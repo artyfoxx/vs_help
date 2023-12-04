@@ -1,4 +1,4 @@
-from vapoursynth import core, GRAY, YUV
+from vapoursynth import core, GRAY
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv 
@@ -6,6 +6,7 @@ def autotap3(clip, dx = None, dy = None, mtaps3 = 1, thresh = 256):
     
     w = clip.width
     h = clip.height
+    
     if dx is None:
         dx = w * 2
     
@@ -18,7 +19,7 @@ def autotap3(clip, dx = None, dy = None, mtaps3 = 1, thresh = 256):
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
-    if bits != 16:
+    if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = 16)
     
     t1 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 1)
@@ -29,30 +30,30 @@ def autotap3(clip, dx = None, dy = None, mtaps3 = 1, thresh = 256):
     t6 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 9)
     t7 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 36)
     
-    m1 = core.std.MakeDiff(clip, core.fmtc.resample(t1, w, h, kernel = "lanczos", taps = 1))
-    m2 = core.std.MakeDiff(clip, core.fmtc.resample(t2, w, h, kernel = "lanczos", taps = 1))
-    m3 = core.std.MakeDiff(clip, core.fmtc.resample(t3, w, h, kernel = "lanczos", taps = 1))
-    m4 = core.std.MakeDiff(clip, core.fmtc.resample(t4, w, h, kernel = "lanczos", taps = 2))
-    m5 = core.std.MakeDiff(clip, core.fmtc.resample(t5, w, h, kernel = "lanczos", taps = 2))
-    m6 = core.std.MakeDiff(clip, core.fmtc.resample(t6, w, h, kernel = "lanczos", taps = 3))
-    m7 = core.std.MakeDiff(clip, core.fmtc.resample(t7, w, h, kernel = "lanczos", taps = 6))
+    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, kernel = "lanczos", taps = 3)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, kernel = "lanczos", taps = 6)], 'x y - abs')
     
-    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m100 = core.std.MakeDiff(clip, core.fmtc.resample(cp1, w, h, kernel = "bilinear"))
-    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m101 = core.std.MakeDiff(clip, core.fmtc.resample(cp2, w, h, kernel = "bilinear"))
-    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m102 = core.std.MakeDiff(clip, core.fmtc.resample(cp3, w, h, kernel = "bilinear"))
-    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m103 = core.std.MakeDiff(clip, core.fmtc.resample(cp4, w, h, kernel = "bilinear"))
-    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m104 = core.std.MakeDiff(clip, core.fmtc.resample(cp5, w, h, kernel = "bilinear"))
-    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, kernel = "bilinear")], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, kernel = "bilinear")], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, kernel = "bilinear")], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, kernel = "bilinear")], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, kernel = "bilinear")], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, kernel = "spline36")], [0, 1, 2], YUV)
+        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, kernel = "spline36")], list(range(chroma.format.num_planes)), chroma.format.color_family)
     
-    if bits != 16:
+    if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = bits)
     
     return clip
@@ -100,7 +101,7 @@ def dehalo(clip, mode = 13, rep = True, rg = False, mask = 1, m = False):
     elif mask == 4:
         e3 = core.std.Expr([e3, m3], ['x y max', ''])
     else:
-        raise ValueError('Please use 1...4 mask type')
+        raise ValueError('dehalo: Please use 1...4 mask type')
     
     blurr = haf_MinBlur(clip, 1)
     blurr = core.rgvs.RemoveGrain(blurr, [11, 0])
@@ -127,11 +128,11 @@ def dehalo(clip, mode = 13, rep = True, rg = False, mask = 1, m = False):
     
     return clip
 
-# Just znedi3 upscale with autotap3
+# Just a hardline znedi3 upscale with autotap3
 def znedi3at(clip, target_width = None, target_height = None, src_left = None, src_top = None, src_width = None, src_height = None):
     
     if clip.format.color_family != GRAY:
-        raise ValueError('Only GRAY clip is supported')
+        raise ValueError('znedi3at: Only GRAY clip is supported')
     
     if target_width is None:
         target_width = clip.width
@@ -151,17 +152,15 @@ def znedi3at(clip, target_width = None, target_height = None, src_left = None, s
         src_height = clip.height - src_top + src_height
     
     bits = clip.format.bits_per_sample
-    if bits > 16:
-        clip = core.fmtc.bitdepth(clip, bits = 16)
     
     clip = core.std.Transpose(clip)
-    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 4, exp = 2)
+    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
     clip = core.std.Transpose(clip)
-    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 4, exp = 2)
+    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
     clip = core.fmtc.resample(clip, kernel = "spline64", sx = src_left * 2 - 0.5, sy = src_top * 2 - 0.5, sw = src_width * 2, sh = src_height * 2)
     clip = autotap3(clip, target_width, target_height)
     
-    if bits != 16:
+    if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = bits)
     
     return clip
@@ -196,14 +195,7 @@ def FixBorderX(clip, target = 0, donor = 0, limit = 0, plane = 0):
         clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
     
     if space != GRAY:
-        if plane == 0:
-            clip = core.std.ShufflePlanes([clip, orig], [0, 1, 2], YUV)
-        elif plane == 1:
-            clip = core.std.ShufflePlanes([orig, clip, orig], [0, 0, 2], YUV)
-        elif plane == 2:
-            clip = core.std.ShufflePlanes([orig, orig, clip], [0, 1, 0], YUV)
-        else:
-            raise ValueError('Unsupported plane')
+        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
     
     return clip
 
@@ -236,13 +228,6 @@ def FixBorderY(clip, target = 0, donor = 0, limit = 0, plane = 0):
         clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
     
     if space != GRAY:
-        if plane == 0:
-            clip = core.std.ShufflePlanes([clip, orig], [0, 1, 2], YUV)
-        elif plane == 1:
-            clip = core.std.ShufflePlanes([orig, clip, orig], [0, 0, 2], YUV)
-        elif plane == 2:
-            clip = core.std.ShufflePlanes([orig, orig, clip], [0, 1, 0], YUV)
-        else:
-            raise ValueError('Unsupported plane')
+        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
     
     return clip
