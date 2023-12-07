@@ -183,7 +183,7 @@ def FixBorderX(clip, target = 0, donor = 0, limit = 0, plane = 0):
     if limit > 0:
         fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
     elif limit < 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y < x x y - {limit} abs < y x {limit} abs - ? ?')
+        fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
     
     fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
@@ -216,7 +216,7 @@ def FixBorderY(clip, target = 0, donor = 0, limit = 0, plane = 0):
     if limit > 0:
         fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
     elif limit < 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y < x x y - {limit} abs < y x {limit} abs - ? ?')
+        fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
     
     fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
