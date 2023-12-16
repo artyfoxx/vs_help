@@ -1,8 +1,9 @@
-from vapoursynth import core, GRAY
+from vapoursynth import core, GRAY, VideoNode
+from typing import Optional
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv 
-def autotap3(clip, dx = None, dy = None, mtaps3 = 1, thresh = 256):
+def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
     
     w = clip.width
     h = clip.height
@@ -59,7 +60,7 @@ def autotap3(clip, dx = None, dy = None, mtaps3 = 1, thresh = 256):
     return clip
 
 # Dehalo by bion-x, ported from AviSynth version with minor additions 
-def dehalo(clip, mode = 13, rep = True, rg = False, mask = 1, m = False):
+def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
     
     '''
     Supported formats: YUV 8 - 16 bit integer.
@@ -129,7 +130,8 @@ def dehalo(clip, mode = 13, rep = True, rg = False, mask = 1, m = False):
     return clip
 
 # Just a hardline znedi3 upscale with autotap3
-def znedi3at(clip, target_width = None, target_height = None, src_left = None, src_top = None, src_width = None, src_height = None):
+def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height: Optional[int] = None, src_left: Optional[float] = None,
+             src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None) -> VideoNode:
     
     if clip.format.color_family != GRAY:
         raise ValueError('znedi3at: Only GRAY clip is supported')
@@ -166,7 +168,7 @@ def znedi3at(clip, target_width = None, target_height = None, src_left = None, s
     return clip
 
 # A simple function for fix brightness artifacts at the borders of the frame. 
-def FixBorderX(clip, target = 0, donor = 0, limit = 0, plane = 0):
+def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -199,7 +201,7 @@ def FixBorderX(clip, target = 0, donor = 0, limit = 0, plane = 0):
     
     return clip
 
-def FixBorderY(clip, target = 0, donor = 0, limit = 0, plane = 0):
+def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
