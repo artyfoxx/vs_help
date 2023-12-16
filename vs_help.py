@@ -20,7 +20,7 @@ def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
-    if bits < 16:
+    if bits != 16:
         clip = core.fmtc.bitdepth(clip, bits = 16)
     
     t1 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 1)
@@ -31,30 +31,30 @@ def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None
     t6 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 9)
     t7 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 36)
     
-    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, kernel = "lanczos", taps = 3)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, kernel = "lanczos", taps = 6)], 'x y - abs')
+    m1 = core.std.MakeDiff(clip, core.fmtc.resample(t1, w, h, kernel = "lanczos", taps = 1))
+    m2 = core.std.MakeDiff(clip, core.fmtc.resample(t2, w, h, kernel = "lanczos", taps = 1))
+    m3 = core.std.MakeDiff(clip, core.fmtc.resample(t3, w, h, kernel = "lanczos", taps = 1))
+    m4 = core.std.MakeDiff(clip, core.fmtc.resample(t4, w, h, kernel = "lanczos", taps = 2))
+    m5 = core.std.MakeDiff(clip, core.fmtc.resample(t5, w, h, kernel = "lanczos", taps = 2))
+    m6 = core.std.MakeDiff(clip, core.fmtc.resample(t6, w, h, kernel = "lanczos", taps = 3))
+    m7 = core.std.MakeDiff(clip, core.fmtc.resample(t7, w, h, kernel = "lanczos", taps = 6))
     
-    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, kernel = "bilinear")], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, kernel = "bilinear")], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, kernel = "bilinear")], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, kernel = "bilinear")], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, kernel = "bilinear")], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m100 = core.std.MakeDiff(clip, core.fmtc.resample(cp1, w, h, kernel = "bilinear"))
+    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m101 = core.std.MakeDiff(clip, core.fmtc.resample(cp2, w, h, kernel = "bilinear"))
+    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m102 = core.std.MakeDiff(clip, core.fmtc.resample(cp3, w, h, kernel = "bilinear"))
+    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m103 = core.std.MakeDiff(clip, core.fmtc.resample(cp4, w, h, kernel = "bilinear"))
+    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    m104 = core.std.MakeDiff(clip, core.fmtc.resample(cp5, w, h, kernel = "bilinear"))
+    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x 32768 - abs y 32768 - abs - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
     
     if space != GRAY:
         clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, kernel = "spline36")], list(range(chroma.format.num_planes)), chroma.format.color_family)
     
-    if bits < 16:
+    if bits != 16:
         clip = core.fmtc.bitdepth(clip, bits = bits)
     
     return clip
