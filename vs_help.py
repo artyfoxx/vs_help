@@ -70,62 +70,70 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
     '''
     
+    space = clip.format.color_family
+    if space != GRAY:
+        chroma = clip
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+    
     bits = clip.format.bits_per_sample
     mp0 = 1 << (bits - 6)
     mp1 = 1 << (bits - 8)
     mp2 = 1 << (bits - 1)
     
-    e1 = core.std.Expr([core.std.Maximum(clip, planes = 0), core.std.Minimum(clip, planes = 0)], [f'x y - {mp0} - 4 *', ''])
-    e2 = haf_mt_expand_multi(e1, planes = 0, sw = 2, sh = 2)
-    e2 = core.std.Merge(e2, haf_mt_expand_multi(e2, planes = 0), [0.5, 0])
-    e2 = haf_mt_inflate_multi(e2, planes = 0)
-    e3 = core.std.Merge(e2, haf_mt_expand_multi(e2, planes = 0), [0.5, 0])
-    e3 = core.std.Expr([e3, haf_mt_deflate_multi(e1, planes = 0)], ['x y 1.2 * -', ''])
-    e3 = haf_mt_inflate_multi(e3, planes = 0)
+    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {mp0} - 4 *')
+    e2 = haf_mt_expand_multi(e1, sw = 2, sh = 2)
+    e2 = core.std.Merge(e2, haf_mt_expand_multi(e2))
+    e2 = haf_mt_inflate_multi(e2)
+    e3 = core.std.Merge(e2, haf_mt_expand_multi(e2))
+    e3 = core.std.Expr([e3, haf_mt_deflate_multi(e1)], 'x y 1.2 * -')
+    e3 = haf_mt_inflate_multi(e3)
     
-    m0 = core.std.BoxBlur(clip, planes = 0, hradius = 2, vradius = 2)
-    m0 = core.std.Expr([clip, m0], ['x y - abs 0 > x y - 0.3125 * x + x ?', ''])
-    m1 = core.std.Expr([clip, m0], [f'x y - {mp1} - 128 *', ''])
-    m1 = haf_mt_expand_multi(m1, planes = 0)
-    m1 = haf_mt_inflate_multi(m1, planes = 0)
-    m2 = haf_mt_expand_multi(m1, planes = 0, sw = 2, sh = 2)
-    m3 = core.std.Expr([m1, m2], ['y x -', ''])
-    m3 = core.rgvs.RemoveGrain(m3, [21, 0])
-    m3 = haf_mt_expand_multi(m3, planes = 0)
+    m0 = core.std.BoxBlur(clip, hradius = 2, vradius = 2)
+    m0 = core.std.Expr([clip, m0], 'x y - abs 0 > x y - 0.3125 * x + x ?')
+    m1 = core.std.Expr([clip, m0], f'x y - {mp1} - 128 *')
+    m1 = haf_mt_expand_multi(m1)
+    m1 = haf_mt_inflate_multi(m1)
+    m2 = haf_mt_expand_multi(m1, sw = 2, sh = 2)
+    m3 = core.std.Expr([m1, m2], 'y x -')
+    m3 = core.rgvs.RemoveGrain(m3, 21)
+    m3 = haf_mt_expand_multi(m3)
     
     if mask == 1:
         pass
     elif mask == 2:
         e3 = m3
     elif mask == 3:
-        e3 = core.std.Expr([e3, m3], ['x y min', ''])
+        e3 = core.std.Expr([e3, m3], 'x y min')
     elif mask == 4:
-        e3 = core.std.Expr([e3, m3], ['x y max', ''])
+        e3 = core.std.Expr([e3, m3], 'x y max')
     else:
         raise ValueError('dehalo: Please use 1...4 mask type')
     
     blurr = haf_MinBlur(clip, 1)
-    blurr = core.rgvs.RemoveGrain(blurr, [11, 0])
-    blurr = core.rgvs.RemoveGrain(blurr, [11, 0])
+    blurr = core.rgvs.RemoveGrain(blurr, 11)
+    blurr = core.rgvs.RemoveGrain(blurr, 11)
     
     if rg:
-        dh1 = core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, [21]), [1])
-        dh1 = core.std.MaskedMerge(dh1, blurr, e3, planes = 0)
+        dh1 = core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1)
+        dh1 = core.std.MaskedMerge(dh1, blurr, e3)
     else:
-        dh1 = core.std.MaskedMerge(clip, blurr, e3, planes = 0)
+        dh1 = core.std.MaskedMerge(clip, blurr, e3)
     
-    dh1D = core.std.MakeDiff(clip, dh1, planes = 0)
+    dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
-    med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2, planes = 0), planes = 0)
-    DD  = core.std.Expr([dh1D, med2D], [f'x {mp2} - y {mp2} - * 0 < {mp2} x {mp2} - abs y {mp2} - abs 2 * < x y {mp2} - 2 * {mp2} + ? ?', ''])
-    dh2 = core.std.MergeDiff(dh1, DD, planes = 0)
+    med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
+    DD  = core.std.Expr([dh1D, med2D], f'x {mp2} - y {mp2} - * 0 < {mp2} x {mp2} - abs y {mp2} - abs 2 * < x y {mp2} - 2 * {mp2} + ? ?')
+    dh2 = core.std.MergeDiff(dh1, DD)
     
-    r = core.rgvs.Repair(clip, dh2, [mode]) if rep else dh2
+    r = core.rgvs.Repair(clip, dh2, mode) if rep else dh2
     
-    clip = haf_Clamp(clip, r, clip, 0, mp1 * 20, planes = 0)
+    clip = haf_Clamp(clip, r, clip, 0, mp1 * 20)
+    
+    if space != GRAY:
+        clip = core.std.ShufflePlanes([clip, chroma], list(range(chroma.format.num_planes)), chroma.format.color_family)
     
     if m:
-        clip = e3
+        clip = e3 if space == GRAY else core.resize.Point(clip, format = chroma.format.name)
     
     return clip
 
