@@ -1,8 +1,8 @@
 from vapoursynth import core, GRAY, VideoNode
 from typing import Optional
-from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi
+from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 
-# Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv 
+# Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
 def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
     
     w = clip.width
@@ -59,7 +59,7 @@ def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None
     
     return clip
 
-# Dehalo by bion-x, ported from AviSynth version with minor additions 
+# Dehalo by bion-x, ported from AviSynth version with minor additions.
 def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
     
     '''
@@ -137,7 +137,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     
     return clip
 
-# Just a hardline znedi3 upscale with autotap3
+# Just a hardline znedi3 upscale with autotap3.
 def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height: Optional[int] = None, src_left: Optional[float] = None,
              src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None) -> VideoNode:
     
@@ -175,7 +175,7 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
     
     return clip
 
-# A simple function for fix brightness artifacts at the borders of the frame. 
+# A simple function for fix brightness artifacts at the borders of the frame.
 def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
@@ -241,3 +241,77 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
         clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
     
     return clip
+
+def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_height: Optional[float] = None, RGmode: int = 3,
+               cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
+               src_left: float = 0, src_top: float = 0, src_width: float = 0, src_height: float = 0,
+               kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
+    
+    '''
+    MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
+    Has nothing to do with the port by MonoS.
+    It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
+    and automatic width calculation based on the original aspect ratio.
+    "down = True" is added for backward compatibility and does not support fractional resolutions.
+    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
+    '''
+    
+    if final_height is None:
+        raise ValueError('MaskDetail: "final_height" must be specified')
+    
+    space = clip.format.color_family
+    if space != GRAY:
+        format = clip.format.id
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+    
+    bits = clip.format.bits_per_sample
+    cutoff <<= bits - 8
+    mp0 = 1 << bits
+    w = clip.width
+    h = clip.height
+    
+    if kernel == 'bilinear':
+        rescaler = rescale.Bilinear()
+    elif kernel == 'bicubic':
+        rescaler = rescale.Bicubic(b, c)
+    elif kernel == 'lanczos':
+        rescaler = rescale.Lanczos(taps)
+    elif kernel == 'spline16':
+        rescaler = rescale.Spline16()
+    elif kernel == 'spline36':
+        rescaler = rescale.Spline36()
+    elif kernel == 'spline64':
+        rescaler = rescale.Spline64()
+    else:
+        raise ValueError('MaskDetail: Unsupported kernel type')
+    
+    if final_width is None:
+        if frac:
+            resc = rescaler.rescale(clip, final_height, h)
+        else:
+            resc = rescaler.rescale(clip, final_height)
+    else:
+        if frac:
+            desc = rescaler.descale(clip, final_width, final_height, h)
+        else:
+            desc = rescaler.descale(clip, final_width, final_height)
+        resc = rescaler.upscale(desc, w, h)
+    
+    diff = core.std.MakeDiff(clip, resc)
+    initial_mask = core.hist.Luma(diff).rgvs.RemoveGrain(RGmode)
+    initial_mask = core.std.Expr(initial_mask, f'x {cutoff} < 0 x {gain} {mp0} x + {mp0} / * * ?')
+    expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
+    final = haf_mt_inflate_multi(expanded, radius = inflateN)
+    
+    if down:
+        if final_width is None:
+            final_width = final_height * w / h
+        final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+    
+    if blur_more:
+        final = core.rgvs.RemoveGrain(final, 12)
+    
+    if space != GRAY:
+        final = core.resize.Point(final, format = format)
+    
+    return final
