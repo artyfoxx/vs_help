@@ -133,7 +133,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         clip = core.std.ShufflePlanes([clip, chroma], list(range(chroma.format.num_planes)), chroma.format.color_family)
     
     if m:
-        clip = e3 if space == GRAY else core.resize.Point(clip, format = chroma.format.name)
+        clip = e3 if space == GRAY else core.resize.Point(clip, format = chroma.format.id)
     
     return clip
 
