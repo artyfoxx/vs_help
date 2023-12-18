@@ -9,10 +9,10 @@ def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None
     h = clip.height
     
     if dx is None:
-        dx = w * 2
+        dx = w << 1
     
     if dy is None:
-        dy = h * 2
+        dy = h << 1
     
     space = clip.format.color_family
     if space != GRAY:
@@ -76,9 +76,9 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
-    mp0 = 1 << (bits - 6)
-    mp1 = 1 << (bits - 8)
-    mp2 = 1 << (bits - 1)
+    mp0 = 1 << bits - 6
+    mp1 = 1 << bits - 8
+    mp2 = 1 << bits - 1
     
     e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {mp0} - 4 *')
     e2 = haf_mt_expand_multi(e1, sw = 2, sh = 2)
