@@ -253,7 +253,6 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
     "down = True" is added for backward compatibility and does not support fractional resolutions.
-    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
     '''
     
     if final_height is None:
@@ -261,7 +260,9 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     
     space = clip.format.color_family
     if space != GRAY:
-        format = clip.format.id
+        format_id = clip.format.id
+        sub_w = clip.format.subsampling_w
+        sub_h = clip.format.subsampling_h
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
@@ -306,12 +307,25 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     if down:
         if final_width is None:
             final_width = final_height * w / h
-        final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+        if space != GRAY:
+            if sub_w == 1 and sub_h == 1:
+                def float_to_even(num: float) -> int:
+                    a = int(num)
+                    if (a % 2) != 0:
+                        a += 1
+                    return a
+                final = core.resize.Bilinear(final, float_to_even(final_width), float_to_even(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+            elif sub_w == 0 and sub_h == 0:
+                final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+            else:
+                raise ValueError('MaskDetail: Unsupported subsampling type')
+        else:
+            final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
     
     if blur_more:
         final = core.rgvs.RemoveGrain(final, 12)
     
     if space != GRAY:
-        final = core.resize.Point(final, format = format)
+        final = core.resize.Point(final, format = format_id)
     
     return final
