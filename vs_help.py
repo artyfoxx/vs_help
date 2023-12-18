@@ -144,22 +144,25 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
     if clip.format.color_family != GRAY:
         raise ValueError('znedi3at: Only GRAY clip is supported')
     
+    w = clip.width
+    h = clip.height
+    
     if target_width is None:
-        target_width = clip.width
+        target_width = w
     if target_height is None:
-        target_height = clip.height
+        target_height = h
     if src_left is None:
         src_left = 0
     if src_top is None:
         src_top = 0
     if src_width is None:
-        src_width = clip.width
+        src_width = w
     elif src_width <= 0:
-        src_width = clip.width - src_left + src_width
+        src_width = w - src_left + src_width
     if src_height is None:
-        src_height = clip.height
+        src_height = h
     elif src_height <= 0:
-        src_height = clip.height - src_top + src_height
+        src_height = h - src_top + src_height
     
     bits = clip.format.bits_per_sample
     
@@ -244,7 +247,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
 
 def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_height: Optional[float] = None, RGmode: int = 3,
                cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
-               src_left: float = 0, src_top: float = 0, src_width: float = 0, src_height: float = 0,
+               src_left: Optional[float] = None, src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None,
                kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
     
     '''
@@ -307,11 +310,23 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     
     if down:
         if final_width is None:
-            raise ValueError('MaskDetail: if "down" is "True" - "final_widt" can\'t be None')
-        if not isinstance(final_width, int) or not isinstance(final_height, int)
-            raise ValueError('MaskDetail: if "down" is "True" - "final_width" and "final_height" must be intgers')
-        if space != GRAY & ((final_width >> sub_w) < 0 or (final_width >> sub_w) > final_width or (final_height >> sub_h) < 0 or (final_height >> sub_h) > final_height):
+            raise ValueError('MaskDetail: if "down" is "True", then "final_width" can\'t be "None"')
+        if not isinstance(final_width, int) or not isinstance(final_height, int):
+            raise ValueError('MaskDetail: if "down" is "True", then "final_width" and "final_height" must be intgers')
+        if space != GRAY and (final_width >> sub_w << sub_w != final_width or final_height >> sub_h << sub_h != final_height):
             raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
+        if src_left is None:
+            src_left = 0
+        if src_top is None:
+            src_top = 0
+        if src_width is None:
+            src_width = w
+        elif src_width <= 0:
+            src_width = w - src_left + src_width
+        if src_height is None:
+            src_height = h
+        elif src_height <= 0:
+            src_height = h - src_top + src_height
         final = core.resize.Bilinear(final, final_width, final_height, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
     
     if blur_more:
