@@ -310,7 +310,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
             raise ValueError('MaskDetail: if "down" is "True" - "final_widt" can\'t be None')
         if not isinstance(final_width, int) or not isinstance(final_height, int)
             raise ValueError('MaskDetail: if "down" is "True" - "final_width" and "final_height" must be intgers')
-        if (final_width >> sub_w) < 0 or (final_width >> sub_w) > final_width or (final_height >> sub_h) < 0 or (final_height >> sub_h) > final_height:
+        if space != GRAY & ((final_width >> sub_w) < 0 or (final_width >> sub_w) > final_width or (final_height >> sub_h) < 0 or (final_height >> sub_h) > final_height):
             raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
         final = core.resize.Bilinear(final, final_width, final_height, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
     
