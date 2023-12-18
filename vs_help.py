@@ -76,11 +76,10 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
-    mp0 = 1 << bits - 6
-    mp1 = 1 << bits - 8
-    mp2 = 1 << bits - 1
+    step = bits - 8
+    half = 128 << step
     
-    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {mp0} - 4 *')
+    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
     e2 = haf_mt_expand_multi(e1, sw = 2, sh = 2)
     e2 = core.std.Merge(e2, haf_mt_expand_multi(e2))
     e2 = haf_mt_inflate_multi(e2)
@@ -90,7 +89,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     
     m0 = core.std.BoxBlur(clip, hradius = 2, vradius = 2)
     m0 = core.std.Expr([clip, m0], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {mp1} - 128 *')
+    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *')
     m1 = haf_mt_expand_multi(m1)
     m1 = haf_mt_inflate_multi(m1)
     m2 = haf_mt_expand_multi(m1, sw = 2, sh = 2)
@@ -122,12 +121,12 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
-    DD  = core.std.Expr([dh1D, med2D], f'x {mp2} - y {mp2} - * 0 < {mp2} x {mp2} - abs y {mp2} - abs 2 * < x y {mp2} - 2 * {mp2} + ? ?')
+    DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
     r = core.rgvs.Repair(clip, dh2, mode) if rep else dh2
     
-    clip = haf_Clamp(clip, r, clip, 0, mp1 * 20)
+    clip = haf_Clamp(clip, r, clip, 0, 20 << step)
     
     if space != GRAY:
         clip = core.std.ShufflePlanes([clip, chroma], list(range(chroma.format.num_planes)), chroma.format.color_family)
@@ -271,7 +270,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     
     bits = clip.format.bits_per_sample
     cutoff <<= bits - 8
-    mp0 = 1 << bits
+    full = 1 << bits
     w = clip.width
     h = clip.height
     
@@ -304,7 +303,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     
     diff = core.std.MakeDiff(clip, resc)
     initial_mask = core.hist.Luma(diff).rgvs.RemoveGrain(RGmode)
-    initial_mask = core.std.Expr(initial_mask, f'x {cutoff} < 0 x {gain} {mp0} x + {mp0} / * * ?')
+    initial_mask = core.std.Expr(initial_mask, f'x {cutoff} < 0 x {gain} {full} x + {full} / * * ?')
     expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
     final = haf_mt_inflate_multi(expanded, radius = inflateN)
     
