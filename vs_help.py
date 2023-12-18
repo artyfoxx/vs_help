@@ -253,6 +253,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
     "down = True" is added for backward compatibility and does not support fractional resolutions.
+    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
     '''
     
     if final_height is None:
@@ -306,21 +307,12 @@ def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_heigh
     
     if down:
         if final_width is None:
-            final_width = final_height * w / h
-        if space != GRAY:
-            if sub_w == 1 and sub_h == 1:
-                def float_to_even(num: float) -> int:
-                    a = int(num)
-                    if (a % 2) != 0:
-                        a += 1
-                    return a
-                final = core.resize.Bilinear(final, float_to_even(final_width), float_to_even(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
-            elif sub_w == 0 and sub_h == 0:
-                final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
-            else:
-                raise ValueError('MaskDetail: Unsupported subsampling type')
-        else:
-            final = core.resize.Bilinear(final, round(final_width), round(final_height), src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+            raise ValueError('MaskDetail: if "down" is "True" - "final_widt" can\'t be None')
+        if not isinstance(final_width, int) or not isinstance(final_height, int)
+            raise ValueError('MaskDetail: if "down" is "True" - "final_width" and "final_height" must be intgers')
+        if (final_width >> sub_w) < 0 or (final_width >> sub_w) > final_width or (final_height >> sub_h) < 0 or (final_height >> sub_h) > final_height:
+            raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
+        final = core.resize.Bilinear(final, final_width, final_height, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
     
     if blur_more:
         final = core.rgvs.RemoveGrain(final, 12)
