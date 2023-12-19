@@ -244,7 +244,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
     
     return clip
 
-def MaskDetail(clip: VideoNode, final_width: Optional[float] = None, final_height: Optional[float] = None, RGmode: int = 3,
+def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None, final_height: Optional[Union[float, int]] = None, RGmode: int = 3,
                cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
                src_left: Optional[float] = None, src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None,
                kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
