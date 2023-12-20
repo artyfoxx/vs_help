@@ -252,7 +252,7 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
     
     return clip
 
-def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
+def FixBorderX(clip: VideoNode, target: int = 0, donor: Optional[int] = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -261,7 +261,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
     
     w = clip.width
     
-    if target == donor:
+    if target == donor or donor is None:
         donor = target + 1 if target < w >> 1 else target - 1
     
     target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
@@ -288,7 +288,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
     
     return clip
 
-def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
+def FixBorderY(clip: VideoNode, target: int = 0, donor: Optional[int] = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -297,7 +297,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
     
     h = clip.height
     
-    if target == donor:
+    if target == donor or donor is None:
         donor = target + 1 if target < h >> 1 else target - 1
     
     target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
