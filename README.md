@@ -10,4 +10,4 @@ and the dependencies of them.
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [AkarinVS-vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
 * [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
-### Python version >= 3.9 
+### Python version >= 3.10 
