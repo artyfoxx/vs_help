@@ -140,7 +140,7 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
              src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None) -> VideoNode:
     
     if clip.format.color_family != GRAY:
-        raise ValueError('znedi3at: Only GRAY clip is supported')
+        raise ValueError('znedi3at: Only \"GRAY\" clip is supported')
     
     w = clip.width
     h = clip.height
@@ -182,11 +182,13 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
               lx: Optional[Union[int, Sequence[int]]] = None, ly: Optional[Union[int, Sequence[int]]] = None,
               px: Optional[Union[int, Sequence[int]]] = None, py: Optional[Union[int, Sequence[int]]] = None) -> VideoNode:
     
-    if tx is not None and dx is not None:
+    if tx is not None:
         if isinstance(tx, int):
             tx = [tx]
         if isinstance(dx, int):
             dx = [dx]
+        elif dx is None:
+            dx = tx
         length_x = len(tx)
         if length_x == len(dx):
             if isinstance(lx, int):
@@ -208,19 +210,19 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
                     for i in range(length_x):
                         clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
                 else:
-                    raise ValueError('FixBorder: px must be less than or equal to tx, or px must be int or None')
+                    raise ValueError('FixBorder: \"px\" must be shorter or the same length to \"tx\", or \"px\" must be \"int\" or \"None\"')
             else:
-                raise ValueError('FixBorder: lx must be less than or equal to tx, or lx must be int or None')
+                raise ValueError('FixBorder: \"lx\" must be shorter or the same length to \"tx\", or \"lx\" must be \"int\" or \"None\"')
         else:
-            raise ValueError('FixBorder: tx and dx must be the same length')
-    elif (tx is None and dx is not None) or (tx is not None and dx is None):
-        raise ValueError('FixBorder: tx and dx must be of the same type')
+            raise ValueError('FixBorder: \"dx\" must be the same length to \"tx\", or \"dx\" must be \"None\"')
     
-    if ty is not None and dy is not None:
+    if ty is not None:
         if isinstance(ty, int):
             ty = [ty]
         if isinstance(dy, int):
             dy = [dy]
+        elif dy is None:
+            dy = ty
         length_y = len(ty)
         if length_y == len(dy):
             if isinstance(ly, int):
@@ -240,15 +242,13 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
                         py.append(py[len(py) - 1])
                 if length_y == len(py):
                     for i in range(length_y):
-                        clip = FixBorderX(clip, ty[i], dy[i], ly[i], py[i])
+                        clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
                 else:
-                    raise ValueError('FixBorder: py must be less than or equal to ty, or py must be int or None')
+                    raise ValueError('FixBorder: \"py\" must be shorter or the same length to \"ty\", or \"py\" must be \"int\" or \"None\"')
             else:
-                raise ValueError('FixBorder: ly must be less than or equal to ty, or ly must be int or None')
+                raise ValueError('FixBorder: \"ly\" must be shorter or the same length to \"ty\", or \"ly\" must be \"int\" or \"None\"')
         else:
-            raise ValueError('FixBorder: ty and dy must be the same length')
-    elif (ty is None and dy is not None) or (ty is not None and dy is None):
-        raise ValueError('FixBorder: ty and dy must be of the same type')
+            raise ValueError('FixBorder: \"dy\" must be the same length to \"ty\", or \"dy\" must be \"None\"')
     
     return clip
 
@@ -260,6 +260,9 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
         clip = core.std.ShufflePlanes(clip, plane, GRAY)
     
     w = clip.width
+    
+    if target == donor:
+        donor = target + 1 if target < w >> 1 else target - 1
     
     target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
     donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.PlaneStats()
@@ -293,6 +296,9 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0,
         clip = core.std.ShufflePlanes(clip, plane, GRAY)
     
     h = clip.height
+    
+    if target == donor:
+        donor = target + 1 if target < h >> 1 else target - 1
     
     target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
     donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.PlaneStats()
@@ -333,7 +339,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None,
     '''
     
     if final_height is None:
-        raise ValueError('MaskDetail: "final_height" must be specified')
+        raise ValueError('MaskDetail: \"final_height\" must be specified')
     
     space = clip.format.color_family
     if space != GRAY:
@@ -382,11 +388,11 @@ def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None,
     
     if down:
         if final_width is None:
-            raise ValueError('MaskDetail: if "down" is "True", then "final_width" can\'t be "None"')
+            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" can\'t be \"None\"')
         if not isinstance(final_width, int) or not isinstance(final_height, int):
-            raise ValueError('MaskDetail: if "down" is "True", then "final_width" and "final_height" must be intgers')
+            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" and \"final_height\" must be intgers')
         if space != GRAY and (final_width >> sub_w << sub_w != final_width or final_height >> sub_h << sub_h != final_height):
-            raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
+            raise ValueError('MaskDetail: \"final_width\" or \"final_height\" does not match the chroma subsampling of the output clip')
         if src_left is None:
             src_left = 0
         if src_top is None:
