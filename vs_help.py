@@ -342,9 +342,9 @@ def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None,
         sub_h = clip.format.subsampling_h
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
-    bits = clip.format.bits_per_sample
-    cutoff <<= bits - 8
-    full = 1 << bits
+    step = clip.format.bits_per_sample - 8
+    cutoff <<= step
+    full = 256 << step
     w = clip.width
     h = clip.height
     
