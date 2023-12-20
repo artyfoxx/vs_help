@@ -1,5 +1,5 @@
 from vapoursynth import core, GRAY, VideoNode
-from typing import Optional, Union, Sequence
+from typing import Optional, Union
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
@@ -177,10 +177,10 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
     return clip
 
 # A simple function for fix brightness artifacts at the borders of the frame.
-def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, ty: Optional[Union[int, Sequence[int]]] = None,
-              dx: Optional[Union[int, Sequence[int]]] = None, dy: Optional[Union[int, Sequence[int]]] = None,
-              lx: Optional[Union[int, Sequence[int]]] = None, ly: Optional[Union[int, Sequence[int]]] = None,
-              px: Optional[Union[int, Sequence[int]]] = None, py: Optional[Union[int, Sequence[int]]] = None) -> VideoNode:
+def FixBorder(clip: VideoNode, tx: Optional[Union[int, list[int]]] = None, ty: Optional[Union[int, list[int]]] = None,
+              dx: Optional[Union[int, list[int]]] = None, dy: Optional[Union[int, list[int]]] = None,
+              lx: Optional[Union[int, list[int]]] = None, ly: Optional[Union[int, list[int]]] = None,
+              px: Optional[Union[int, list[int]]] = None, py: Optional[Union[int, list[int]]] = None) -> VideoNode:
     
     if tx is not None:
         if isinstance(tx, int):
