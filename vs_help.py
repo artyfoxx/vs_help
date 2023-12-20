@@ -343,7 +343,6 @@ def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None,
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     step = clip.format.bits_per_sample - 8
-    cutoff <<= step
     full = 256 << step
     w = clip.width
     h = clip.height
@@ -377,7 +376,7 @@ def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None,
     
     diff = core.std.MakeDiff(clip, resc)
     initial_mask = core.hist.Luma(diff).rgvs.RemoveGrain(RGmode)
-    initial_mask = core.std.Expr(initial_mask, f'x {cutoff} < 0 x {gain} {full} x + {full} / * * ?')
+    initial_mask = core.std.Expr(initial_mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
     final = haf_mt_inflate_multi(expanded, radius = inflateN)
     
