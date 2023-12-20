@@ -183,10 +183,6 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
               lx: Optional[Union[int, Sequence[int]]] = None, ly: Optional[Union[int, Sequence[int]]] = None,
               px: Optional[Union[int, Sequence[int]]] = None, py: Optional[Union[int, Sequence[int]]] = None) -> VideoNode:
     
-    for i in [tx, ty, dx, dy, lx, ly, px, py]:
-        if i is not None and not isinstance(i, list) and not isinstance(i, int):
-            raise ValueError('FixBorder: supported values are only in the type of int, list and None')
-    
     if tx is not None and dx is not None:
         if isinstance(tx, int):
             tx = [tx]
