@@ -75,8 +75,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         chroma = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
-    bits = clip.format.bits_per_sample
-    step = bits - 8
+    step = clip.format.bits_per_sample - 8
     half = 128 << step
     
     e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
@@ -188,23 +187,30 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
             tx = [tx]
         if isinstance(dx, int):
             dx = [dx]
-        if len(tx) == len(dx):
+        length_x = len(tx)
+        if length_x == len(dx):
             if isinstance(lx, int):
-                lx = [lx for _ in range(len(tx))]
-            if lx is None:
-                lx = [0 for _ in range(len(tx))]
-            if len(tx) == len(lx):
+                lx = [lx for _ in range(length_x)]
+            elif lx is None:
+                lx = [0 for _ in range(length_x)]
+            elif length_x > len(lx):
+                for _ in range(length_x - len(lx)):
+                    lx.append(lx[len(lx) - 1])
+            if length_x == len(lx):
                 if isinstance(px, int):
-                    px = [px for _ in range(len(tx))]
-                if px is None:
-                    px = [0 for _ in range(len(tx))]
-                if len(tx) == len(px):
-                    for i in range(len(tx)):
+                    px = [px for _ in range(length_x)]
+                elif px is None:
+                    px = [0 for _ in range(length_x)]
+                elif length_x > len(px):
+                    for _ in range(length_x - len(px)):
+                        px.append(px[len(px) - 1])
+                if length_x == len(px):
+                    for i in range(length_x):
                         clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
                 else:
-                    raise ValueError('FixBorder: tx and px must be the same length, or px must be int or None')
+                    raise ValueError('FixBorder: px must be less than or equal to tx, or px must be int or None')
             else:
-                raise ValueError('FixBorder: tx and lx must be the same length, or lx must be int or None')
+                raise ValueError('FixBorder: lx must be less than or equal to tx, or lx must be int or None')
         else:
             raise ValueError('FixBorder: tx and dx must be the same length')
     elif (tx is None and dx is not None) or (tx is not None and dx is None):
@@ -215,23 +221,30 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, t
             ty = [ty]
         if isinstance(dy, int):
             dy = [dy]
-        if len(ty) == len(dy):
+        length_y = len(ty)
+        if length_y == len(dy):
             if isinstance(ly, int):
-                ly = [ly for _ in range(len(ty))]
-            if ly is None:
-                ly = [0 for _ in range(len(ty))]
-            if len(ty) == len(ly):
+                ly = [ly for _ in range(length_y)]
+            elif ly is None:
+                ly = [0 for _ in range(length_y)]
+            elif length_y > len(ly):
+                for _ in range(length_y - len(ly)):
+                    ly.append(ly[len(ly) - 1])
+            if length_y == len(ly):
                 if isinstance(py, int):
-                    py = [py for _ in range(len(ty))]
-                if py is None:
-                    py = [0 for _ in range(len(ty))]
-                if len(ty) == len(py):
-                    for i in range(len(ty)):
-                        clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
+                    py = [py for _ in range(length_y)]
+                elif py is None:
+                    py = [0 for _ in range(length_y)]
+                elif length_y > len(py):
+                    for _ in range(length_y - len(py)):
+                        py.append(py[len(py) - 1])
+                if length_y == len(py):
+                    for i in range(length_y):
+                        clip = FixBorderX(clip, ty[i], dy[i], ly[i], py[i])
                 else:
-                    raise ValueError('FixBorder: ty and py must be the same length, or py must be int or None')
+                    raise ValueError('FixBorder: py must be less than or equal to ty, or py must be int or None')
             else:
-                raise ValueError('FixBorder: ty and ly must be the same length, or ly must be int or None')
+                raise ValueError('FixBorder: ly must be less than or equal to ty, or ly must be int or None')
         else:
             raise ValueError('FixBorder: ty and dy must be the same length')
     elif (ty is None and dy is not None) or (ty is not None and dy is None):
