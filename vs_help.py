@@ -1,9 +1,8 @@
 from vapoursynth import core, GRAY, VideoNode
-from typing import Optional, Union
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
-def autotap3(clip: VideoNode, dx: Optional[int] = None, dy: Optional[int] = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
+def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
     
     w = clip.width
     h = clip.height
@@ -136,8 +135,8 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     return clip
 
 # Just a hardline znedi3 upscale with autotap3.
-def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height: Optional[int] = None, src_left: Optional[float] = None,
-             src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None) -> VideoNode:
+def znedi3at(clip: VideoNode, target_width: int | None = None, target_height: int | None = None, src_left: float | None = None,
+             src_top: float | None = None, src_width: float | None = None, src_height: float | None = None) -> VideoNode:
     
     if clip.format.color_family != GRAY:
         raise ValueError('znedi3at: Only \"GRAY\" clip is supported')
@@ -177,10 +176,9 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
     return clip
 
 # A simple function for fix brightness artifacts at the borders of the frame.
-def FixBorder(clip: VideoNode, tx: Optional[Union[int, list[int]]] = None, ty: Optional[Union[int, list[int]]] = None,
-              dx: Optional[Union[int, list[int]]] = None, dy: Optional[Union[int, list[int]]] = None,
-              lx: Optional[Union[int, list[int]]] = None, ly: Optional[Union[int, list[int]]] = None,
-              px: Optional[Union[int, list[int]]] = None, py: Optional[Union[int, list[int]]] = None) -> VideoNode:
+def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int] | None = None,
+              dy: int | list[int] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
+              px: int | list[int] | None = None, py: int | list[int] | None = None) -> VideoNode:
     
     if tx is not None:
         if isinstance(tx, int):
@@ -252,7 +250,7 @@ def FixBorder(clip: VideoNode, tx: Optional[Union[int, list[int]]] = None, ty: O
     
     return clip
 
-def FixBorderX(clip: VideoNode, target: int = 0, donor: Optional[int] = None, limit: int = 0, plane: int = 0) -> VideoNode:
+def FixBorderX(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -288,7 +286,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: Optional[int] = None, li
     
     return clip
 
-def FixBorderY(clip: VideoNode, target: int = 0, donor: Optional[int] = None, limit: int = 0, plane: int = 0) -> VideoNode:
+def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -324,9 +322,9 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: Optional[int] = None, li
     
     return clip
 
-def MaskDetail(clip: VideoNode, final_width: Optional[Union[float, int]] = None, final_height: Optional[Union[float, int]] = None, RGmode: int = 3,
+def MaskDetail(clip: VideoNode, final_width: float | int | None = None, final_height: float | int | None = None, RGmode: int = 3,
                cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
-               src_left: Optional[float] = None, src_top: Optional[float] = None, src_width: Optional[float] = None, src_height: Optional[float] = None,
+               src_left: float | None = None, src_top: float | None = None, src_width: float | None = None, src_height: float | None = None,
                kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
     
     '''
