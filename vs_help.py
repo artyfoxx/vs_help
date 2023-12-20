@@ -1,5 +1,5 @@
 from vapoursynth import core, GRAY, VideoNode
-from typing import Optional
+from typing import Optional, Union, Sequence
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
@@ -178,6 +178,71 @@ def znedi3at(clip: VideoNode, target_width: Optional[int] = None, target_height:
     return clip
 
 # A simple function for fix brightness artifacts at the borders of the frame.
+def FixBorder(clip: VideoNode, tx: Optional[Union[int, Sequence[int]]] = None, ty: Optional[Union[int, Sequence[int]]] = None,
+              dx: Optional[Union[int, Sequence[int]]] = None, dy: Optional[Union[int, Sequence[int]]] = None,
+              lx: Optional[Union[int, Sequence[int]]] = None, ly: Optional[Union[int, Sequence[int]]] = None,
+              px: Optional[Union[int, Sequence[int]]] = None, py: Optional[Union[int, Sequence[int]]] = None) -> VideoNode:
+    
+    for i in [tx, ty, dx, dy, lx, ly, px, py]:
+        if i is not None and not isinstance(i, list) and not isinstance(i, int):
+            raise ValueError('FixBorder: supported values are only in the type of int, list and None')
+    
+    if tx is not None and dx is not None:
+        if isinstance(tx, int):
+            tx = [tx]
+        if isinstance(dx, int):
+            dx = [dx]
+        if len(tx) == len(dx):
+            if isinstance(lx, int):
+                lx = [lx for _ in range(len(tx))]
+            if lx is None:
+                lx = [0 for _ in range(len(tx))]
+            if len(tx) == len(lx):
+                if isinstance(px, int):
+                    px = [px for _ in range(len(tx))]
+                if px is None:
+                    px = [0 for _ in range(len(tx))]
+                if len(tx) == len(px):
+                    for i in range(len(tx)):
+                        clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
+                else:
+                    raise ValueError('FixBorder: tx and px must be the same length, or px must be int or None')
+            else:
+                raise ValueError('FixBorder: tx and lx must be the same length, or lx must be int or None')
+        else:
+            raise ValueError('FixBorder: tx and dx must be the same length')
+    elif (tx is None and dx is not None) or (tx is not None and dx is None):
+        raise ValueError('FixBorder: tx and dx must be of the same type')
+    
+    if ty is not None and dy is not None:
+        if isinstance(ty, int):
+            ty = [ty]
+        if isinstance(dy, int):
+            dy = [dy]
+        if len(ty) == len(dy):
+            if isinstance(ly, int):
+                ly = [ly for _ in range(len(ty))]
+            if ly is None:
+                ly = [0 for _ in range(len(ty))]
+            if len(ty) == len(ly):
+                if isinstance(py, int):
+                    py = [py for _ in range(len(ty))]
+                if py is None:
+                    py = [0 for _ in range(len(ty))]
+                if len(ty) == len(py):
+                    for i in range(len(ty)):
+                        clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
+                else:
+                    raise ValueError('FixBorder: ty and py must be the same length, or py must be int or None')
+            else:
+                raise ValueError('FixBorder: ty and ly must be the same length, or ly must be int or None')
+        else:
+            raise ValueError('FixBorder: ty and dy must be the same length')
+    elif (ty is None and dy is not None) or (ty is not None and dy is None):
+        raise ValueError('FixBorder: ty and dy must be of the same type')
+    
+    return clip
+
 def FixBorderX(clip: VideoNode, target: int = 0, donor: int = 0, limit: int = 0, plane: int = 0) -> VideoNode:
     
     space = clip.format.color_family
