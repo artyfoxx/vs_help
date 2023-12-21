@@ -322,7 +322,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     return clip
 
-def MaskDetail(clip: VideoNode, final_width: float | int | None = None, final_height: float | int | None = None, RGmode: int = 3,
+def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: float | None = None, RGmode: int = 3,
                cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
                src_left: float | None = None, src_top: float | None = None, src_width: float | None = None, src_height: float | None = None,
                kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
@@ -388,7 +388,7 @@ def MaskDetail(clip: VideoNode, final_width: float | int | None = None, final_he
         if final_width is None:
             raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" can\'t be \"None\"')
         if not isinstance(final_width, int) or not isinstance(final_height, int):
-            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" and \"final_height\" must be intgers')
+            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" and \"final_height\" must be \"int\"')
         if space != GRAY and (final_width >> sub_w << sub_w != final_width or final_height >> sub_h << sub_h != final_height):
             raise ValueError('MaskDetail: \"final_width\" or \"final_height\" does not match the chroma subsampling of the output clip')
         if src_left is None:
