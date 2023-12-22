@@ -2,16 +2,42 @@ from vapoursynth import core, GRAY, VideoNode
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
-def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
+def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
+             sw: float | None = None, sh: float | None = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
     
     w = clip.width
     h = clip.height
     
     if dx is None:
         dx = w << 1
-    
     if dy is None:
         dy = h << 1
+    if sx is None:
+        sx = 0
+        isx = 0
+    else:
+        isx = -sx * dx / w
+    if sy is None:
+        sy = 0
+        isy = 0
+    else:
+        isy = -sy * dy / h
+    if sw is None:
+        sw = w
+        isw = dx
+    elif sw <= 0:
+        sw = w - sx + sw
+        isw = (dx << 1) - sw * dx / w
+    else:
+        isw = (dx << 1) - sw * dx / w
+    if sh is None:
+        sh = h
+        ish = dy
+    elif sh <= 0:
+        sh = h - sy + sh
+        ish = (dy << 1) - sh * dy / h
+    else:
+        ish = (dy << 1) - sh * dy / h
     
     space = clip.format.color_family
     if space != GRAY:
@@ -22,36 +48,36 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = 16)
     
-    t1 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 1)
-    t2 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 2)
-    t3 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 3)
-    t4 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 4)
-    t5 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 5)
-    t6 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 9)
-    t7 = core.fmtc.resample(clip, dx, dy, kernel = "lanczos", taps = 36)
+    t1 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 1)
+    t2 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 2)
+    t3 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 3)
+    t4 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 4)
+    t5 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 5)
+    t6 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 9)
+    t7 = core.fmtc.resample(clip, dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = 36)
     
-    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, kernel = "lanczos", taps = 1)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, kernel = "lanczos", taps = 2)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, kernel = "lanczos", taps = 3)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, kernel = "lanczos", taps = 6)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 1)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 2)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 2)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 3)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, isx, isy, isw, ish, kernel = "lanczos", taps = 6)], 'x y - abs')
     
-    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, kernel = "bilinear")], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, kernel = "bilinear")], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, kernel = "bilinear")], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, kernel = "bilinear")], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
-    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, kernel = "bilinear")], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x y - {thresh} *'), dx, dy, kernel = "lanczos", taps = mtaps3))
+    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.fmtc.resample(core.std.Expr([m1, m2], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
+    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, isx, isy, isw, ish, kernel = "bilinear")], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.fmtc.resample(core.std.Expr([m100, m3], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
+    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, isx, isy, isw, ish, kernel = "bilinear")], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.fmtc.resample(core.std.Expr([m101, m4], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
+    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, isx, isy, isw, ish, kernel = "bilinear")], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.fmtc.resample(core.std.Expr([m102, m5], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
+    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, isx, isy, isw, ish, kernel = "bilinear")], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.fmtc.resample(core.std.Expr([m103, m6], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
+    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, isx, isy, isw, ish, kernel = "bilinear")], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, kernel = "spline36")], list(range(chroma.format.num_planes)), chroma.format.color_family)
+        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, sx, sy, sw, sh, kernel = "spline36")], list(range(chroma.format.num_planes)), chroma.format.color_family)
     
     if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = bits)
@@ -134,9 +160,9 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     
     return clip
 
-# Just a hardline znedi3 upscale with autotap3.
-def znedi3at(clip: VideoNode, target_width: int | None = None, target_height: int | None = None, src_left: float | None = None,
-             src_top: float | None = None, src_width: float | None = None, src_height: float | None = None) -> VideoNode:
+# Custom upscaler for the rescale class from muvsfunc. Just a hardline znedi3 upscale with autotap3.
+def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
+             sw: float | None = None, sh: float | None = None) -> VideoNode:
     
     if clip.format.color_family != GRAY:
         raise ValueError('znedi3at: Only \"GRAY\" clip is supported')
@@ -144,34 +170,28 @@ def znedi3at(clip: VideoNode, target_width: int | None = None, target_height: in
     w = clip.width
     h = clip.height
     
-    if target_width is None:
-        target_width = w
-    if target_height is None:
-        target_height = h
-    if src_left is None:
-        src_left = 0
-    if src_top is None:
-        src_top = 0
-    if src_width is None:
-        src_width = w
-    elif src_width <= 0:
-        src_width = w - src_left + src_width
-    if src_height is None:
-        src_height = h
-    elif src_height <= 0:
-        src_height = h - src_top + src_height
-    
-    bits = clip.format.bits_per_sample
+    if dx is None:
+        dx = w
+    if dy is None:
+        dy = h
+    if sx is None:
+        sx = 0
+    if sy is None:
+        sy = 0
+    if sw is None:
+        sw = w
+    elif sw <= 0:
+        sw = w - sx + sw
+    if sh is None:
+        sh = h
+    elif sh <= 0:
+        sh = h - sy + sh
     
     clip = core.std.Transpose(clip)
     clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
     clip = core.std.Transpose(clip)
     clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
-    clip = core.fmtc.resample(clip, kernel = "spline64", sx = src_left * 2 - 0.5, sy = src_top * 2 - 0.5, sw = src_width * 2, sh = src_height * 2)
-    clip = autotap3(clip, target_width, target_height)
-    
-    if bits < 16:
-        clip = core.fmtc.bitdepth(clip, bits = bits)
+    clip = autotap3(clip, dx, dy, sx * 2 - 0.5, sy * 2 - 0.5, sw * 2, sh * 2)
     
     return clip
 
