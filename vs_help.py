@@ -165,7 +165,7 @@ def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
              sw: float | None = None, sh: float | None = None) -> VideoNode:
     
     if clip.format.color_family != GRAY:
-        raise ValueError('znedi3at: Only \"GRAY\" clip is supported')
+        raise ValueError('znedi3at: Only "GRAY" clip is supported')
     
     w = clip.width
     h = clip.height
@@ -228,11 +228,11 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
                     for i in range(length_x):
                         clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
                 else:
-                    raise ValueError('FixBorder: \"px\" must be shorter or the same length to \"tx\", or \"px\" must be \"int\" or \"None\"')
+                    raise ValueError('FixBorder: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
             else:
-                raise ValueError('FixBorder: \"lx\" must be shorter or the same length to \"tx\", or \"lx\" must be \"int\" or \"None\"')
+                raise ValueError('FixBorder: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
         else:
-            raise ValueError('FixBorder: \"dx\" must be the same length to \"tx\", or \"dx\" must be \"None\"')
+            raise ValueError('FixBorder: "dx" must be the same length to "tx", or "dx" must be "None"')
     
     if ty is not None:
         if isinstance(ty, int):
@@ -262,11 +262,11 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
                     for i in range(length_y):
                         clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
                 else:
-                    raise ValueError('FixBorder: \"py\" must be shorter or the same length to \"ty\", or \"py\" must be \"int\" or \"None\"')
+                    raise ValueError('FixBorder: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
             else:
-                raise ValueError('FixBorder: \"ly\" must be shorter or the same length to \"ty\", or \"ly\" must be \"int\" or \"None\"')
+                raise ValueError('FixBorder: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
         else:
-            raise ValueError('FixBorder: \"dy\" must be the same length to \"ty\", or \"dy\" must be \"None\"')
+            raise ValueError('FixBorder: "dy" must be the same length to "ty", or "dy" must be "None"')
     
     return clip
 
@@ -357,7 +357,7 @@ def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: 
     '''
     
     if final_height is None:
-        raise ValueError('MaskDetail: \"final_height\" must be specified')
+        raise ValueError('MaskDetail: "final_height" must be specified')
     
     space = clip.format.color_family
     if space != GRAY:
@@ -406,11 +406,11 @@ def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: 
     
     if down:
         if final_width is None:
-            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" can\'t be \"None\"')
+            raise ValueError('MaskDetail: if "down" is "True", then "final_width" can\'t be "None"')
         if not isinstance(final_width, int) or not isinstance(final_height, int):
-            raise ValueError('MaskDetail: if \"down\" is \"True\", then \"final_width\" and \"final_height\" must be \"int\"')
+            raise ValueError('MaskDetail: if "down" is "True", then "final_width" and "final_height" must be "int"')
         if space != GRAY and (final_width >> sub_w << sub_w != final_width or final_height >> sub_h << sub_h != final_height):
-            raise ValueError('MaskDetail: \"final_width\" or \"final_height\" does not match the chroma subsampling of the output clip')
+            raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
         if src_left is None:
             src_left = 0
         if src_top is None:
