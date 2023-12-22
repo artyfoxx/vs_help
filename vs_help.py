@@ -342,10 +342,9 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     return clip
 
-def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: float | None = None, RGmode: int = 3,
-               cutoff: int = 70, gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False,
-               src_left: float | None = None, src_top: float | None = None, src_width: float | None = None, src_height: float | None = None,
-               kernel: str = 'bilinear', b: float = 0, c: float = 0.5, taps: int = 3, down: bool = True, frac: bool = True) -> VideoNode:
+def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None, RGmode: int = 3, cutoff: int = 70,
+               gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
+               b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: float) -> VideoNode:
     
     '''
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
@@ -356,8 +355,8 @@ def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: 
     Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
     '''
     
-    if final_height is None:
-        raise ValueError('MaskDetail: "final_height" must be specified')
+    if dy is None:
+        raise ValueError('MaskDetail: "dy" must be specified')
     
     space = clip.format.color_family
     if space != GRAY:
@@ -386,16 +385,16 @@ def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: 
     else:
         raise ValueError('MaskDetail: Unsupported kernel type')
     
-    if final_width is None:
+    if dx is None:
         if frac:
-            resc = rescaler.rescale(clip, final_height, h)
+            resc = rescaler.rescale(clip, dy, h)
         else:
-            resc = rescaler.rescale(clip, final_height)
+            resc = rescaler.rescale(clip, dy)
     else:
         if frac:
-            desc = rescaler.descale(clip, final_width, final_height, h)
+            desc = rescaler.descale(clip, dx, dy, h)
         else:
-            desc = rescaler.descale(clip, final_width, final_height)
+            desc = rescaler.descale(clip, dx, dy)
         resc = rescaler.upscale(desc, w, h)
     
     diff = core.std.MakeDiff(clip, resc)
@@ -405,25 +404,13 @@ def MaskDetail(clip: VideoNode, final_width: float | None = None, final_height: 
     final = haf_mt_inflate_multi(expanded, radius = inflateN)
     
     if down:
-        if final_width is None:
-            raise ValueError('MaskDetail: if "down" is "True", then "final_width" can\'t be "None"')
-        if not isinstance(final_width, int) or not isinstance(final_height, int):
-            raise ValueError('MaskDetail: if "down" is "True", then "final_width" and "final_height" must be "int"')
-        if space != GRAY and (final_width >> sub_w << sub_w != final_width or final_height >> sub_h << sub_h != final_height):
-            raise ValueError('MaskDetail: "final_width" or "final_height" does not match the chroma subsampling of the output clip')
-        if src_left is None:
-            src_left = 0
-        if src_top is None:
-            src_top = 0
-        if src_width is None:
-            src_width = w
-        elif src_width <= 0:
-            src_width = w - src_left + src_width
-        if src_height is None:
-            src_height = h
-        elif src_height <= 0:
-            src_height = h - src_top + src_height
-        final = core.resize.Bilinear(final, final_width, final_height, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height)
+        if dx is None:
+            raise ValueError('MaskDetail: if "down" is "True", then "dx" can\'t be "None"')
+        if not isinstance(dx, int) or not isinstance(dy, int):
+            raise ValueError('MaskDetail: if "down" is "True", then "dx" and "dy" must be "int"')
+        if space != GRAY and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
+            raise ValueError('MaskDetail: "dx" or "dy" does not match the chroma subsampling of the output clip')
+        final = core.resize.Bilinear(final, dx, dy, **down_args)
     
     if blur_more:
         final = core.rgvs.RemoveGrain(final, 12)
