@@ -214,16 +214,14 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
             elif lx is None:
                 lx = [0 for _ in range(length_x)]
             elif length_x > len(lx):
-                for _ in range(length_x - len(lx)):
-                    lx.append(lx[-1])
+                lx += [lx[-1] for _ in range(length_x - len(lx))]
             if length_x == len(lx):
                 if isinstance(px, int):
                     px = [px for _ in range(length_x)]
                 elif px is None:
                     px = [0 for _ in range(length_x)]
                 elif length_x > len(px):
-                    for _ in range(length_x - len(px)):
-                        px.append(px[-1])
+                    px += [px[-1] for _ in range(length_x - len(px))]
                 if length_x == len(px):
                     for i in range(length_x):
                         clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
@@ -248,16 +246,14 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
             elif ly is None:
                 ly = [0 for _ in range(length_y)]
             elif length_y > len(ly):
-                for _ in range(length_y - len(ly)):
-                    ly.append(ly[-1])
+                ly += [ly[-1] for _ in range(length_y - len(ly))]
             if length_y == len(ly):
                 if isinstance(py, int):
                     py = [py for _ in range(length_y)]
                 elif py is None:
                     py = [0 for _ in range(length_y)]
                 elif length_y > len(py):
-                    for _ in range(length_y - len(py)):
-                        py.append(py[-1])
+                    py += [py[-1] for _ in range(length_y - len(py))]
                 if length_y == len(py):
                     for i in range(length_y):
                         clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
