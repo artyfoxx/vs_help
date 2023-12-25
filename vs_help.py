@@ -1,5 +1,6 @@
 from vapoursynth import core, GRAY, VideoNode
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
+from itertools import chain
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
@@ -415,3 +416,23 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         final = core.resize.Point(final, format = format_id)
     
     return final
+
+# Just an alias for mv.Degrain
+def MDegrainN(clip: VideoNode, tr: int = 1, super: dict[str, int | bool] = {}, analyse: dict[str, int | bool] = {},
+              degrain: dict[str, int | bool] = {}, recalculate: dict[str, int | bool] = {}) -> VideoNode:
+    
+    if tr > 6 or tr < 1:
+        raise ValueError('MDegrainN: 1 <= "tr" <= 6')
+    
+    sup = core.mv.Super(clip, **super)
+    
+    mvbw = [core.mv.Analyse(sup, isb = True, delta = i, **analyse) for i in range(1, tr + 1)]
+    mvfw = [core.mv.Analyse(sup, isb = False, delta = i, **analyse) for i in range(1, tr + 1)]
+    
+    if len(recalculate) > 0:
+        mvbw = [core.mv.Recalculate(sup, mvbw[i], **recalculate) for i in range(tr)]
+        mvfw = [core.mv.Recalculate(sup, mvfw[i], **recalculate) for i in range(tr)]
+    
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw[:tr], mvfw[:tr])), **degrain)')
+    
+    return clip
