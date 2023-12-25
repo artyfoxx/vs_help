@@ -197,73 +197,81 @@ def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
     return clip
 
 # A simple function for fix brightness artifacts at the borders of the frame.
-def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int] | None = None,
-              dy: int | list[int] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
+def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int | None] | None = None,
+              dy: int | list[int | None] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
               px: int | list[int] | None = None, py: int | list[int] | None = None) -> VideoNode:
     
     if tx is not None:
         if isinstance(tx, int):
             tx = [tx]
-        if isinstance(dx, int):
-            dx = [dx]
-        elif dx is None:
-            dx = tx
+        
         length_x = len(tx)
-        if length_x == len(dx):
-            if isinstance(lx, int):
-                lx = [lx for _ in range(length_x)]
-            elif lx is None:
-                lx = [0 for _ in range(length_x)]
-            elif length_x > len(lx):
-                lx += [lx[-1] for _ in range(length_x - len(lx))]
-            if length_x == len(lx):
-                if isinstance(px, int):
-                    px = [px for _ in range(length_x)]
-                elif px is None:
-                    px = [0 for _ in range(length_x)]
-                elif length_x > len(px):
-                    px += [px[-1] for _ in range(length_x - len(px))]
-                if length_x == len(px):
-                    for i in range(length_x):
-                        clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
-                else:
-                    raise ValueError('FixBorder: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
-            else:
-                raise ValueError('FixBorder: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
-        else:
-            raise ValueError('FixBorder: "dx" must be the same length to "tx", or "dx" must be "None"')
+        
+        if isinstance(dx, int):
+            dx = [dx] + [None for _ in range(length_x - 1)]
+        elif dx is None:
+            dx = [None for _ in range(length_x)]
+        elif length_x > len(dx):
+            dx += [None for _ in range(length_x - len(dx))]
+        elif length_x < len(dx):
+            raise ValueError('FixBorder: "dx" must be shorter or the same length to "tx", or "dx" must be "int" or "None"')
+        
+        if isinstance(lx, int):
+            lx = [lx for _ in range(length_x)]
+        elif lx is None:
+            lx = [0 for _ in range(length_x)]
+        elif length_x > len(lx):
+            lx += [lx[-1] for _ in range(length_x - len(lx))]
+        elif length_x < len(lx):
+            raise ValueError('FixBorder: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
+        
+        if isinstance(px, int):
+            px = [px for _ in range(length_x)]
+        elif px is None:
+            px = [0 for _ in range(length_x)]
+        elif length_x > len(px):
+            px += [px[-1] for _ in range(length_x - len(px))]
+        elif length_x < len(px):
+            raise ValueError('FixBorder: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
+        
+        for i in range(length_x):
+            clip = FixBorderX(clip, tx[i], dx[i], lx[i], px[i])
     
     if ty is not None:
         if isinstance(ty, int):
             ty = [ty]
-        if isinstance(dy, int):
-            dy = [dy]
-        elif dy is None:
-            dy = ty
+        
         length_y = len(ty)
-        if length_y == len(dy):
-            if isinstance(ly, int):
-                ly = [ly for _ in range(length_y)]
-            elif ly is None:
-                ly = [0 for _ in range(length_y)]
-            elif length_y > len(ly):
-                ly += [ly[-1] for _ in range(length_y - len(ly))]
-            if length_y == len(ly):
-                if isinstance(py, int):
-                    py = [py for _ in range(length_y)]
-                elif py is None:
-                    py = [0 for _ in range(length_y)]
-                elif length_y > len(py):
-                    py += [py[-1] for _ in range(length_y - len(py))]
-                if length_y == len(py):
-                    for i in range(length_y):
-                        clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
-                else:
-                    raise ValueError('FixBorder: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
-            else:
-                raise ValueError('FixBorder: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
-        else:
-            raise ValueError('FixBorder: "dy" must be the same length to "ty", or "dy" must be "None"')
+        
+        if isinstance(dy, int):
+            dy = [dy] + [None for _ in range(length_y - 1)]
+        elif dy is None:
+            dy = [None for _ in range(length_y)]
+        elif length_y > len(dy):
+            dy += [None for _ in range(length_y - len(dy))]
+        elif length_y < len(dy):
+            raise ValueError('FixBorder: "dy" must be shorter or the same length to "ty", or "dy" must be "int" or "None"')
+        
+        if isinstance(ly, int):
+            ly = [ly for _ in range(length_y)]
+        elif ly is None:
+            ly = [0 for _ in range(length_y)]
+        elif length_y > len(ly):
+            ly += [ly[-1] for _ in range(length_y - len(ly))]
+        elif length_y < len(ly):
+            raise ValueError('FixBorder: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
+        
+        if isinstance(py, int):
+            py = [py for _ in range(length_y)]
+        elif py is None:
+            py = [0 for _ in range(length_y)]
+        elif length_y > len(py):
+            py += [py[-1] for _ in range(length_y - len(py))]
+        elif length_y < len(py):
+            raise ValueError('FixBorder: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
+        
+        for i in range(length_y):
+            clip = FixBorderY(clip, ty[i], dy[i], ly[i], py[i])
     
     return clip
 
@@ -276,7 +284,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     w = clip.width
     
-    if target == donor or donor is None:
+    if donor is None:
         donor = target + 1 if target < w >> 1 else target - 1
     
     target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
@@ -312,7 +320,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     h = clip.height
     
-    if target == donor or donor is None:
+    if donor is None:
         donor = target + 1 if target < h >> 1 else target - 1
     
     target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
