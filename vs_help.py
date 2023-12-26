@@ -200,7 +200,7 @@ def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
     
     return clip
 
-# A simple function for fix brightness artifacts at the borders of the frame.
+# A simple functions for fix brightness artifacts at the borders of the frame.
 def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int | None] | None = None,
               dy: int | list[int | None] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
               px: int | list[int] | None = None, py: int | list[int] | None = None) -> VideoNode:
@@ -461,5 +461,33 @@ def MDegrainN(clip: VideoNode, tr: int = 1, super: dict[str, int | bool] = {}, a
         mvfw = [core.mv.Recalculate(sup, mvfw[i], **recalculate) for i in range(tr)]
     
     clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw, mvfw)), **degrain)')
+    
+    return clip
+
+# Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
+def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, descale: dict[str, str | float | bool | list[float]] = {}) -> VideoNode:
+    
+    if dx is None:
+        dx = clip.width
+    if dy is None:
+        dy = clip.height >> 1
+    
+    descale2 = {}
+    for i in descale:
+        if isinstance(descale[i], list):
+            descale2[i] = descale[i][1]
+            descale[i] = descale[i][0]
+        else:
+            descale2[i] = descale[i]
+    
+    clip = core.std.SeparateFields(clip, True)
+    clip = core.std.SetFieldBased(clip, 0)
+    
+    clip_tf = clip[0::2].descale.Descale(dx, dy, **descale)
+    clip_bf = clip[1::2].descale.Descale(dx, dy, **descale2)
+    
+    clip = core.std.Interleave([clip_tf, clip_bf])
+    clip = core.std.DoubleWeave(clip, True)[0::2]
+    clip = core.std.SetFieldBased(clip, 0)
     
     return clip
