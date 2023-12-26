@@ -13,16 +13,19 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
         dx = w << 1
     if dy is None:
         dy = h << 1
+    
     if sx is None:
         sx = 0
         isx = 0
     else:
         isx = -sx * dx / w
+    
     if sy is None:
         sy = 0
         isy = 0
     else:
         isy = -sy * dy / h
+    
     if sw is None:
         sw = w
         isw = dx
@@ -31,6 +34,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
         isw = (dx << 1) - sw * dx / w
     else:
         isw = (dx << 1) - sw * dx / w
+    
     if sh is None:
         sh = h
         ish = dy
@@ -423,10 +427,13 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     if down:
         if dx is None:
             raise ValueError('MaskDetail: if "down" is "True", then "dx" can\'t be "None"')
+        
         if not isinstance(dx, int) or not isinstance(dy, int):
             raise ValueError('MaskDetail: if "down" is "True", then "dx" and "dy" must be "int"')
+        
         if space != GRAY and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError('MaskDetail: "dx" or "dy" does not match the chroma subsampling of the output clip')
+        
         final = core.resize.Bilinear(final, dx, dy, **down_args)
     
     if blur_more:
