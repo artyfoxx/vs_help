@@ -206,32 +206,37 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
             tx = [tx]
         
         length_x = len(tx)
-        
-        if isinstance(dx, int):
+        if length_x == len(dx):
+            pass
+        elif isinstance(dx, int):
             dx = [dx] + [None for _ in range(length_x - 1)]
         elif dx is None:
             dx = [None for _ in range(length_x)]
         elif length_x > len(dx):
             dx += [None for _ in range(length_x - len(dx))]
-        elif length_x < len(dx):
+        else:
             raise ValueError('FixBorder: "dx" must be shorter or the same length to "tx", or "dx" must be "int" or "None"')
         
-        if isinstance(lx, int):
+        if length_x == len(lx):
+            pass
+        elif isinstance(lx, int):
             lx = [lx for _ in range(length_x)]
         elif lx is None:
             lx = [0 for _ in range(length_x)]
         elif length_x > len(lx):
             lx += [lx[-1] for _ in range(length_x - len(lx))]
-        elif length_x < len(lx):
+        else:
             raise ValueError('FixBorder: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
         
-        if isinstance(px, int):
+        if length_x == len(px):
+            pass
+        elif isinstance(px, int):
             px = [px for _ in range(length_x)]
         elif px is None:
             px = [0 for _ in range(length_x)]
         elif length_x > len(px):
             px += [px[-1] for _ in range(length_x - len(px))]
-        elif length_x < len(px):
+        else:
             raise ValueError('FixBorder: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
         
         for i in range(length_x):
@@ -243,31 +248,37 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
         
         length_y = len(ty)
         
-        if isinstance(dy, int):
+        if length_y == len(dy):
+            pass
+        elif isinstance(dy, int):
             dy = [dy] + [None for _ in range(length_y - 1)]
         elif dy is None:
             dy = [None for _ in range(length_y)]
         elif length_y > len(dy):
             dy += [None for _ in range(length_y - len(dy))]
-        elif length_y < len(dy):
+        else:
             raise ValueError('FixBorder: "dy" must be shorter or the same length to "ty", or "dy" must be "int" or "None"')
         
-        if isinstance(ly, int):
+        if length_y == len(ly):
+            pass
+        elif isinstance(ly, int):
             ly = [ly for _ in range(length_y)]
         elif ly is None:
             ly = [0 for _ in range(length_y)]
         elif length_y > len(ly):
             ly += [ly[-1] for _ in range(length_y - len(ly))]
-        elif length_y < len(ly):
+        else:
             raise ValueError('FixBorder: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
         
-        if isinstance(py, int):
+        if length_y == len(py):
+            pass
+        elif isinstance(py, int):
             py = [py for _ in range(length_y)]
         elif py is None:
             py = [0 for _ in range(length_y)]
         elif length_y > len(py):
             py += [py[-1] for _ in range(length_y - len(py))]
-        elif length_y < len(py):
+        else:
             raise ValueError('FixBorder: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
         
         for i in range(length_y):
