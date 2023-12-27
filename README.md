@@ -14,3 +14,4 @@ and some dependencies on them.
 * [AkarinVS-vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
 * [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
 * [vapoursynth-mvtools](https://github.com/AmusementClub/vapoursynth-mvtools)
+* [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
