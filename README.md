@@ -6,7 +6,7 @@ Just a few vapoursynth function...
 * [Python](https://www.python.org/) >= 3.10
 ## Scripts
 * [muvsfunc](https://github.com/WolframRhodium/muvsfunc) (master branch)\
-and the dependencies of them.
+and some dependencies on them.
 ## Plugins
 * [fmtconv](https://github.com/EleonoreMizo/fmtconv)
 * [vs-removegrain](https://github.com/vapoursynth/vs-removegrain)
