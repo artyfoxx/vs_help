@@ -1,6 +1,7 @@
 from vapoursynth import core, GRAY, VideoNode
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
 from itertools import chain
+from typing import Any
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
@@ -95,7 +96,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     '''
     Supported formats: YUV 8 - 16 bit integer.
     mode = 1, 5, 11 - the weakest, artifacts will not cause.
-    mode = 2, 3, 4 - bad modes, eat innocent parts, can not be used.
+    mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
     mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
     mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
     '''
@@ -138,8 +139,8 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         raise ValueError('dehalo: Please use 1...4 mask type')
     
     blurr = haf_MinBlur(clip, 1)
-    blurr = core.rgvs.RemoveGrain(blurr, 11)
-    blurr = core.rgvs.RemoveGrain(blurr, 11)
+    blurr = core.std.Convolution(blurr, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+    blurr = core.std.Convolution(blurr, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
         dh1 = core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1)
@@ -365,7 +366,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
 
 def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None, RGmode: int = 3, cutoff: int = 70,
                gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
-               b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: float) -> VideoNode:
+               b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: Any) -> VideoNode:
     
     '''
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
@@ -437,7 +438,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         final = core.resize.Bilinear(final, dx, dy, **down_args)
     
     if blur_more:
-        final = core.rgvs.RemoveGrain(final, 12)
+        final = core.std.Convolution(final, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if space != GRAY:
         final = core.resize.Point(final, format = format_id)
@@ -445,49 +446,88 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     return final
 
 # Just an alias for mv.Degrain
-def MDegrainN(clip: VideoNode, tr: int = 1, super: dict[str, int | bool] = {}, analyse: dict[str, int | bool] = {},
-              degrain: dict[str, int | bool] = {}, recalculate: dict[str, int | bool] = {}) -> VideoNode:
+def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
     
     if tr > 6 or tr < 1:
         raise ValueError('MDegrainN: 1 <= "tr" <= 6')
     
-    sup = core.mv.Super(clip, **super)
+    if len(args) < 3:
+        args += ({},) * (3 - len(args))
     
-    mvbw = [core.mv.Analyse(sup, isb = True, delta = i, **analyse) for i in range(1, tr + 1)]
-    mvfw = [core.mv.Analyse(sup, isb = False, delta = i, **analyse) for i in range(1, tr + 1)]
+    sup = core.mv.Super(clip, **args[0])
     
-    if len(recalculate) > 0:
-        mvbw = [core.mv.Recalculate(sup, mvbw[i], **recalculate) for i in range(tr)]
-        mvfw = [core.mv.Recalculate(sup, mvfw[i], **recalculate) for i in range(tr)]
+    mvbw = [core.mv.Analyse(sup, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
+    mvfw = [core.mv.Analyse(sup, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw, mvfw)), **degrain)')
+    if len(args) > 3:
+        for i in args[3:]:
+            mvbw = [core.mv.Recalculate(sup, mvbw[j], **i) for j in range(tr)]
+            mvfw = [core.mv.Recalculate(sup, mvfw[j], **i) for j in range(tr)]
+    
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
     
     return clip
 
 # Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
-def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, descale: dict[str, str | float | bool | list[float]] = {}) -> VideoNode:
+def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **descale_args: Any) -> VideoNode:
     
     if dx is None:
         dx = clip.width
     if dy is None:
         dy = clip.height >> 1
     
-    descale2 = {}
-    for i in descale:
-        if isinstance(descale[i], list):
-            descale2[i] = descale[i][1]
-            descale[i] = descale[i][0]
+    descale_args2 = {}
+    for i in descale_args:
+        if isinstance(descale_args[i], list):
+            descale_args2[i] = descale_args[i][1]
+            descale_args[i] = descale_args[i][0]
         else:
-            descale2[i] = descale[i]
+            descale_args2[i] = descale_args[i]
     
     clip = core.std.SeparateFields(clip, True)
     clip = core.std.SetFieldBased(clip, 0)
     
-    clip_tf = clip[0::2].descale.Descale(dx, dy, **descale)
-    clip_bf = clip[1::2].descale.Descale(dx, dy, **descale2)
+    clip_tf = clip[::2].descale.Descale(dx, dy, **descale_args)
+    clip_bf = clip[1::2].descale.Descale(dx, dy, **descale_args2)
     
     clip = core.std.Interleave([clip_tf, clip_bf])
-    clip = core.std.DoubleWeave(clip, True)[0::2]
+    clip = core.std.DoubleWeave(clip, True)[::2]
     clip = core.std.SetFieldBased(clip, 0)
+    
+    return clip
+
+def daa(clip: VideoNode, sharp: bool = True, **znedi3_args: Any) -> VideoNode:
+    
+    nn = core.znedi3.nnedi3(clip, field = 3, **znedi3_args)
+    dbl = core.std.Merge(nn[::2], nn[1::2])
+    
+    if sharp:
+        matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
+        shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix))
+        dblD = core.std.MakeDiff(clip, dbl)
+        DD = core.rgvs.Repair(shrpD, dblD, 13)
+        dbl = core.std.MergeDiff(dbl, DD)
+    
+    return dbl
+
+def averagefields(clip: VideoNode, plane: int = 0) -> VideoNode:
+    
+    space = clip.format.color_family
+    if space != GRAY:
+        orig = clip
+        clip = core.std.ShufflePlanes(clip, plane, GRAY)
+    
+    clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+    
+    clip_tf = core.akarin.Expr([clip[::2], clip[1::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+    clip_bf = core.akarin.Expr([clip[1::2], clip[::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+    
+    clip = core.std.Interleave([clip_tf, clip_bf])
+    clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+    clip = core.std.DoubleWeave(clip, True)[::2]
+    clip = core.std.SetFieldBased(clip, 0)
+    
+    if space != GRAY:
+        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
     
     return clip
