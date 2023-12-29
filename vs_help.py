@@ -390,10 +390,6 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
                gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
                b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: Any) -> VideoNode:
     
-    '''
-
-    '''
-    
     if dy is None:
         raise ValueError('MaskDetail: "dy" must be specified')
     
@@ -483,10 +479,9 @@ def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
     mvbw = [core.mv.Analyse(sup, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
     mvfw = [core.mv.Analyse(sup, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
     
-    if len(args) > 3:
-        for i in args[3:]:
-            mvbw = [core.mv.Recalculate(sup, mvbw[j], **i) for j in range(tr)]
-            mvfw = [core.mv.Recalculate(sup, mvfw[j], **i) for j in range(tr)]
+    for i in args[3:]:
+        mvbw = [core.mv.Recalculate(sup, mvbw[j], **i) for j in range(tr)]
+        mvfw = [core.mv.Recalculate(sup, mvfw[j], **i) for j in range(tr)]
     
     clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
     
@@ -560,15 +555,16 @@ def averagefields(clip: VideoNode, planes: int | list[int] | None = None) -> Vid
     
     for i in planes:
         if i >= num_p:
-            raise ValueError(f'averagefields: wrong plane {i}')
+            raise ValueError(f'averagefields: plane {i} does not exist')
         
         if space != GRAY:
             orig = clip
             clip = core.std.ShufflePlanes(clip, i, GRAY)
         
         clip = core.std.PlaneStats(clip)
-        clip_tf = core.akarin.Expr([clip[::2], clip[1::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
-        clip_bf = core.akarin.Expr([clip[1::2], clip[::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+        fields = [clip[::2], clip[1::2]]
+        clip_tf = core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+        clip_bf = core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *')
         clip = core.std.Interleave([clip_tf, clip_bf])
         clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
         
