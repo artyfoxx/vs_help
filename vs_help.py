@@ -3,7 +3,11 @@ from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf
 from itertools import chain
 from typing import Any
 
-# Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions and moved to fmtconv.
+
+# Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
+# It is well suited for downsampling. Compared to the original, in addition to the porting itself,
+# the entire internal reuse has been transferred to fmtconv. Crop parameters with fmtconv-style names have also been added.
+
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
              sw: float | None = None, sh: float | None = None, mtaps3: int = 1, thresh: int = 256) -> VideoNode:
     
@@ -47,7 +51,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
     
     space = clip.format.color_family
     if space != GRAY:
-        chroma = clip
+        orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     bits = clip.format.bits_per_sample
@@ -83,27 +87,26 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
     clip = core.std.MaskedMerge(cp5, t7, core.fmtc.resample(core.std.Expr([m104, m7], f'x y - {thresh} *'), dx, dy, sx, sy, sw, sh, kernel = "lanczos", taps = mtaps3))
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(chroma, dx, dy, sx, sy, sw, sh, kernel = "spline36")], list(range(chroma.format.num_planes)), chroma.format.color_family)
+        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(orig, dx, dy, sx, sy, sw, sh, kernel = "spline36")], list(range(orig.format.num_planes)), space)
     
     if bits < 16:
         clip = core.fmtc.bitdepth(clip, bits = bits)
     
     return clip
 
+
 # Dehalo by bion-x, ported from AviSynth version with minor additions.
+# Supported formats: YUV 8 - 16 bit integer.
+# mode = 1, 5, 11 - the weakest, artifacts will not cause.
+# mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
+# mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
+# mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
+
 def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
-    
-    '''
-    Supported formats: YUV 8 - 16 bit integer.
-    mode = 1, 5, 11 - the weakest, artifacts will not cause.
-    mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
-    mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
-    mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
-    '''
     
     space = clip.format.color_family
     if space != GRAY:
-        chroma = clip
+        orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     
     step = clip.format.bits_per_sample - 8
@@ -159,19 +162,18 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     clip = haf_Clamp(clip, r, clip, 0, 20 << step)
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([clip, chroma], list(range(chroma.format.num_planes)), chroma.format.color_family)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if m:
-        clip = e3 if space == GRAY else core.resize.Point(clip, format = chroma.format.id)
+        clip = e3 if space == GRAY else core.resize.Point(clip, format = orig.format.id)
     
     return clip
 
+
 # Custom upscaler for the rescale class from muvsfunc. Just a hardline znedi3 upscale with autotap3.
+
 def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: float | None = None, sy: float | None = None,
              sw: float | None = None, sh: float | None = None) -> VideoNode:
-    
-    if clip.format.color_family != GRAY:
-        raise ValueError('znedi3at: Only "GRAY" clip is supported')
     
     w = clip.width
     h = clip.height
@@ -201,7 +203,17 @@ def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, sx: 
     
     return clip
 
+
 # A simple functions for fix brightness artifacts at the borders of the frame.
+# The values of the target columns/rows are set as lists of tx and ty or as an integer.
+# The values of the reference columns/rows are set as lists dx and dy or as an integer.
+# You can also set it as "None" or specify nothing at all, in this case, auto mode is enabled,
+# assigning the reference rows/columns as a single offset to the center of the frame relative to the target ones.
+# Next are the limits lx and ly, which can also be both integers and lists of them. A single limit applies to all iterations on a given axis.
+# Positive values prohibit darkening of the target rows/columns and limit the maximum lightening, negative values - on the contrary.
+# By default, the limits are zero, that is, they are disabled.
+# Last are plans px and py, which can also be both integers and lists of them. By default, the zero plan is set.
+
 def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int | None] | None = None,
               dy: int | list[int | None] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
               px: int | list[int] | None = None, py: int | list[int] | None = None) -> VideoNode:
@@ -213,35 +225,35 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
         length_x = len(tx)
         
         if isinstance(dx, int):
-            dx = [dx] + [None for _ in range(length_x - 1)]
+            dx = [dx] + [None] * (length_x - 1)
         elif dx is None:
-            dx = [None for _ in range(length_x)]
+            dx = [None] * length_x
         elif length_x == len(dx):
             pass
         elif length_x > len(dx):
-            dx += [None for _ in range(length_x - len(dx))]
+            dx += [None] * (length_x - len(dx))
         else:
             raise ValueError('FixBorder: "dx" must be shorter or the same length to "tx", or "dx" must be "int" or "None"')
         
         if isinstance(lx, int):
-            lx = [lx for _ in range(length_x)]
+            lx = [lx] * length_x
         elif lx is None:
-            lx = [0 for _ in range(length_x)]
+            lx = [0] * length_x
         elif length_x == len(lx):
             pass
         elif length_x > len(lx):
-            lx += [lx[-1] for _ in range(length_x - len(lx))]
+            lx += [lx[-1]] * (length_x - len(lx))
         else:
             raise ValueError('FixBorder: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
         
         if isinstance(px, int):
-            px = [px for _ in range(length_x)]
+            px = [px] * length_x
         elif px is None:
-            px = [0 for _ in range(length_x)]
+            px = [0] * length_x
         elif length_x == len(px):
             pass
         elif length_x > len(px):
-            px += [px[-1] for _ in range(length_x - len(px))]
+            px += [px[-1]] * (length_x - len(px))
         else:
             raise ValueError('FixBorder: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
         
@@ -255,35 +267,35 @@ def FixBorder(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list
         length_y = len(ty)
         
         if isinstance(dy, int):
-            dy = [dy] + [None for _ in range(length_y - 1)]
+            dy = [dy] + [None] * (length_y - 1)
         elif dy is None:
-            dy = [None for _ in range(length_y)]
+            dy = [None] * length_y
         elif length_y == len(dy):
             pass
         elif length_y > len(dy):
-            dy += [None for _ in range(length_y - len(dy))]
+            dy += [None] * (length_y - len(dy))
         else:
             raise ValueError('FixBorder: "dy" must be shorter or the same length to "ty", or "dy" must be "int" or "None"')
         
         if isinstance(ly, int):
-            ly = [ly for _ in range(length_y)]
+            ly = [ly] * length_y
         elif ly is None:
-            ly = [0 for _ in range(length_y)]
+            ly = [0] * length_y
         elif length_y == len(ly):
             pass
         elif length_y > len(ly):
-            ly += [ly[-1] for _ in range(length_y - len(ly))]
+            ly += [ly[-1]] * (length_y - len(ly))
         else:
             raise ValueError('FixBorder: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
         
         if isinstance(py, int):
-            py = [py for _ in range(length_y)]
+            py = [py] * length_y
         elif py is None:
-            py = [0 for _ in range(length_y)]
+            py = [0] * length_y
         elif length_y == len(py):
             pass
         elif length_y > len(py):
-            py += [py[-1] for _ in range(length_y - len(py))]
+            py += [py[-1]] * (length_y - len(py))
         else:
             raise ValueError('FixBorder: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
         
@@ -296,6 +308,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     space = clip.format.color_family
     if space != GRAY:
+        num_p = clip.format.num_planes
         orig = clip
         clip = core.std.ShufflePlanes(clip, plane, GRAY)
     
@@ -324,7 +337,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int | None = None, limit
         clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
+        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(num_p)], [(0 if i == plane else i) for i in range(num_p)], space)
     
     return clip
 
@@ -332,6 +345,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     
     space = clip.format.color_family
     if space != GRAY:
+        num_p = clip.format.num_planes
         orig = clip
         clip = core.std.ShufflePlanes(clip, plane, GRAY)
     
@@ -360,21 +374,24 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
         clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
     
     if space != GRAY:
-        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
+        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(num_p)], [(0 if i == plane else i) for i in range(num_p)], space)
     
     return clip
+
+
+# MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
+# Has nothing to do with the port by MonoS.
+# It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
+# and automatic width calculation based on the original aspect ratio.
+# "down = True" is added for backward compatibility and does not support fractional resolutions.
+# Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
 
 def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None, RGmode: int = 3, cutoff: int = 70,
                gain: float = 0.75, expandN: int = 2, inflateN: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
                b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: Any) -> VideoNode:
     
     '''
-    MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
-    Has nothing to do with the port by MonoS.
-    It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
-    and automatic width calculation based on the original aspect ratio.
-    "down = True" is added for backward compatibility and does not support fractional resolutions.
-    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
+
     '''
     
     if dy is None:
@@ -445,7 +462,14 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     
     return final
 
+
 # Just an alias for mv.Degrain
+# The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
+# If you do not set anything, the default settings of MVTools itself apply.
+# Function dictionaries are set in order: Super, Analyze, Degrain, Recalculate.
+# Recalculate is optional, but you can specify several of them (as many as you want).
+# If you need to specify settings for only one function, the rest of the dictionaries are served empty.
+
 def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
     
     if tr > 6 or tr < 1:
@@ -468,7 +492,11 @@ def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
     
     return clip
 
+
 # Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
+# The internal Descale functions are unloaded as a dictionary.
+# The function values that differ for the upper and lower fields are indicated in the list.
+
 def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **descale_args: Any) -> VideoNode:
     
     if dx is None:
@@ -496,6 +524,9 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     
     return clip
 
+
+# Just daa, I don't know what else to say...
+
 def daa(clip: VideoNode, sharp: bool = True, **znedi3_args: Any) -> VideoNode:
     
     nn = core.znedi3.nnedi3(clip, field = 3, **znedi3_args)
@@ -510,24 +541,41 @@ def daa(clip: VideoNode, sharp: bool = True, **znedi3_args: Any) -> VideoNode:
     
     return dbl
 
-def averagefields(clip: VideoNode, plane: int = 0) -> VideoNode:
+
+# Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
+# Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
+# Apparently it depends on the source.
+
+def averagefields(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     space = clip.format.color_family
-    if space != GRAY:
-        orig = clip
-        clip = core.std.ShufflePlanes(clip, plane, GRAY)
+    num_p = clip.format.num_planes
     
-    clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+    if planes is None:
+        planes = list(range(num_p))
+    elif isinstance(planes, int):
+        planes = [planes]
     
-    clip_tf = core.akarin.Expr([clip[::2], clip[1::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
-    clip_bf = core.akarin.Expr([clip[1::2], clip[::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+    clip = core.std.SeparateFields(clip, True)
     
-    clip = core.std.Interleave([clip_tf, clip_bf])
-    clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+    for i in planes:
+        if i >= num_p:
+            raise ValueError(f'averagefields: wrong plane {i}')
+        
+        if space != GRAY:
+            orig = clip
+            clip = core.std.ShufflePlanes(clip, i, GRAY)
+        
+        clip = core.std.PlaneStats(clip)
+        clip_tf = core.akarin.Expr([clip[::2], clip[1::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+        clip_bf = core.akarin.Expr([clip[1::2], clip[::2]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
+        clip = core.std.Interleave([clip_tf, clip_bf])
+        clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+        
+        if space != GRAY:
+            clip = core.std.ShufflePlanes([(clip if i == j else orig) for j in range(num_p)], [(0 if i == j else j) for j in range(num_p)], space)
+    
     clip = core.std.DoubleWeave(clip, True)[::2]
     clip = core.std.SetFieldBased(clip, 0)
-    
-    if space != GRAY:
-        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(orig.format.num_planes)], [(0 if i == plane else i) for i in range(orig.format.num_planes)], orig.format.color_family)
     
     return clip
