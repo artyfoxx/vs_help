@@ -433,7 +433,8 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         resc = rescaler.upscale(desc, w, h)
     
     diff = core.std.MakeDiff(clip, resc)
-    initial_mask = core.hist.Luma(diff).rgvs.RemoveGrain(RGmode)
+    initial_mask = core.hist.Luma(diff)
+    initial_mask = rgfix(initial_mask, RGmode)
     initial_mask = core.std.Expr(initial_mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
     final = haf_mt_inflate_multi(expanded, radius = inflateN)
@@ -573,5 +574,23 @@ def averagefields(clip: VideoNode, planes: int | list[int] | None = None) -> Vid
     
     clip = core.std.DoubleWeave(clip, True)[::2]
     clip = core.std.SetFieldBased(clip, 0)
+    
+    return clip
+
+
+# Alias for RemoveGrain with GRAY clip. For internal use.
+
+def rgfix(clip: VideoNode, mode: int = 2) -> VideoNode:
+    
+    if mode == 4:
+        clip = core.std.Median(clip)
+    elif mode == 11 or mode == 12:
+        clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+    elif mode == 19:
+        clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
+    elif mode == 20:
+        clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
+    else:
+        clip = core.rgvs.RemoveGrain(clip, mode)
     
     return clip
