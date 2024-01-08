@@ -1,5 +1,5 @@
 from vapoursynth import core, GRAY, VideoNode
-from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale
+from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale, haf_DitherLumaRebuild
 from itertools import chain
 from typing import Any
 
@@ -434,7 +434,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     
     diff = core.std.MakeDiff(clip, resc)
     initial_mask = core.hist.Luma(diff)
-    initial_mask = rgfix(initial_mask, RGmode)
+    initial_mask = RemoveGrainFix(initial_mask, RGmode)
     initial_mask = core.std.Expr(initial_mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
     final = haf_mt_inflate_multi(expanded, radius = inflateN)
@@ -467,7 +467,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
 # Recalculate is optional, but you can specify several of them (as many as you want).
 # If you need to specify settings for only one function, the rest of the dictionaries are served empty.
 
-def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
+def MDegrainN(clip: VideoNode, tr: int = 1, dark: bool = True, *args: dict[str, Any]) -> VideoNode:
     
     if tr > 6 or tr < 1:
         raise ValueError('MDegrainN: 1 <= "tr" <= 6')
@@ -475,16 +475,20 @@ def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any]) -> VideoNode:
     if len(args) < 3:
         args += ({},) * (3 - len(args))
     
-    sup = core.mv.Super(clip, **args[0])
+    if dark:
+        sup1 = haf_DitherLumaRebuild(clip, s0 = 1).mv.Super(**args[0])
+        sup2 = core.mv.Super(clip, levels = 1, **args[0])
+    else:
+        sup1 = core.mv.Super(clip, **args[0])
     
-    mvbw = [core.mv.Analyse(sup, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
-    mvfw = [core.mv.Analyse(sup, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
+    mvbw = [core.mv.Analyse(sup1, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
+    mvfw = [core.mv.Analyse(sup1, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
     
     for i in args[3:]:
-        mvbw = [core.mv.Recalculate(sup, mvbw[j], **i) for j in range(tr)]
-        mvfw = [core.mv.Recalculate(sup, mvfw[j], **i) for j in range(tr)]
+        mvbw = [core.mv.Recalculate(sup1, mvbw[j], **i) for j in range(tr)]
+        mvfw = [core.mv.Recalculate(sup1, mvfw[j], **i) for j in range(tr)]
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
     
     return clip
 
@@ -521,21 +525,27 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     return clip
 
 
-# Just daa, I don't know what else to say...
+# daa by Didée, ported from AviSynth version with minor additions.
 
-def daa(clip: VideoNode, sharp: bool = True, **znedi3_args: Any) -> VideoNode:
+def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
     
-    nn = core.znedi3.nnedi3(clip, field = 3, **znedi3_args)
-    dbl = core.std.Merge(nn[::2], nn[1::2])
+    num_p = clip.format.num_planes
     
-    if sharp:
-        matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
-        shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix))
-        dblD = core.std.MakeDiff(clip, dbl)
-        DD = core.rgvs.Repair(shrpD, dblD, 13)
-        dbl = core.std.MergeDiff(dbl, DD)
+    if planes is None:
+        planes = list(range(num_p))
+    elif isinstance(planes, int):
+        planes = [planes]
     
-    return dbl
+    nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
+    dbl = core.std.Merge(nn[::2], nn[1::2], [(0.5 if i in planes else 0) for i in range(num_p)])
+    
+    dblD = core.std.MakeDiff(clip, dbl, planes = planes)
+    matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
+    shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix, planes = planes), planes = planes)
+    DD = core.rgvs.Repair(shrpD, dblD, [(13 if i in planes else 0) for i in range(num_p)])
+    clip = core.std.MergeDiff(dbl, DD, planes = planes)
+    
+    return clip
 
 
 # Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
@@ -578,19 +588,72 @@ def averagefields(clip: VideoNode, planes: int | list[int] | None = None) -> Vid
     return clip
 
 
-# Alias for RemoveGrain with GRAY clip. For internal use.
+# Alias for RemoveGrain. For internal use.
 
-def rgfix(clip: VideoNode, mode: int = 2) -> VideoNode:
+def RemoveGrainFix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
-    if mode == 4:
-        clip = core.std.Median(clip)
-    elif mode == 11 or mode == 12:
-        clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-    elif mode == 19:
-        clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
-    elif mode == 20:
-        clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    
+    if isinstance(mode, int):
+        mode = [mode] * num_p
+    elif num_p > len(mode):
+        mode += [mode[-1]] * (num_p - len(mode))
+    elif num_p == len(mode):
+        pass
     else:
-        clip = core.rgvs.RemoveGrain(clip, mode)
+        raise ValueError('RemoveGrainFix: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
+    
+    count = 0
+    
+    for i in mode:
+        if space != GRAY:
+            orig = clip
+            clip = core.std.ShufflePlanes(clip, count, GRAY)
+        
+        if i == 0:
+            pass
+        elif i == 4:
+            clip = core.std.Median(clip)
+        elif i == 11 or i == 12:
+            clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+        elif i == 19:
+            clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
+        elif i == 20:
+            clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
+        else:
+            clip = core.rgvs.RemoveGrain(clip, i)
+        
+        if space != GRAY:
+            clip = core.std.ShufflePlanes([(clip if count == j else orig) for j in range(num_p)], [(0 if count == j else j) for j in range(num_p)], space)
+        
+        count += 1
+    
+    return clip
+
+
+# nnedi2aas by Didée, ported from AviSynth version with minor additions.
+
+def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+    
+    num_p = clip.format.num_planes
+    
+    if planes is None:
+        planes = list(range(num_p))
+    elif isinstance(planes, int):
+        planes = [planes]
+    
+    nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
+    dbl = core.std.Merge(nn[::2], nn[1::2], [(0.5 if i in planes else 0) for i in range(num_p)])
+    
+    dblD = core.std.MakeDiff(clip, dbl, planes = planes)
+    
+    if clamp > 0:
+        shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, RemoveGrainFix(dbl, [(rg if i in planes else 0) for i in range(num_p)]), dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
+    else:
+        shrpD = core.std.MakeDiff(dbl, RemoveGrainFix(dbl, [(rg if i in planes else 0) for i in range(num_p)]), planes = planes)
+    
+    DD = core.rgvs.Repair(shrpD, dblD, [(rep if i in planes else 0) for i in range(num_p)])
+    clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
