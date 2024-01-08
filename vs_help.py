@@ -467,7 +467,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
 # Recalculate is optional, but you can specify several of them (as many as you want).
 # If you need to specify settings for only one function, the rest of the dictionaries are served empty.
 
-def MDegrainN(clip: VideoNode, tr: int = 1, *args: dict[str, Any], dark: bool = True) -> VideoNode:
+def MDegrainN(clip: VideoNode, tr: int = 0, *args: dict[str, Any], dark: bool = True) -> VideoNode:
     
     if tr > 6 or tr < 1:
         raise ValueError('MDegrainN: 1 <= "tr" <= 6')
