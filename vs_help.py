@@ -426,10 +426,10 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     mask = RemoveGrainFix(mask, RGmode)
     mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     
-    for i in range(expandN):
+    for _ in range(expandN):
         mask = mask.std.Maximum()
     
-    for i in range(inflateN):
+    for _ in range(inflateN):
         mask = mask.std.Inflate()
     
     if down:
@@ -675,10 +675,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     clip = core.std.Expr([clip, clip.std.Maximum().std.Maximum()], f'y x - {shift << step} - 128 *')
     mask = clip.tcanny.TCanny(sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
     
-    for i in range(iterations):
+    for _ in range(iterations):
         clip = clip.std.Maximum()
     
-    for i in range(iterations):
+    for _ in range(iterations):
         clip = clip.std.Minimum()
     
     clip = clip.std.InvertMask().std.BinarizeMask(80 << step)
