@@ -1,7 +1,8 @@
 from vapoursynth import core, GRAY, VideoNode
-from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, haf_mt_expand_multi, haf_mt_inflate_multi, haf_mt_deflate_multi, rescale, haf_DitherLumaRebuild
+from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, rescale, haf_DitherLumaRebuild
 from itertools import chain
 from typing import Any
+from math import sqrt
 
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
@@ -113,22 +114,14 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     half = 128 << step
     
     e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
-    e2 = haf_mt_expand_multi(e1, sw = 2, sh = 2)
-    e2 = core.std.Merge(e2, haf_mt_expand_multi(e2))
-    e2 = haf_mt_inflate_multi(e2)
-    e3 = core.std.Merge(e2, haf_mt_expand_multi(e2))
-    e3 = core.std.Expr([e3, haf_mt_deflate_multi(e1)], 'x y 1.2 * -')
-    e3 = haf_mt_inflate_multi(e3)
+    e2 = e1.std.Maximum().std.Maximum()
+    e2 = core.std.Merge(e2, e2.std.Maximum()).std.Inflate()
+    e3 = core.std.Expr([core.std.Merge(e2, e2.std.Maximum()), e1.std.Deflate()], 'x y 1.2 * -').std.Inflate()
     
-    m0 = core.std.BoxBlur(clip, hradius = 2, vradius = 2)
-    m0 = core.std.Expr([clip, m0], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *')
-    m1 = haf_mt_expand_multi(m1)
-    m1 = haf_mt_inflate_multi(m1)
-    m2 = haf_mt_expand_multi(m1, sw = 2, sh = 2)
-    m3 = core.std.Expr([m1, m2], 'y x -')
-    m3 = core.rgvs.RemoveGrain(m3, 21)
-    m3 = haf_mt_expand_multi(m3)
+    m0 = core.std.Expr([clip, clip.std.BoxBlur(hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
+    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *').std.Maximum().std.Inflate()
+    m2 = m1.std.Maximum().std.Maximum()
+    m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
     if mask == 1:
         pass
@@ -141,13 +134,10 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     else:
         raise ValueError('dehalo: Please use 1...4 mask type')
     
-    blurr = haf_MinBlur(clip, 1)
-    blurr = core.std.Convolution(blurr, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-    blurr = core.std.Convolution(blurr, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+    blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
-        dh1 = core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1)
-        dh1 = core.std.MaskedMerge(dh1, blurr, e3)
+        dh1 = core.std.MaskedMerge(core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1), blurr, e3)
     else:
         dh1 = core.std.MaskedMerge(clip, blurr, e3)
     
@@ -432,12 +422,15 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
             desc = rescaler.descale(clip, dx, dy)
         resc = rescaler.upscale(desc, w, h)
     
-    diff = core.std.MakeDiff(clip, resc)
-    initial_mask = core.hist.Luma(diff)
-    initial_mask = RemoveGrainFix(initial_mask, RGmode)
-    initial_mask = core.std.Expr(initial_mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
-    expanded = haf_mt_expand_multi(initial_mask, sw = expandN, sh = expandN)
-    final = haf_mt_inflate_multi(expanded, radius = inflateN)
+    mask = core.std.MakeDiff(clip, resc).hist.Luma()
+    mask = RemoveGrainFix(mask, RGmode)
+    mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
+    
+    for i in range(expandN):
+        mask = mask.std.Maximum()
+    
+    for i in range(inflateN):
+        mask = mask.std.Inflate()
     
     if down:
         if dx is None:
@@ -449,15 +442,15 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         if space != GRAY and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError('MaskDetail: "dx" or "dy" does not match the chroma subsampling of the output clip')
         
-        final = core.resize.Bilinear(final, dx, dy, **down_args)
+        mask = core.resize.Bilinear(mask, dx, dy, **down_args)
     
     if blur_more:
-        final = core.std.Convolution(final, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+        mask = core.std.Convolution(mask, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if space != GRAY:
-        final = core.resize.Point(final, format = format_id)
+        mask = core.resize.Point(mask, format = format_id)
     
-    return final
+    return mask
 
 
 # Just an alias for mv.Degrain
@@ -467,7 +460,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
 # Recalculate is optional, but you can specify several of them (as many as you want).
 # If you need to specify settings for only one function, the rest of the dictionaries are served empty.
 
-def MDegrainN(clip: VideoNode, tr: int = 0, *args: dict[str, Any], dark: bool = True) -> VideoNode:
+def MDegrainN(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = True) -> VideoNode:
     
     if tr > 6 or tr < 1:
         raise ValueError('MDegrainN: 1 <= "tr" <= 6')
@@ -657,3 +650,47 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
+
+
+# Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
+# Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
+# :param src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
+# :param expand: Expansion of edge mask.
+# :param iterations: Protects parallel lines and corners that are usually damaged by YAHR.
+# :param brz: Adjusts the internal line thickness.
+# :param shift: Corrective shift for fine-tuning iterations
+
+def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: int = 255, shift: int = 8) -> VideoNode:
+    
+    if brz > 255 or brz < 0:
+        raise ValueError('dehalo_mask: brz must be between 0 and 255')
+
+    space = clip.format.color_family
+    if space != GRAY:
+        format_id = clip.format.id
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+    
+    step = clip.format.bits_per_sample - 8
+    
+    clip = core.std.Expr([clip, clip.std.Maximum().std.Maximum()], f'y x - {shift << step} - 128 *')
+    mask = clip.tcanny.TCanny(sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
+    
+    for i in range(iterations):
+        clip = clip.std.Maximum()
+    
+    for i in range(iterations):
+        clip = clip.std.Minimum()
+    
+    clip = clip.std.InvertMask().std.BinarizeMask(80 << step)
+    
+    if brz < 255:
+        clip = clip.std.Inflate().std.Inflate().std.BinarizeMask(brz << step)
+    
+    clip = clip.std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
+    
+    mask = core.std.Expr([mask, clip], 'x y min')
+    
+    if space != GRAY:
+        mask = core.resize.Point(mask, format = format_id)
+    
+    return mask
