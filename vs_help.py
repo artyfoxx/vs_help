@@ -117,13 +117,11 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
-    med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
+    med2D = core.std.MakeDiff(tmp, tmp.ctmf.CTMF(2))
     DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    r = core.rgvs.Repair(clip, dh2, mode) if rep else dh2
-    
-    clip = haf_Clamp(clip, r, clip, 0, 20 << step)
+    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
     
     if space != GRAY:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
