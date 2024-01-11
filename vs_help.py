@@ -34,7 +34,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     space = clip.format.color_family
     if space != GRAY:
         orig = clip
-        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        clip = clip.std.ShufflePlanes(0, GRAY)
     
     t1 = clip.resize.Lanczos(dx, dy, filter_param_a = 1, **crop_args)
     t2 = clip.resize.Lanczos(dx, dy, filter_param_a = 2, **crop_args)
@@ -82,7 +82,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     space = clip.format.color_family
     if space != GRAY:
         orig = clip
-        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        clip = clip.std.ShufflePlanes(0, GRAY)
     
     step = clip.format.bits_per_sample - 8
     half = 128 << step
@@ -274,7 +274,7 @@ def FixBorderX(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     if space != GRAY:
         num_p = clip.format.num_planes
         orig = clip
-        clip = core.std.ShufflePlanes(clip, plane, GRAY)
+        clip = clip.std.ShufflePlanes(plane, GRAY)
     
     w = clip.width
     
@@ -311,7 +311,7 @@ def FixBorderY(clip: VideoNode, target: int = 0, donor: int | None = None, limit
     if space != GRAY:
         num_p = clip.format.num_planes
         orig = clip
-        clip = core.std.ShufflePlanes(clip, plane, GRAY)
+        clip = clip.std.ShufflePlanes(plane, GRAY)
     
     h = clip.height
     
@@ -362,7 +362,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         format_id = clip.format.id
         sub_w = clip.format.subsampling_w
         sub_h = clip.format.subsampling_h
-        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        clip = clip.std.ShufflePlanes(0, GRAY)
     
     step = clip.format.bits_per_sample - 8
     full = 256 << step
@@ -398,7 +398,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
     mask = RemoveGrainFix(mask, RGmode)
-    mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
+    mask = mask.std.Expr(f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     
     for _ in range(expandN):
         mask = mask.std.Maximum()
@@ -444,12 +444,12 @@ def MDegrainN(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     
     if dark:
         sup1 = haf_DitherLumaRebuild(clip, s0 = 1).mv.Super(**args[0])
-        sup2 = core.mv.Super(clip, levels = 1, **args[0])
+        sup2 = clip.mv.Super(levels = 1, **args[0])
     else:
-        sup1 = core.mv.Super(clip, **args[0])
+        sup1 = clip.mv.Super(**args[0])
     
-    mvbw = [core.mv.Analyse(sup1, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
-    mvfw = [core.mv.Analyse(sup1, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
+    mvbw = [sup1.mv.Analyse(isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
+    mvfw = [sup1.mv.Analyse(isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
     
     for i in args[3:]:
         mvbw = [core.mv.Recalculate(sup1, mvbw[j], **i) for j in range(tr)]
@@ -537,7 +537,7 @@ def averagefields(clip: VideoNode, planes: int | list[int] | None = None) -> Vid
         
         if space != GRAY:
             orig = clip
-            clip = core.std.ShufflePlanes(clip, i, GRAY)
+            clip = clip.std.ShufflePlanes(i, GRAY)
         
         clip = clip.std.PlaneStats()
         fields = [clip[::2], clip[1::2]]
@@ -576,7 +576,7 @@ def RemoveGrainFix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     for i in mode:
         if space != GRAY:
             orig = clip
-            clip = core.std.ShufflePlanes(clip, count, GRAY)
+            clip = clip.std.ShufflePlanes(count, GRAY)
         
         if i == 0:
             pass
@@ -642,7 +642,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     space = clip.format.color_family
     if space != GRAY:
         format_id = clip.format.id
-        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        clip = clip.std.ShufflePlanes(0, GRAY)
     
     step = clip.format.bits_per_sample - 8
     
@@ -665,6 +665,6 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     mask = core.std.Expr([mask, clip], 'x y min')
     
     if space != GRAY:
-        mask = core.resize.Point(mask, format = format_id)
+        mask = mask.resize.Point(format = format_id)
     
     return mask
