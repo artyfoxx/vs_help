@@ -25,11 +25,15 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
         elif i == 'src_top':
             crop_args2[i] = -crop_args[i] * dy / h
         elif i == 'src_width':
+            if crop_args[i] <= 0:
+                crop_args[i] = w - crop_args.get('src_left', 0) + crop_args[i]
             crop_args2[i] = (dx << 1) - crop_args[i] * dx / w
         elif i == 'src_height':
+            if crop_args[i] <= 0:
+                crop_args[i] = h - crop_args.get('src_top', 0) + crop_args[i]
             crop_args2[i] = (dy << 1) - crop_args[i] * dy / h
         else:
-            raise ValueError('autotap3: Unsupported key for crop_args')
+            raise ValueError(f'autotap3: Unsupported key {i} in crop_args')
     
     space = clip.format.color_family
     if space != GRAY:
