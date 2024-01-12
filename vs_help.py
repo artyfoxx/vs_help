@@ -19,21 +19,31 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
         dy = h << 1
     
     crop_args2 = {}
-    for i in crop_args:
-        if i == 'src_left':
-            crop_args2[i] = -crop_args[i] * dx / w
-        elif i == 'src_top':
-            crop_args2[i] = -crop_args[i] * dy / h
-        elif i == 'src_width':
-            if crop_args[i] <= 0:
-                crop_args[i] = w - crop_args.get('src_left', 0) + crop_args[i]
-            crop_args2[i] = (dx << 1) - crop_args[i] * dx / w
-        elif i == 'src_height':
-            if crop_args[i] <= 0:
-                crop_args[i] = h - crop_args.get('src_top', 0) + crop_args[i]
-            crop_args2[i] = (dy << 1) - crop_args[i] * dy / h
-        else:
-            raise ValueError(f'autotap3: Unsupported key {i} in crop_args')
+    if len(crop_args) > 0:
+        count = 0
+        
+        if 'src_left' in crop_args:
+            crop_args2['src_left'] = -crop_args['src_left'] * dx / w
+            count += 1
+        
+        if 'src_top' in crop_args:
+            crop_args2['src_top'] = -crop_args['src_top'] * dy / h
+            count += 1
+        
+        if 'src_width' in crop_args:
+            if crop_args['src_width'] <= 0:
+                crop_args['src_width'] = w - crop_args.get('src_left', 0) + crop_args['src_width']
+            crop_args2['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
+            count += 1
+        
+        if 'src_height' in crop_args:
+            if crop_args['src_height'] <= 0:
+                crop_args['src_height'] = h - crop_args.get('src_top', 0) + crop_args['src_height']
+            crop_args2['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
+            count += 1
+        
+        if len(crop_args) != count:
+            raise ValueError('autotap3: Unsupported keys in crop_args')
     
     space = clip.format.color_family
     if space != GRAY:
@@ -110,7 +120,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
     elif mask == 4:
         e3 = core.std.Expr([e3, m3], 'x y max')
     else:
-        raise ValueError('dehalo: Please use 1...4 mask type')
+        raise ValueError('dehalo: Please use 1...4 mask value')
     
     blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
@@ -131,7 +141,7 @@ def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, 
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if m:
-        clip = e3 if space == GRAY else core.resize.Point(clip, format = orig.format.id)
+        clip = e3 if space == GRAY else core.resize.Point(e3, format = orig.format.id)
     
     return clip
 
