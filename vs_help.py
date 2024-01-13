@@ -18,25 +18,25 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     if dy is None:
         dy = h << 1
     
-    crop_args2 = {}
+    back_args = {}
     if len(crop_args) > 0:
         if 'src_left' in crop_args:
-            crop_args2['src_left'] = -crop_args['src_left'] * dx / w
+            back_args['src_left'] = -crop_args['src_left'] * dx / w
         
         if 'src_top' in crop_args:
-            crop_args2['src_top'] = -crop_args['src_top'] * dy / h
+            back_args['src_top'] = -crop_args['src_top'] * dy / h
         
         if 'src_width' in crop_args:
             if crop_args['src_width'] <= 0:
                 crop_args['src_width'] = w - crop_args.get('src_left', 0) + crop_args['src_width']
-            crop_args2['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
+            back_args['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
         
         if 'src_height' in crop_args:
             if crop_args['src_height'] <= 0:
                 crop_args['src_height'] = h - crop_args.get('src_top', 0) + crop_args['src_height']
-            crop_args2['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
+            back_args['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
         
-        if len(crop_args) != len(crop_args2):
+        if len(crop_args) != len(back_args):
             raise ValueError('autotap3: Unsupported keys in crop_args')
     
     space = clip.format.color_family
@@ -52,24 +52,24 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a = 9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a = 36, **crop_args)
     
-    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a = 1, **crop_args2)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a = 1, **crop_args2)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a = 1, **crop_args2)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a = 2, **crop_args2)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a = 2, **crop_args2)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a = 3, **crop_args2)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a = 6, **crop_args2)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a = 1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a = 1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a = 1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a = 2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a = 2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a = 3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a = 6, **back_args)], 'x y - abs')
     
     cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.std.Expr([m1, m2], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
-    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **crop_args2)], 'x y - abs')
+    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
     cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
-    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **crop_args2)], 'x y - abs')
+    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
     cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
-    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **crop_args2)], 'x y - abs')
+    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
     cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
-    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **crop_args2)], 'x y - abs')
+    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
     cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
-    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **crop_args2)], 'x y - abs')
+    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
     clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     
     if space != GRAY:
@@ -477,19 +477,19 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     if dy is None:
         dy = clip.height >> 1
     
-    descale_args2 = {}
+    second_args = {}
     for i in descale_args:
         if isinstance(descale_args[i], list):
-            descale_args2[i] = descale_args[i][1]
+            second_args[i] = descale_args[i][1]
             descale_args[i] = descale_args[i][0]
         else:
-            descale_args2[i] = descale_args[i]
+            second_args[i] = descale_args[i]
     
     clip = core.std.SeparateFields(clip, True)
     clip = core.std.SetFieldBased(clip, 0)
     
     clip_tf = core.descale.Descale(clip[::2], dx, dy, **descale_args)
-    clip_bf = core.descale.Descale(clip[1::2], dx, dy, **descale_args2)
+    clip_bf = core.descale.Descale(clip[1::2], dx, dy, **second_args)
     
     clip = core.std.Interleave([clip_tf, clip_bf])
     clip = core.std.DoubleWeave(clip, True)[::2]
