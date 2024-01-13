@@ -4,6 +4,8 @@ from itertools import chain
 from typing import Any
 from math import sqrt
 
+# All filters support the following formats: YUV 8 - 16 bit integer. Float is not supported yet.
+
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
@@ -79,7 +81,6 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
 
 
 # Dehalo by bion-x, ported from AviSynth version with minor additions.
-# Supported formats: YUV 8 - 16 bit integer.
 # mode = 1, 5, 11 - the weakest, artifacts will not cause.
 # mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
 # mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
