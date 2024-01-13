@@ -20,30 +20,24 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     crop_args2 = {}
     if len(crop_args) > 0:
-        count = 0
-        
         if 'src_left' in crop_args:
             crop_args2['src_left'] = -crop_args['src_left'] * dx / w
-            count += 1
         
         if 'src_top' in crop_args:
             crop_args2['src_top'] = -crop_args['src_top'] * dy / h
-            count += 1
         
         if 'src_width' in crop_args:
             if crop_args['src_width'] <= 0:
                 crop_args['src_width'] = w - crop_args.get('src_left', 0) + crop_args['src_width']
             crop_args2['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
-            count += 1
         
         if 'src_height' in crop_args:
             if crop_args['src_height'] <= 0:
                 crop_args['src_height'] = h - crop_args.get('src_top', 0) + crop_args['src_height']
             crop_args2['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
-            count += 1
         
-        if len(crop_args) != count:
-            raise ValueError('autotap3: Unsupported keys in crop_args')
+        if len(crop_args) != len(crop_args2):
+            raise ValueError(f'autotap3: Unsupported keys in crop_args')
     
     space = clip.format.color_family
     if space != GRAY:
@@ -586,13 +580,15 @@ def RemoveGrainFix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     count = 0
     
     for i in mode:
+        if i == 0:
+            count += 1
+            continue
+        
         if space != GRAY:
             orig = clip
             clip = core.std.ShufflePlanes(clip, count, GRAY)
         
-        if i == 0:
-            pass
-        elif i == 4:
+        if i == 4:
             clip = core.std.Median(clip)
         elif i == 11 or i == 12:
             clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
