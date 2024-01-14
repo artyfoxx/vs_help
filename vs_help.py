@@ -62,7 +62,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a = 3, **back_args)], 'x y - abs')
     m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a = 6, **back_args)], 'x y - abs')
     
-    cp1 = core.std.MaskedMerge(Blur(t1, amountH = 1.42), t2, core.std.Expr([m1, m2], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
     cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
