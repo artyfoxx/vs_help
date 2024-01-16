@@ -15,3 +15,4 @@ and some dependencies on them.
 * [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
 * [vapoursynth-mvtools](https://github.com/AmusementClub/vapoursynth-mvtools)
 * [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
+* [VapourSynth-TCanny ](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
