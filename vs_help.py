@@ -30,12 +30,12 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
         
         if 'src_width' in crop_args:
             if crop_args['src_width'] <= 0:
-                crop_args['src_width'] = w - crop_args.get('src_left', 0) + crop_args['src_width']
+                crop_args['src_width'] += w - crop_args.get('src_left', 0)
             back_args['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
         
         if 'src_height' in crop_args:
             if crop_args['src_height'] <= 0:
-                crop_args['src_height'] = h - crop_args.get('src_top', 0) + crop_args['src_height']
+                crop_args['src_height'] += h - crop_args.get('src_top', 0)
             back_args['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
         
         if len(crop_args) != len(back_args):
@@ -160,11 +160,11 @@ def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     if src_width is None:
         src_width = w
     elif src_width <= 0:
-        src_width = w - src_left + src_width
+        src_width += w - src_left
     if src_height is None:
         src_height = h
     elif src_height <= 0:
-        src_height = h - src_top + src_height
+        src_height += h - src_top
     
     clip = core.std.Transpose(clip)
     clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
