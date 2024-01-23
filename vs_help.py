@@ -526,7 +526,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+def average_int_fades(clip: VideoNode, mode: int = 0, planes: int | list[int] | None = None) -> VideoNode:
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
@@ -537,29 +537,40 @@ def average_fields(clip: VideoNode, planes: int | list[int] | None = None) -> Vi
         if planes in list(range(num_p)):
             planes = [planes]
         else:
-            raise ValueError(f'average_fields: Plane {planes} not exist')
+            raise ValueError(f'average_int_fades: Plane {planes} not exist')
     elif isinstance(planes, list):
         if set(planes).issubset(set(range(num_p))):
             pass
         else:
-            raise ValueError('average_fields: Invalid plane in planes')
+            raise ValueError('average_int_fades: Invalid plane in planes')
     else:
-        raise ValueError('average_fields: "planes" must be "None", "int" or list')
+        raise ValueError('average_int_fades: "planes" must be "None", "int" or list')
     
     if space != GRAY:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        clips = [(average_fields_simple(clips[i]) if i in planes else clips[i]) for i in range(num_p)]
+        
+        if mode == 0:
+            clips = [(average_by_fields(clips[i]) if i in planes else clips[i]) for i in range(num_p)]
+        elif mode == 1:
+            clips = [(average_by_lines(clips[i]) if i in planes else clips[i]) for i in range(num_p)]
+        else:
+            raise ValueError('average_int_fades: Please use 0 or 1 mode value')
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
-        clip = average_fields_simple(clip)
+        if mode == 0:
+            clip = average_by_fields(clip)
+        elif mode == 1:
+            clip = average_by_lines(clip)
+        else:
+            raise ValueError('average_int_fades: Please use 0 or 1 mode value')
     
     return clip
 
 
-def average_fields_simple(clip: VideoNode) -> VideoNode:
+def average_by_fields(clip: VideoNode) -> VideoNode:
     
     if clip.format.color_family != GRAY:
-        raise ValueError('average_fields_simple: Only GRAY is supported')
+        raise ValueError('average_by_fields: Only GRAY is supported')
     
     clip = core.std.SeparateFields(clip, True)
     
@@ -572,6 +583,25 @@ def average_fields_simple(clip: VideoNode) -> VideoNode:
     
     clip = core.std.DoubleWeave(clip, True)[::2]
     clip = core.std.SetFieldBased(clip, 0)
+    
+    return clip
+
+
+def average_by_lines(clip: VideoNode) -> VideoNode:
+    
+    if clip.format.color_family != GRAY:
+        raise ValueError('average_by_lines: Only GRAY is supported')
+    
+    h = clip.height
+    
+    clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+    
+    for i in range(0, h - 1, 2):
+        clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'), \
+                                 core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *')
+    
+    clip = core.std.StackVertical(clips)
+    clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
     return clip
 
