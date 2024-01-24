@@ -459,8 +459,9 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     mvfw = [core.mv.Analyse(sup1, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
     
     for i in args[3:]:
-        mvbw = [core.mv.Recalculate(sup1, mvbw[j], **i) for j in range(tr)]
-        mvfw = [core.mv.Recalculate(sup1, mvfw[j], **i) for j in range(tr)]
+        for j in range(tr):
+            mvbw[j] = core.mv.Recalculate(sup1, mvbw[j], **i)
+            mvfw[j] = core.mv.Recalculate(sup1, mvfw[j], **i)
     
     clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
     
@@ -538,17 +539,16 @@ def average_fields(clip: VideoNode, mode: int = 0, planes: int | list[int] | Non
             planes = [planes]
         else:
             raise ValueError(f'average_fields: Plane {planes} not exist')
-    elif isinstance(planes, list):
-        if set(planes).issubset(set(range(num_p))):
-            pass
-        else:
-            raise ValueError('average_fields: Invalid plane in planes')
+    elif isinstance(planes, list) and not set(planes).issubset(set(range(num_p))):
+        raise ValueError('average_fields: Invalid plane in planes')
     else:
         raise ValueError('average_fields: "planes" must be "None", "int" or list')
     
     if space != GRAY:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        clips = [(average_fields_simple(clips[i], mode) if i in planes else clips[i]) for i in range(num_p)]
+        for i in range(num_p):
+            if i in planes:
+                clips[i] = average_fields_simple(clips[i], mode)
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         clip = average_fields_simple(clip, mode)
@@ -562,15 +562,14 @@ def average_fields_simple(clip: VideoNode, mode: int = 0) -> VideoNode:
         raise ValueError('average_fields_simple: Only GRAY is supported')
     
     if mode == 0:
-        clip = core.std.SeparateFields(clip, True)
-        clip = core.std.PlaneStats(clip)
+        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
         fields = [clip[::2], clip[1::2]]
-        clip_tf = core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *')
-        clip_bf = core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *')
-        clip = core.std.Interleave([clip_tf, clip_bf])
+        fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
+                                core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
         clip = core.std.SetFieldBased(clip, 0)
-    elif mode == 1:# very slow
+    elif mode == 1:
         h = clip.height
         clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
         for i in range(0, h - 1, 2):
@@ -604,7 +603,8 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     if space != GRAY:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        clips = [rg_fix_simple(clips[i], mode[i]) for i in range(num_p)]
+        for i in range(num_p):
+            clips[i] = rg_fix_simple(clips[i], mode[i])
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         clip = rg_fix_simple(clip, mode[0])
@@ -741,7 +741,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     return clip
 
 
-def dehalo_alpha(clip: VideoNode, rx: float = 2, ry: float = 2, darkstr: float = 1, brightstr: float = 1,
+def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: float = 1.0, brightstr: float = 1.0,
                  lowsens: float = 50, highsens: float = 50, ss: float = 1.5) -> VideoNode:
     
     w = clip.width
@@ -780,8 +780,8 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2, ry: float = 2, darkstr: float =
 
 
 def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
-                thlima: int = 100, darkstr: float = 1, brightstr: float = 1, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.25, showmask: int = 0, contra: float = 0, excl: bool = True, edgeproc: float = 0) -> VideoNode:
+                thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
+                ss: float = 1.5, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0) -> VideoNode:
     
     space = clip.format.color_family
     if space != GRAY:
@@ -825,14 +825,14 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     if space != GRAY:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
-    if showmask != 0:
+    if showmask:
         if showmask == 1:
             clip = outside if space == GRAY else core.resize.Point(outside, format = orig.format.id)
-        if showmask == 2:
+        elif showmask == 2:
             clip = shrink if space == GRAY else core.resize.Point(shrink, format = orig.format.id)
-        if showmask == 3:
+        elif showmask == 3:
             clip = edges if space == GRAY else core.resize.Point(edges, format = orig.format.id)
-        if showmask == 4:
+        elif showmask == 4:
             clip = strong if space == GRAY else core.resize.Point(strong, format = orig.format.id)
         else:
             raise ValueError('fine_dehalo: Please use 0...4 showmask value')
@@ -864,8 +864,8 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
     
     fix_h = core.std.Convolution(clip, vconv, mode = 'v')
     fix_v = core.std.Convolution(clip, hconv, mode = 'h')
-    mask_h = core.std.Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], saturate = False)# check
-    mask_v = core.std.Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], saturate = False)# check
+    mask_h = core.std.Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], divisor = 4, saturate = False)
+    mask_v = core.std.Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], divisor = 4, saturate = False)
     temp_h = core.std.Expr([mask_h, mask_v], 'x 3 * y -')
     temp_v = core.std.Expr([mask_v, mask_h], 'x 3 * y -')
     
