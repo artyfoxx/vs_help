@@ -703,7 +703,8 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
 def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1) -> VideoNode:
     
     num_p = clip.format.num_planes
-    step = clip.format.bits_per_sample - 8
+    bits = clip.format.bits_per_sample
+    step = bits - 8
     
     if isinstance(thr, list):
         if num_p == len(thr):
@@ -730,6 +731,8 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         
         if clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0:
             mask[1] = core.fmtc.resample(mask[1], clip.width, clip.height, kernel = "spline", taps = 6)
+            if bits != 16:
+                mask[1] = core.fmtc.bitdepth(mask[1], bits = bits, dmode = 1)
         
         clip = core.std.Expr([mask[0], mask[1]], 'x y max')
         
