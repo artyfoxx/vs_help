@@ -16,3 +16,4 @@ and some dependencies on them.
 * [vapoursynth-mvtools](https://github.com/AmusementClub/vapoursynth-mvtools)
 * [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
 * [VapourSynth-TCanny ](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
+* [fmtconv](https://github.com/EleonoreMizo/fmtconv)
