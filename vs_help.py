@@ -700,11 +700,11 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     return mask
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0) -> VideoNode:
     
     num_p = clip.format.num_planes
     bits = clip.format.bits_per_sample
-    step = bits - 8
+    mult = 1 << bits - 8
     
     if isinstance(thr, list):
         if num_p == len(thr):
@@ -714,9 +714,9 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         else:
             raise ValueError('tp7_deband_mask: "thr" must be shorter or the same length to number of planes, or "thr" must be "float"')
         
-        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask([thr[i] * (1 << step) for i in range(num_p)])
+        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask([thr[i] * mult for i in range(num_p)])
     else:
-        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask(thr * (1 << step))
+        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask(thr * mult)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -738,6 +738,9 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         
         for _ in range(exp_n):
             clip = core.std.Maximum(clip)
+        
+        for _ in range(def_n):
+            clip = core.std.Deflate(clip)
         
         clip = core.resize.Point(clip, format = format_id)
     
