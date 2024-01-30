@@ -539,8 +539,11 @@ def average_fields(clip: VideoNode, mode: int = 0, planes: int | list[int] | Non
             planes = [planes]
         else:
             raise ValueError(f'average_fields: Plane {planes} not exist')
-    elif isinstance(planes, list) and not set(planes).issubset(set(range(num_p))):
-        raise ValueError('average_fields: Invalid plane in planes')
+    elif isinstance(planes, list):
+        if set(planes).issubset(set(range(num_p))):
+            pass
+        else:
+            raise ValueError('average_fields: Invalid plane in planes')
     else:
         raise ValueError('average_fields: "planes" must be "None", "int" or list')
     
