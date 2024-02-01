@@ -742,11 +742,11 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     mult = 1 << bits - 8
     
     if old_edge:
-        edge1 = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], saturate = False),
-                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], saturate = False)], 'x y max')
-        edge2 = core.std.Expr([core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], saturate = False),
-                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], saturate = False)], 'x y max')
-        clip = core.std.Expr([edge1, edge2], f'x y max {scale} *')
+        clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
+                              f'x y max z a max max {scale} *')
     else:
         clip = core.std.Prewitt(clip, scale = scale)
     
@@ -867,11 +867,11 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
         dehaloed = fine_dehalo_contrasharp(dehaloed, clip, contra)
     
     if old_edge:
-        edge1 = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], saturate = False),
-                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], saturate = False)], 'x y max')
-        edge2 = core.std.Expr([core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], saturate = False),
-                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], saturate = False)], 'x y max')
-        edges = core.std.Expr([edge1, edge2], 'x y max')
+        edges = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
+                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
+                               core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
+                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
+                               'x y max z a max max')
     else:
         edges = core.std.Prewitt(clip)
     
