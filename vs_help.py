@@ -734,14 +734,14 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     return mask
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0, old_edge: bool = False) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0, fake_prewitt: bool = False) -> VideoNode:
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
     bits = clip.format.bits_per_sample
     mult = 1 << bits - 8
     
-    if old_edge:
+    if fake_prewitt:
         clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
                               core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
@@ -792,7 +792,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
 
 
 def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: float = 1.0, brightstr: float = 1.0,
-                 lowsens: float = 50, highsens: float = 50, ss: float = 1.5) -> VideoNode:
+                 lowsens: float = 50, highsens: float = 50, ss: float = 1.5, showmask: bool = False) -> VideoNode:
     
     w = clip.width
     h = clip.height
@@ -831,12 +831,15 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
+    if showmask:
+        clip = so if space == GRAY else core.resize.Point(so, format = orig.format.id)
+    
     return clip
 
 
 def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, old_edge = False) -> VideoNode:
+                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, fake_prewitt = False) -> VideoNode:
     
     space = clip.format.color_family
     
@@ -866,7 +869,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     if contra > 0:
         dehaloed = fine_dehalo_contrasharp(dehaloed, clip, contra)
     
-    if old_edge:
+    if fake_prewitt:
         edges = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
                                core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
                                core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
