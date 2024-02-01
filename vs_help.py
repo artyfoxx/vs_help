@@ -92,7 +92,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
 # mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
 # mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
 
-def dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
+def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
     
     space = clip.format.color_family
     
@@ -418,15 +418,9 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
         raise ValueError('mask_detail: Unsupported kernel type')
     
     if dx is None:
-        if frac:
-            resc = rescaler.rescale(clip, dy, h)
-        else:
-            resc = rescaler.rescale(clip, dy)
+        resc = rescaler.rescale(clip, dy, h if frac else None)
     else:
-        if frac:
-            desc = rescaler.descale(clip, dx, dy, h)
-        else:
-            desc = rescaler.descale(clip, dx, dy)
+        desc = rescaler.descale(clip, dx, dy, h if frac else None)
         resc = rescaler.upscale(desc, w, h)
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
@@ -637,7 +631,8 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         for i in range(num_p):
-            clips[i] = rg_fix_simple(clips[i], mode[i])
+            if mode[i]:
+                clips[i] = rg_fix_simple(clips[i], mode[i])
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError('rg_fix: Unsupported color family')
@@ -680,7 +675,8 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
     if clamp > 0:
-        shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [(rg if i in planes else 0) for i in range(num_p)]), dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
+        shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [(rg if i in planes else 0) for i in range(num_p)]),
+                                  dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [(rg if i in planes else 0) for i in range(num_p)]), planes = planes)
     
@@ -738,24 +734,29 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     return mask
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0, old_edge: bool = False) -> VideoNode:
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
     bits = clip.format.bits_per_sample
     mult = 1 << bits - 8
     
+    if old_edge:
+        edge1 = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], saturate = False),
+                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], saturate = False)], 'x y max')
+        edge2 = core.std.Expr([core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], saturate = False),
+                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], saturate = False)], 'x y max')
+        clip = core.std.Expr([edge1, edge2], f'x y max {scale} *')
+    else:
+        clip = core.std.Prewitt(clip, scale = scale)
+    
     if isinstance(thr, list):
-        if num_p == len(thr):
-            pass
-        elif num_p > len(thr):
-            thr += [thr[-1]] * (num_p - len(thr))
-        else:
+        if num_p < len(thr):
             raise ValueError('tp7_deband_mask: "thr" must be shorter or the same length to number of planes, or "thr" must be "float"')
         
-        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask([thr[i] * mult for i in range(num_p)])
+        clip = core.std.BinarizeMask(clip, [thr[i] * mult for i in range(len(thr))])
     else:
-        clip = core.std.Prewitt(clip, scale = scale).std.BinarizeMask(thr * mult)
+        clip = core.std.BinarizeMask(clip, thr * mult)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -835,7 +836,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
 
 def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.5, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0) -> VideoNode:
+                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, old_edge = False) -> VideoNode:
     
     space = clip.format.color_family
     
@@ -865,7 +866,15 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     if contra > 0:
         dehaloed = fine_dehalo_contrasharp(dehaloed, clip, contra)
     
-    edges = core.std.Prewitt(clip)
+    if old_edge:
+        edge1 = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], saturate = False),
+                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], saturate = False)], 'x y max')
+        edge2 = core.std.Expr([core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], saturate = False),
+                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], saturate = False)], 'x y max')
+        edges = core.std.Expr([edge1, edge2], 'x y max')
+    else:
+        edges = core.std.Prewitt(clip)
+    
     strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
     large = haf_mt_expand_multi(strong, sw = rx_i, sh = ry_i)
     light = core.std.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
