@@ -836,7 +836,8 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     step = clip.format.bits_per_sample - 8
     full = 256 << step
     mult = 1 << step
-    m4 = lambda x: 16 if x < 16 else int(x / 4 + 0.5) * 4
+    
+    def m4(x): return 16 if x < 16 else int(x / 4 + 0.5) * 4
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
