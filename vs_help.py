@@ -1,8 +1,9 @@
-from vapoursynth import core, GRAY, YUV, VideoNode
+from vapoursynth import core, GRAY, YUV, VideoNode, GRAYS, RGBS
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
 from itertools import chain
 from typing import Any
 from math import sqrt
+from functools import partial
 
 # All filters support the following formats: GRAY and YUV 8 - 16 bit integer. Float is not supported yet.
 
@@ -1009,5 +1010,166 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     mask_2 = core.std.Maximum(mask_1, coordinates = coord).std.Maximum(coordinates = coord)
     clip = core.std.Expr([mask_2, mask_1], 'x y -')
     clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr('x 1.8 *')
+    
+    return clip
+
+
+def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order_aa: bool = True, mode: int = 0,
+              desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
+              dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscale_args: Any) -> VideoNode:
+    
+    func_name = 'insane_aa'
+    
+    space = clip.format.color_family
+    
+    if space == GRAY:
+        orig_gray = clip
+    elif space == YUV:
+        orig = clip
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        orig_gray = clip
+    else:
+        raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if external_aa is None:
+        w = clip.width
+        h = clip.height
+        
+        if kernel == 'bilinear':
+            rescaler = rescale.Bilinear()
+        elif kernel == 'bicubic':
+            rescaler = rescale.Bicubic(b, c)
+        elif kernel == 'lanczos':
+            rescaler = rescale.Lanczos(taps)
+        elif kernel == 'spline16':
+            rescaler = rescale.Spline16()
+        elif kernel == 'spline36':
+            rescaler = rescale.Spline36()
+        elif kernel == 'spline64':
+            rescaler = rescale.Spline64()
+        else:
+            raise ValueError(f'{func_name}: Unsupported kernel type')
+        
+        if dx is None:
+            dx = w / h * dy
+        
+        clip = rescaler.descale(clip, dx, dy, h if frac else None)
+        
+        kwargs = rescaler.descale_args.copy()
+        clip_sp = core.resize.Spline36(clip, **kwargs)
+        
+        clip = core.std.Merge(clip_sp, clip, desc_str)
+        
+        if dehalo:
+            clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
+        
+        upscale_mod = partial(upscale, mode = mode, order_aa = order_aa, **upscale_args)
+        clip = rescaler.upscale(clip, w, h, upscale_mod)
+    else:
+        if ext_aa.format.color_family == GRAY:
+            clip = ext_aa
+        else:
+            raise ValueError(f'{func_name}: The external AA should be GRAY')
+    
+    if masked:
+        if ext_mask is None:
+            mask = core.std.Sobel(orig_gray).std.Expr('x 2 *').std.Maximum()
+        else:
+            if ext_mask.format.color_family == GRAY:
+                mask = ext_mask
+            else:
+                raise ValueError(f'{func_name}: The external mask should be GRAY')
+        
+        clip = core.std.MaskedMerge(orig_gray, clip, mask)
+    
+    if space == YUV:
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+    
+    return clip
+
+
+def upscale(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
+            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: bool = True, **upscale_args: Any) -> VideoNode:
+    
+    func_name = 'upscale'
+    
+    w = clip.width
+    h = clip.height
+    
+    if dx is None:
+        dx = w
+    if dy is None:
+        dy = h
+    if src_left is None:
+        src_left = 0
+    if src_top is None:
+        src_top = 0
+    if src_width is None:
+        src_width = w
+    elif src_width <= 0:
+        src_width += w - src_left
+    if src_height is None:
+        src_height = h
+    elif src_height <= 0:
+        src_height += h - src_top
+    
+    if mode == 0:
+        kernel = upscale_args.pop('kernel', 'bicubic').capitalize()
+        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscale_args)')
+    elif mode == 1:
+        if order_aa:
+            clip = core.std.Transpose(clip)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+        else:
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+        
+        clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
+    elif mode == 2:
+        if order_aa:
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+        else:
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.std.Transpose(clip)
+        
+        clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
+    elif mode == 3:
+        from inspect import signature
+        
+        eedi3_args = {i:upscale_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscale_args}
+        znedi3_args = {i:upscale_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscale_args}
+        
+        if order_aa:
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+        else:
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+            clip = core.std.Transpose(clip)
+        
+        clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
+    elif mode == 4:
+        from vsmlrt import Waifu2x, Waifu2xModel
+        
+        format_id = clip.format.id
+        format = GRAYS if upscale_args.get('model', 6) in [0, Waifu2xModel.anime_style_art] else RGBS
+        clip = core.resize.Point(clip, format = format, matrix_in = 1)
+        clip = Waifu2x(clip, **upscale_args)
+        clip = core.resize.Point(clip, format = format_id, matrix = 1, dither_type = 'error_diffusion')
+        clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2, src_top = src_top * 2, src_width = src_width * 2, src_height = src_height * 2))
+    else:
+        raise ValueError(f'{func_name}: Please use 0...4 mode value')
     
     return clip
