@@ -90,7 +90,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     return clip
 
 
-# Dehalo by bion-x, ported from AviSynth version with minor additions.
+# Dehalo by bion, ported from AviSynth version with minor additions.
 # mode = 1, 5, 11 - the weakest, artifacts will not cause.
 # mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
 # mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
@@ -724,7 +724,8 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     return mask
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0, fake_prewitt: bool = False) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0,
+                    fake_prewitt: bool = False) -> VideoNode:
     
     func_name = 'tp7_deband_mask'
     
@@ -760,8 +761,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         
         mask = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
-        for i in range(num_p - 2, 0, -1):
-            mask[i] = core.std.Expr([mask[i], mask[i + 1]], 'x y max')
+        mask[1] = core.std.Expr([mask[1], mask[2]], 'x y max')
         
         if clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0:
             mask[1] = core.fmtc.resample(mask[1], clip.width, clip.height, kernel = "spline", taps = 6)
@@ -1030,8 +1030,8 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         if dehalo:
             clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
         
-        upscale_mod = partial(upscaler, mode = mode, order_aa = order_aa, **upscaler_args)
-        clip = rescaler.upscale(clip, w, h, upscale_mod)
+        upscaler_mod = partial(upscaler, mode = mode, order_aa = order_aa, **upscaler_args)
+        clip = rescaler.upscale(clip, w, h, upscaler_mod)
     else:
         if ext_aa.format.color_family == GRAY:
             clip = ext_aa
@@ -1040,7 +1040,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
     
     if masked:
         if ext_mask is None:
-            mask = core.std.Sobel(orig_gray).std.Expr('x 2 *').std.Maximum()
+            mask = core.std.Sobel(orig_gray, scale = 2).std.Maximum()
         else:
             if ext_mask.format.color_family == GRAY:
                 mask = ext_mask
