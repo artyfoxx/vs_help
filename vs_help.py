@@ -4,6 +4,7 @@ from itertools import chain
 from typing import Any
 from math import sqrt
 from functools import partial
+import re
 
 # All filters support the following formats: GRAY and YUV 8 - 16 bit integer. Float is not supported yet.
 
@@ -153,40 +154,6 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     if m:
         clip = e3 if space == GRAY else core.resize.Point(e3, format = orig.format.id)
-    
-    return clip
-
-
-# Custom upscaler for the rescale class from muvsfunc. Just a hardline znedi3 upscale with autotap3.
-
-def znedi3at(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-             src_width: float | None = None, src_height: float | None = None) -> VideoNode:
-    
-    w = clip.width
-    h = clip.height
-    
-    if dx is None:
-        dx = w
-    if dy is None:
-        dy = h
-    if src_left is None:
-        src_left = 0
-    if src_top is None:
-        src_top = 0
-    if src_width is None:
-        src_width = w
-    elif src_width <= 0:
-        src_width += w - src_left
-    if src_height is None:
-        src_height = h
-    elif src_height <= 0:
-        src_height += h - src_top
-    
-    clip = core.std.Transpose(clip)
-    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
-    clip = core.std.Transpose(clip)
-    clip = core.znedi3.nnedi3(clip, field = 1, dh = True, nsize = 0, nns = 4, qual = 2, pscrn = 0, exp = 2)
-    clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     
     return clip
 
@@ -1063,7 +1030,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         if dehalo:
             clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
         
-        upscale_mod = partial(upscale, mode = mode, order_aa = order_aa, **upscale_args)
+        upscale_mod = partial(upscaler, mode = mode, order_aa = order_aa, **upscaler_args)
         clip = rescaler.upscale(clip, w, h, upscale_mod)
     else:
         if ext_aa.format.color_family == GRAY:
@@ -1088,10 +1055,10 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
     return clip
 
 
-def upscale(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: bool = True, **upscale_args: Any) -> VideoNode:
+def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
+            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: bool = True, **upscaler_args: Any) -> VideoNode:
     
-    func_name = 'upscale'
+    func_name = 'upscaler'
     
     w = clip.width
     h = clip.height
@@ -1114,39 +1081,37 @@ def upscale(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_l
         src_height += h - src_top
     
     if mode == 0:
-        kernel = upscale_args.pop('kernel', 'bicubic').capitalize()
-        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscale_args)')
+        kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
+        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
     elif mode == 1:
         if order_aa:
             clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
         else:
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     elif mode == 2:
         if order_aa:
             clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
         else:
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscale_args)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     elif mode == 3:
-        import re
-        
-        eedi3_args = {i:upscale_args[i] for i in re.split(r':[^;]+;', core.eedi3m.EEDI3.signature) if i in upscale_args}
-        znedi3_args = {i:upscale_args[i] for i in re.split(r':[^;]+;', core.znedi3.nnedi3.signature) if i in upscale_args}
+        eedi3_args = {i:upscaler_args[i] for i in re.split(r':[^;]+;', core.eedi3m.EEDI3.signature) if i in upscaler_args}
+        znedi3_args = {i:upscaler_args[i] for i in re.split(r':[^;]+;', core.znedi3.nnedi3.signature) if i in upscaler_args}
         
         if order_aa:
             clip = core.std.Transpose(clip)
@@ -1160,16 +1125,7 @@ def upscale(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_l
             clip = core.std.Transpose(clip)
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
-    elif mode == 4:
-        from vsmlrt import Waifu2x, Waifu2xModel
-        
-        format_id = clip.format.id
-        format = GRAYS if upscale_args.get('model', 6) in [0, Waifu2xModel.anime_style_art] else RGBS
-        clip = core.resize.Point(clip, format = format, matrix_in = 1)
-        clip = Waifu2x(clip, **upscale_args)
-        clip = core.resize.Point(clip, format = format_id, matrix = 1, dither_type = 'error_diffusion')
-        clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2, src_top = src_top * 2, src_width = src_width * 2, src_height = src_height * 2))
     else:
-        raise ValueError(f'{func_name}: Please use 0...4 mode value')
+        raise ValueError(f'{func_name}: Please use 0...3 mode value')
     
     return clip
