@@ -1143,10 +1143,10 @@ def upscale(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_l
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     elif mode == 3:
-        from inspect import signature
+        import re
         
-        eedi3_args = {i:upscale_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscale_args}
-        znedi3_args = {i:upscale_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscale_args}
+        eedi3_args = {i:upscale_args[i] for i in re.split(r':[^;]+;', core.eedi3m.EEDI3.signature) if i in upscale_args}
+        znedi3_args = {i:upscale_args[i] for i in re.split(r':[^;]+;', core.znedi3.nnedi3.signature) if i in upscale_args}
         
         if order_aa:
             clip = core.std.Transpose(clip)
