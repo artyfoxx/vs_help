@@ -260,6 +260,7 @@ def fix_border(clip: VideoNode, tx: int | list[int] | None = None, ty: int | lis
     
     return clip
 
+
 def fix_border_x(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
     func_name = 'fix_border_x'
@@ -303,6 +304,7 @@ def fix_border_x(clip: VideoNode, target: int = 0, donor: int | None = None, lim
         clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(num_p)], [(0 if i == plane else i) for i in range(num_p)], space)
     
     return clip
+
 
 def fix_border_y(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
     
@@ -457,15 +459,17 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     else:
         sup1 = core.mv.Super(clip, **args[0])
     
-    mvbw = [core.mv.Analyse(sup1, isb = True, delta = i, **args[1]) for i in range(1, tr + 1)]
-    mvfw = [core.mv.Analyse(sup1, isb = False, delta = i, **args[1]) for i in range(1, tr + 1)]
+    vectors = []
+    
+    for i in range(1, tr + 1):
+        vectors.append(core.mv.Analyse(sup1, isb = True, delta = i, **args[1]))
+        vectors.append(core.mv.Analyse(sup1, isb = False, delta = i, **args[1]))
     
     for i in args[3:]:
-        for j in range(tr):
-            mvbw[j] = core.mv.Recalculate(sup1, mvbw[j], **i)
-            mvfw[j] = core.mv.Recalculate(sup1, mvfw[j], **i)
+        for j in range(tr << 1):
+            vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *chain.from_iterable(zip(mvbw, mvfw)), **args[2])')
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *vectors, **args[2])')
     
     return clip
 
@@ -723,6 +727,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
         mask = core.resize.Point(mask, format = format_id)
     
     return mask
+
 
 def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0,
                     fake_prewitt: bool = False) -> VideoNode:
