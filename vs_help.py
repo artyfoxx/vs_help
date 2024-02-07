@@ -1,6 +1,5 @@
-from vapoursynth import core, GRAY, YUV, VideoNode, GRAYS, RGBS
+from vapoursynth import core, GRAY, YUV, VideoNode
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
-from itertools import chain
 from typing import Any
 from math import sqrt
 from functools import partial
