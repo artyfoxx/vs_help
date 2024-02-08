@@ -487,7 +487,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int = 0, planes: int | list[int] | None = None) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int = 0, factor: float = 1, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -510,12 +510,12 @@ def average_fields(clip: VideoNode, mode: int = 0, planes: int | list[int] | Non
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or list')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode)
+        clip = average_fields_simple(clip, mode, factor)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         for i in range(num_p):
             if i in planes:
-                clips[i] = average_fields_simple(clips[i], mode)
+                clips[i] = average_fields_simple(clips[i], mode, factor)
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -523,7 +523,7 @@ def average_fields(clip: VideoNode, mode: int = 0, planes: int | list[int] | Non
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int = 0) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int = 0, factor: float = 1) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
@@ -531,19 +531,31 @@ def average_fields_simple(clip: VideoNode, mode: int = 0) -> VideoNode:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
     if mode == 0:
-        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
-        fields = [clip[::2], clip[1::2]]
+        if factor == 1:
+            clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+            fields = [clip[::2], clip[1::2]]
+        else:
+            clip = core.std.SeparateFields(clip, True)
+            fields = [core.std.Expr(clip[::2], f'x {factor} *').std.PlaneStats(), core.std.PlaneStats(clip[1::2])]
+        
         fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                 core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        
         clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
         clip = core.std.SetFieldBased(clip, 0)
     elif mode == 1:
         h = clip.height
-        clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+        
+        if factor == 1:
+            clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+        else:
+            clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.Expr(f'x {factor} *').std.PlaneStats() if i % 2 == 0 else core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+        
         for i in range(0, h - 1, 2):
             clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                       core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        
         clip = core.std.StackVertical(clips)
     else:
         raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
@@ -690,7 +702,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     space = clip.format.color_family
     num_p = clip.format.num_planes
     bits = clip.format.bits_per_sample
-    mult = 1 << bits - 8
+    factor = 1 << bits - 8
     
     if fake_prewitt:
         clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
@@ -705,9 +717,9 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         if num_p < len(thr):
             raise ValueError(f'{func_name}: "thr" must be shorter or the same length to number of planes, or "thr" must be "float"')
         
-        clip = core.std.BinarizeMask(clip, [thr[i] * mult for i in range(len(thr))])
+        clip = core.std.BinarizeMask(clip, [thr[i] * factor for i in range(len(thr))])
     else:
-        clip = core.std.BinarizeMask(clip, thr * mult)
+        clip = core.std.BinarizeMask(clip, thr * factor)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -761,14 +773,14 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     
     step = clip.format.bits_per_sample - 8
     full = 256 << step
-    mult = 1 << step
+    factor = 1 << step
     
     def m4(x): return 16 if x < 16 else int(x / 4 + 0.5) * 4
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], f'y x - y {0.001 * mult} + / {full - 1} * {lowsens * mult} - y {full} + {512 << step} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {512 << step} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
