@@ -158,129 +158,93 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 
 
 # A simple functions for fix brightness artifacts at the borders of the frame.
-# The values of the target columns/rows are set as lists of tx and ty or as an integer.
-# The values of the reference columns/rows are set as lists dx and dy or as an integer.
-# You can also set it as "None" or specify nothing at all, in this case, auto mode is enabled,
-# assigning the reference rows/columns as a single offset to the center of the frame relative to the target ones.
-# Next are the limits lx and ly, which can also be both integers and lists of them. A single limit applies to all iterations on a given axis.
-# Positive values prohibit darkening of the target rows/columns and limit the maximum lightening, negative values - on the contrary.
-# By default, the limits are zero, that is, they are disabled.
-# Last are plans px and py, which can also be both integers and lists of them. By default, the zero plan is set.
+# All values are set in the "x" and "y" variables for columns and rows, respectively.
+# Variables can have the following values:
+# None - the axis is skipped, by default.
+# list[list[int]] - the list of iterations, in turn, each iteration is a list of the following parameters: [target, donor, limit, factor, plane].
+# Only target is mandatory.
+# list[int] - the same thing, but there is only one iteration.
+# int - only the target is specified, all other parameters are in default values.
+# target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
+# donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
+# limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
+# and limit the maximum lightening, negative values - on the contrary.
+# factor - this is the pre-multiplier for the target, the default is 1.
+# plane - by default 0.
 
-def fix_border(clip: VideoNode, tx: int | list[int] | None = None, ty: int | list[int] | None = None, dx: int | list[int | None] | None = None,
-              dy: int | list[int | None] | None = None, lx: int | list[int] | None = None, ly: int | list[int] | None = None,
-              px: int | list[int] | None = None, py: int | list[int] | None = None) -> VideoNode:
+def fix_border(clip: VideoNode, x: list[list[int]] | None = None, y: list[list[int]] | None = None) -> VideoNode:
     
     func_name = 'fix_border'
-    
-    if tx is not None:
-        if isinstance(tx, int):
-            tx = [tx]
-        
-        length_x = len(tx)
-        
-        if isinstance(dx, int):
-            dx = [dx] + [None] * (length_x - 1)
-        elif dx is None:
-            dx = [None] * length_x
-        elif length_x == len(dx):
-            pass
-        elif length_x > len(dx):
-            dx += [None] * (length_x - len(dx))
-        else:
-            raise ValueError(f'{func_name}: "dx" must be shorter or the same length to "tx", or "dx" must be "int" or "None"')
-        
-        if isinstance(lx, int):
-            lx = [lx] * length_x
-        elif lx is None:
-            lx = [0] * length_x
-        elif length_x == len(lx):
-            pass
-        elif length_x > len(lx):
-            lx += [lx[-1]] * (length_x - len(lx))
-        else:
-            raise ValueError(f'{func_name}: "lx" must be shorter or the same length to "tx", or "lx" must be "int" or "None"')
-        
-        if isinstance(px, int):
-            px = [px] * length_x
-        elif px is None:
-            px = [0] * length_x
-        elif length_x == len(px):
-            pass
-        elif length_x > len(px):
-            px += [px[-1]] * (length_x - len(px))
-        else:
-            raise ValueError(f'{func_name}: "px" must be shorter or the same length to "tx", or "px" must be "int" or "None"')
-        
-        for i in range(length_x):
-            clip = fix_border_x(clip, tx[i], dx[i], lx[i], px[i])
-    
-    if ty is not None:
-        if isinstance(ty, int):
-            ty = [ty]
-        
-        length_y = len(ty)
-        
-        if isinstance(dy, int):
-            dy = [dy] + [None] * (length_y - 1)
-        elif dy is None:
-            dy = [None] * length_y
-        elif length_y == len(dy):
-            pass
-        elif length_y > len(dy):
-            dy += [None] * (length_y - len(dy))
-        else:
-            raise ValueError(f'{func_name}: "dy" must be shorter or the same length to "ty", or "dy" must be "int" or "None"')
-        
-        if isinstance(ly, int):
-            ly = [ly] * length_y
-        elif ly is None:
-            ly = [0] * length_y
-        elif length_y == len(ly):
-            pass
-        elif length_y > len(ly):
-            ly += [ly[-1]] * (length_y - len(ly))
-        else:
-            raise ValueError(f'{func_name}: "ly" must be shorter or the same length to "ty", or "ly" must be "int" or "None"')
-        
-        if isinstance(py, int):
-            py = [py] * length_y
-        elif py is None:
-            py = [0] * length_y
-        elif length_y == len(py):
-            pass
-        elif length_y > len(py):
-            py += [py[-1]] * (length_y - len(py))
-        else:
-            raise ValueError(f'{func_name}: "py" must be shorter or the same length to "ty", or "py" must be "int" or "None"')
-        
-        for i in range(length_y):
-            clip = fix_border_y(clip, ty[i], dy[i], ly[i], py[i])
-    
-    return clip
-
-
-def fix_border_x(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
-    
-    func_name = 'fix_border_x'
     
     space = clip.format.color_family
     
     if space == GRAY:
-        pass
+        clip = [clip]
     elif space == YUV:
         num_p = clip.format.num_planes
-        orig = clip
-        clip = core.std.ShufflePlanes(clip, plane, GRAY)
+        clip = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if x is not None:
+        if isinstance(x, int):
+            clip[0] = fix_border_x_simple(clip[0], x)
+        elif isinstance(x, list):
+            if all(isinstance(i, int) for i in x):
+                plane = x.pop() if len(x) == 5 else 0
+                clip[plane] = fix_border_x_simple(clip[plane], *x)
+            else:
+                for i in x:
+                    if isinstance(i, list):
+                        plane = i.pop() if len(i) == 5 else 0
+                        clip[plane] = fix_border_x_simple(clip[plane], *i)
+                    else:
+                        raise ValueError(f'{func_name}: "x" must be list[int] or list[list[int]]')
+        else:
+            raise ValueError(f'{func_name}: "x" must be int, list or "None"')
+    
+    if y is not None:
+        if isinstance(y, int):
+            clip[0] = fix_border_y_simple(clip[0], y)
+        elif isinstance(y, list):
+            if all(isinstance(i, int) for i in y):
+                plane = y.pop() if len(y) == 5 else 0
+                clip[plane] = fix_border_y_simple(clip[plane], *y)
+            else:
+                for i in y:
+                    if isinstance(i, list):
+                        plane = i.pop() if len(i) == 5 else 0
+                        clip[plane] = fix_border_y_simple(clip[plane], *i)
+                    else:
+                        raise ValueError(f'{func_name}: "y" must be list[int] or list[list[int]]')
+        else:
+            raise ValueError(f'{func_name}: "y" must be int, list or "None"')
+    
+    if space == GRAY:
+        clip = clip[0]
+    else:
+        clip = core.std.ShufflePlanes(clip, list(range(num_p)), space)
+    
+    return clip
+
+
+def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: float = 1) -> VideoNode:
+    
+    func_name = 'fix_border_x_simple'
+    
+    if clip.format.color_family != GRAY:
+        raise ValueError(f'{func_name}: Only GRAY is supported')
     
     w = clip.width
     
     if donor is None:
         donor = target + 1 if target < w >> 1 else target - 1
     
-    target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
+    if factor == 1:
+        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
+    else:
+        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.Expr(f'x {factor} *').std.PlaneStats()
+    
     donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.PlaneStats()
     
     fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
@@ -299,33 +263,26 @@ def fix_border_x(clip: VideoNode, target: int = 0, donor: int | None = None, lim
     else:
         clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
     
-    if space == YUV:
-        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(num_p)], [(0 if i == plane else i) for i in range(num_p)], space)
-    
     return clip
 
 
-def fix_border_y(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, plane: int = 0) -> VideoNode:
+def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: float = 1) -> VideoNode:
     
-    func_name = 'fix_border_y'
+    func_name = 'fix_border_y_simple'
     
-    space = clip.format.color_family
-    
-    if space == GRAY:
-        pass
-    elif space == YUV:
-        num_p = clip.format.num_planes
-        orig = clip
-        clip = core.std.ShufflePlanes(clip, plane, GRAY)
-    else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+    if clip.format.color_family != GRAY:
+        raise ValueError(f'{func_name}: Only GRAY is supported')
     
     h = clip.height
     
     if donor is None:
         donor = target + 1 if target < h >> 1 else target - 1
     
-    target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
+    if factor == 1:
+        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
+    else:
+        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.Expr(f'x {factor} *').std.PlaneStats()
+    
     donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.PlaneStats()
     
     fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
@@ -343,9 +300,6 @@ def fix_border_y(clip: VideoNode, target: int = 0, donor: int | None = None, lim
         clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, 1), fix_line])
     else:
         clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
-    
-    if space == YUV:
-        clip = core.std.ShufflePlanes([(clip if i == plane else orig) for i in range(num_p)], [(0 if i == plane else i) for i in range(num_p)], space)
     
     return clip
 
