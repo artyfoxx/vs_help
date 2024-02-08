@@ -172,7 +172,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # factor - this is the pre-multiplier for the target, the default is 1.
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, x: list[list[int]] | None = None, y: list[list[int]] | None = None) -> VideoNode:
+def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = None, y: int | list[int] | list[list[int]] | None = None) -> VideoNode:
     
     func_name = 'fix_border'
     
