@@ -952,7 +952,7 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     return clip
 
 
-def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order_aa: int = 1, mode: int = 0,
+def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order_aa: int = 0, mode: int = 0,
               desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
               dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscale_args: Any) -> VideoNode:
     
@@ -1027,7 +1027,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
 
 
 def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: int = 1, **upscaler_args: Any) -> VideoNode:
+            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: int = 0, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'upscaler'
     
