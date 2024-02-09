@@ -169,7 +169,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
 # and limit the maximum lightening, negative values - on the contrary.
-# factor - this applies the mode_factor function to the target, set as list[int, float], by default "None".
+# factor - this applies the mode_factor function to the target, set as tuple[int, float], by default "None".
 # plane - by default 0.
 
 def fix_border(clip: VideoNode, x: int | list[Any] | None = None, y: int | list[Any] | None = None) -> VideoNode:
@@ -222,7 +222,7 @@ def fix_border(clip: VideoNode, x: int | list[Any] | None = None, y: int | list[
     return clip
 
 
-def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: list[int, float] | None = None) -> VideoNode:
+def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: tuple[int, float] | None = None) -> VideoNode:
     
     func_name = 'fix_border_x_simple'
     
@@ -260,7 +260,7 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     return clip
 
 
-def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: list[int, float] | None = None) -> VideoNode:
+def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, factor: tuple[int, float] | None = None) -> VideoNode:
     
     func_name = 'fix_border_y_simple'
     
@@ -481,7 +481,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int = 0, factor: list[int, float] | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int = 0, factor: tuple[int, float] | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -517,7 +517,7 @@ def average_fields(clip: VideoNode, mode: int = 0, factor: list[int, float] | No
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int = 0, factor: list[int, float] | None = None) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int = 0, factor: tuple[int, float] | None = None) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
