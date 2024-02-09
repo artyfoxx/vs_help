@@ -179,25 +179,25 @@ def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = No
     space = clip.format.color_family
     
     if space == GRAY:
-        clip = [clip]
+        clips = [clip]
     elif space == YUV:
         num_p = clip.format.num_planes
-        clip = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if x is not None:
         if isinstance(x, int):
-            clip[0] = fix_border_x_simple(clip[0], x)
+            clips[0] = fix_border_x_simple(clips[0], x)
         elif isinstance(x, list):
             if all(isinstance(i, int) for i in x):
                 plane = x.pop() if len(x) == 5 else 0
-                clip[plane] = fix_border_x_simple(clip[plane], *x)
+                clips[plane] = fix_border_x_simple(clips[plane], *x)
             else:
                 for i in x:
                     if isinstance(i, list):
                         plane = i.pop() if len(i) == 5 else 0
-                        clip[plane] = fix_border_x_simple(clip[plane], *i)
+                        clips[plane] = fix_border_x_simple(clips[plane], *i)
                     else:
                         raise ValueError(f'{func_name}: "x" must be list[int] or list[list[int]]')
         else:
@@ -205,25 +205,25 @@ def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = No
     
     if y is not None:
         if isinstance(y, int):
-            clip[0] = fix_border_y_simple(clip[0], y)
+            clips[0] = fix_border_y_simple(clips[0], y)
         elif isinstance(y, list):
             if all(isinstance(i, int) for i in y):
                 plane = y.pop() if len(y) == 5 else 0
-                clip[plane] = fix_border_y_simple(clip[plane], *y)
+                clips[plane] = fix_border_y_simple(clips[plane], *y)
             else:
                 for i in y:
                     if isinstance(i, list):
                         plane = i.pop() if len(i) == 5 else 0
-                        clip[plane] = fix_border_y_simple(clip[plane], *i)
+                        clips[plane] = fix_border_y_simple(clips[plane], *i)
                     else:
                         raise ValueError(f'{func_name}: "y" must be list[int] or list[list[int]]')
         else:
             raise ValueError(f'{func_name}: "y" must be int, list or "None"')
     
     if space == GRAY:
-        clip = clip[0]
+        clip = clips[0]
     else:
-        clip = core.std.ShufflePlanes(clip, list(range(num_p)), space)
+        clip = core.std.ShufflePlanes(clips, list(range(num_p)), space)
     
     return clip
 
