@@ -161,9 +161,9 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # All values are set in the "x" and "y" variables for columns and rows, respectively.
 # Variables can have the following values:
 # "None" - the axis is skipped, by default.
-# list[list] - the list of iterations, in turn, each iteration is a list of the following parameters: [target, donor, limit, factor, plane].
-# Only target is mandatory.
-# list - the same thing, but there is only one iteration.
+# list[list[int | tuple | None]] - the list of iterations, in turn, each iteration is a list of the following parameters:
+# [target, donor, limit, factor, plane]. Only target is mandatory.
+# list[int | tuple | None] - the same thing, but there is only one iteration.
 # int - only the target is specified, all other parameters are in default values.
 # target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
@@ -172,7 +172,8 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # factor - this applies the mode_factor function to the target, set as tuple[int, float], by default "None".
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, x: int | list[Any] | None = None, y: int | list[Any] | None = None) -> VideoNode:
+def fix_border(clip: VideoNode, x: int | list[int | tuple | None] | list[list[int | tuple | None]] | None = None,
+               y: int | list[int | tuple | None] | list[list[int | tuple | None]] | None = None) -> VideoNode:
     
     func_name = 'fix_border'
     
@@ -190,13 +191,16 @@ def fix_border(clip: VideoNode, x: int | list[Any] | None = None, y: int | list[
         if isinstance(x, int):
             clips[0] = fix_border_x_simple(clips[0], x)
         elif isinstance(x, list):
-            if isinstance(x[0], int):
+            if all(isinstance(i, int | tuple | None) for i in x):
                 plane = x.pop() if len(x) == 5 else 0
                 clips[plane] = fix_border_x_simple(clips[plane], *x)
             else:
                 for i in x:
-                    plane = i.pop() if len(i) == 5 else 0
-                    clips[plane] = fix_border_x_simple(clips[plane], *i)
+                    if isinstance(i, list):
+                        plane = i.pop() if len(i) == 5 else 0
+                        clips[plane] = fix_border_x_simple(clips[plane], *i)
+                    else:
+                        raise ValueError(f'{func_name}: "x" must be list[int | tuple | None] or list[list[int | tuple | None]]')
         else:
             raise ValueError(f'{func_name}: "x" must be int, list or "None"')
     
@@ -204,13 +208,16 @@ def fix_border(clip: VideoNode, x: int | list[Any] | None = None, y: int | list[
         if isinstance(y, int):
             clips[0] = fix_border_y_simple(clips[0], y)
         elif isinstance(y, list):
-            if isinstance(y[0], int):
+            if all(isinstance(i, int | tuple | None) for i in y):
                 plane = y.pop() if len(y) == 5 else 0
                 clips[plane] = fix_border_y_simple(clips[plane], *y)
             else:
                 for i in y:
-                    plane = i.pop() if len(i) == 5 else 0
-                    clips[plane] = fix_border_y_simple(clips[plane], *i)
+                    if isinstance(i, list):
+                        plane = i.pop() if len(i) == 5 else 0
+                        clips[plane] = fix_border_y_simple(clips[plane], *i)
+                    else:
+                        raise ValueError(f'{func_name}: "y" must be list[int | tuple | None] or list[list[int | tuple | None]]')
         else:
             raise ValueError(f'{func_name}: "y" must be int, list or "None"')
     
