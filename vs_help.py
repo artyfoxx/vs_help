@@ -501,7 +501,8 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: tuple[int, int] = (0, 0), factor: tuple[int, float] | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, factor: tuple[int, float] | None = None,
+                   planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -524,12 +525,12 @@ def average_fields(clip: VideoNode, mode: tuple[int, int] = (0, 0), factor: tupl
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or list')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode, factor)
+        clip = average_fields_simple(clip, mode, by_lines, factor)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         for i in range(num_p):
             if i in planes:
-                clips[i] = average_fields_simple(clips[i], mode, factor)
+                clips[i] = average_fields_simple(clips[i], mode, by_lines, factor)
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -537,14 +538,14 @@ def average_fields(clip: VideoNode, mode: tuple[int, int] = (0, 0), factor: tupl
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: tuple[int, int] = (0, 0), factor: tuple[int, float] | None = None) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False, factor: tuple[int, float] | None = None) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if mode[0] == 0:
+    if not by_lines:
         if factor is None:
             clip = core.std.SeparateFields(clip, True).std.PlaneStats()
             fields = [clip[::2], clip[1::2]]
@@ -552,19 +553,19 @@ def average_fields_simple(clip: VideoNode, mode: tuple[int, int] = (0, 0), facto
             clip = core.std.SeparateFields(clip, True)
             fields = [mode_factor(clip[::2], *factor).std.PlaneStats(), core.std.PlaneStats(clip[1::2])]
         
-        if mode[1] == 0:
+        if mode == 0:
             fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'),
                                     core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'))
-        elif mode[1] == 1:
+        elif mode == 1:
             fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                     core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
         else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode[1] value')
+            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
         clip = core.std.SetFieldBased(clip, 0)
-    elif mode[0] == 1:
+    else:
         h = clip.height
         
         if factor is None:
@@ -572,20 +573,18 @@ def average_fields_simple(clip: VideoNode, mode: tuple[int, int] = (0, 0), facto
         else:
             clips = [mode_factor(core.std.Crop(clip, 0, 0, i, h - i - 1), *factor).std.PlaneStats() if i % 2 == 0 else core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
         
-        if mode[1] == 0:
+        if mode == 0:
             for i in range(0, h - 1, 2):
                 clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'),
                                           core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'))
-        elif mode[1] == 1:
+        elif mode == 1:
             for i in range(0, h - 1, 2):
                 clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                           core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
         else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode[1] value')
+            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         clip = core.std.StackVertical(clips)
-    else:
-        raise ValueError(f'{func_name}: Please use 0 or 1 mode[0] value')
     
     clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
