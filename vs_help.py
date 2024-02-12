@@ -169,7 +169,8 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
 # and limit the maximum lightening, negative values - on the contrary.
-# mode - target correction mode, 0 - arithmetic, 1 - geometric.
+# mode - target correction mode, 0 - subtraction and addition, 1 - division and multiplication, 2 - logarithm and exponentiation,
+# 3 - nth root and exponentiation.
 # plane - by default 0.
 
 def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = None, y: int | list[int] | list[list[int]] | None = None) -> VideoNode:
@@ -247,8 +248,12 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
     elif mode == 1:
         fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
+    elif mode == 2:
+        fix_line = core.akarin.Expr([target_line, donor_line], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
+    elif mode == 3:
+        fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
     else:
-        raise ValueError(f'{func_name}: Please use 0...1 mode value')
+        raise ValueError(f'{func_name}: Please use 0...3 mode value')
     
     if limit > 0:
         fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
@@ -286,8 +291,12 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
     elif mode == 1:
         fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
+    elif mode == 2:
+        fix_line = core.akarin.Expr([target_line, donor_line], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
+    elif mode == 3:
+        fix_line = core.akarin.Expr([target_line, donor_line], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
     else:
-        raise ValueError(f'{func_name}: Please use 0...1 mode value')
+        raise ValueError(f'{func_name}: Please use 0...3 mode value')
     
     if limit > 0:
         fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
@@ -544,8 +553,16 @@ def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False
             for i in range(0, h - 1, 2):
                 clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                           core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        elif mode == 2:
+            for i in range(0, h - 1, 2):
+                clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log x.PlaneStatsAverage log / pow'),
+                                          core.akarin.Expr([clips[i], clips[i + 1]], 'y x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log y.PlaneStatsAverage log / pow'))
+        elif mode == 3:
+            for i in range(0, h - 1, 2):
+                clips[i], clips[i + 1] = (core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 x.PlaneStatsAverage / pow x pow'),
+                                          core.akarin.Expr([clips[i], clips[i + 1]], 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'))
         else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
+            raise ValueError(f'{func_name}: Please use 0...3 mode value')
         
         clip = core.std.StackVertical(clips)
     else:
@@ -558,8 +575,14 @@ def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False
         elif mode == 1:
             fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
                                     core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        elif mode == 2:
+            fields[0], fields[1] = (core.akarin.Expr(fields, 'x x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log x.PlaneStatsAverage log / pow'),
+                                    core.akarin.Expr(fields, 'y x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log y.PlaneStatsAverage log / pow'))
+        elif mode == 3:
+            fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 x.PlaneStatsAverage / pow x pow'),
+                                    core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'))
         else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
+            raise ValueError(f'{func_name}: Please use 0...3 mode value')
         
         clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
