@@ -162,7 +162,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # Variables can have the following values:
 # "None" - the axis is skipped, by default.
 # list[list[int | tuple | None]] - the list of iterations, in turn, each iteration is a list of the following parameters:
-# [target, donor, limit, mode, factor, plane]. Only target is mandatory.
+# [target, donor, limit, mode, plane]. Only target is mandatory.
 # list[int | tuple | None] - the same thing, but there is only one iteration.
 # int - only the target is specified, all other parameters are in default values.
 # target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
@@ -170,11 +170,9 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
 # and limit the maximum lightening, negative values - on the contrary.
 # mode - target correction mode, 0 - arithmetic, 1 - geometric.
-# factor - this applies the mode_factor function to the target, set as tuple[int, float], by default "None".
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, x: int | list[int | tuple | None] | list[list[int | tuple | None]] | None = None,
-               y: int | list[int | tuple | None] | list[list[int | tuple | None]] | None = None) -> VideoNode:
+def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = None, y: int | list[int] | list[list[int]] | None = None) -> VideoNode:
     
     func_name = 'fix_border'
     
@@ -192,13 +190,13 @@ def fix_border(clip: VideoNode, x: int | list[int | tuple | None] | list[list[in
         if isinstance(x, int):
             clips[0] = fix_border_x_simple(clips[0], x)
         elif isinstance(x, list):
-            if all(isinstance(i, int | tuple | None) for i in x):
-                plane = x.pop() if len(x) == 6 else 0
+            if all(isinstance(i, int) for i in x):
+                plane = x.pop() if len(x) == 5 else 0
                 clips[plane] = fix_border_x_simple(clips[plane], *x)
             else:
                 for i in x:
                     if isinstance(i, list):
-                        plane = i.pop() if len(i) == 6 else 0
+                        plane = i.pop() if len(i) == 5 else 0
                         clips[plane] = fix_border_x_simple(clips[plane], *i)
                     else:
                         raise ValueError(f'{func_name}: "x" must be list[int | tuple | None] or list[list[int | tuple | None]]')
@@ -209,13 +207,13 @@ def fix_border(clip: VideoNode, x: int | list[int | tuple | None] | list[list[in
         if isinstance(y, int):
             clips[0] = fix_border_y_simple(clips[0], y)
         elif isinstance(y, list):
-            if all(isinstance(i, int | tuple | None) for i in y):
-                plane = y.pop() if len(y) == 6 else 0
+            if all(isinstance(i, int) for i in y):
+                plane = y.pop() if len(y) == 5 else 0
                 clips[plane] = fix_border_y_simple(clips[plane], *y)
             else:
                 for i in y:
                     if isinstance(i, list):
-                        plane = i.pop() if len(i) == 6 else 0
+                        plane = i.pop() if len(i) == 5 else 0
                         clips[plane] = fix_border_y_simple(clips[plane], *i)
                     else:
                         raise ValueError(f'{func_name}: "y" must be list[int | tuple | None] or list[list[int | tuple | None]]')
@@ -230,8 +228,7 @@ def fix_border(clip: VideoNode, x: int | list[int | tuple | None] | list[list[in
     return clip
 
 
-def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0,
-                        factor: tuple[int, float] | None = None) -> VideoNode:
+def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0) -> VideoNode:
     
     func_name = 'fix_border_x_simple'
     
@@ -243,11 +240,7 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if donor is None:
         donor = target + 1 if target < w >> 1 else target - 1
     
-    if factor is None:
-        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
-    else:
-        target_line = mode_factor(core.std.Crop(clip, target, w - target - 1, 0, 0), *factor).std.PlaneStats()
-    
+    target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
     donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.PlaneStats()
     
     if mode == 0:
@@ -274,8 +267,7 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     return clip
 
 
-def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0,
-                        factor: tuple[int, float] | None = None) -> VideoNode:
+def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0) -> VideoNode:
     
     func_name = 'fix_border_y_simple'
     
@@ -287,11 +279,7 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if donor is None:
         donor = target + 1 if target < h >> 1 else target - 1
     
-    if factor is None:
-        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
-    else:
-        target_line = mode_factor(core.std.Crop(clip, 0, 0, target, h - target - 1), *factor).std.PlaneStats()
-    
+    target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
     donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.PlaneStats()
     
     if mode == 0:
@@ -501,8 +489,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, factor: tuple[int, float] | None = None,
-                   planes: int | list[int] | None = None) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -525,12 +512,12 @@ def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, facto
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or list')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode, by_lines, factor)
+        clip = average_fields_simple(clip, mode, by_lines)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         for i in range(num_p):
             if i in planes:
-                clips[i] = average_fields_simple(clips[i], mode, by_lines, factor)
+                clips[i] = average_fields_simple(clips[i], mode, by_lines)
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -538,40 +525,16 @@ def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, facto
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False, factor: tuple[int, float] | None = None) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if not by_lines:
-        if factor is None:
-            clip = core.std.SeparateFields(clip, True).std.PlaneStats()
-            fields = [clip[::2], clip[1::2]]
-        else:
-            clip = core.std.SeparateFields(clip, True)
-            fields = [mode_factor(clip[::2], *factor).std.PlaneStats(), core.std.PlaneStats(clip[1::2])]
-        
-        if mode == 0:
-            fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'),
-                                    core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'))
-        elif mode == 1:
-            fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
-                                    core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
-        else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
-        
-        clip = core.std.Interleave(fields)
-        clip = core.std.DoubleWeave(clip, True)[::2]
-        clip = core.std.SetFieldBased(clip, 0)
-    else:
+    if by_lines:
         h = clip.height
-        
-        if factor is None:
-            clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
-        else:
-            clips = [mode_factor(core.std.Crop(clip, 0, 0, i, h - i - 1), *factor).std.PlaneStats() if i % 2 == 0 else core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+        clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
         
         if mode == 0:
             for i in range(0, h - 1, 2):
@@ -585,6 +548,22 @@ def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False
             raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         clip = core.std.StackVertical(clips)
+    else:
+        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+        fields = [clip[::2], clip[1::2]]
+        
+        if mode == 0:
+            fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'),
+                                    core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'))
+        elif mode == 1:
+            fields[0], fields[1] = (core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'),
+                                    core.akarin.Expr(fields, 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'))
+        else:
+            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
+        
+        clip = core.std.Interleave(fields)
+        clip = core.std.DoubleWeave(clip, True)[::2]
+        clip = core.std.SetFieldBased(clip, 0)
     
     clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
@@ -1163,25 +1142,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             raise ValueError(f'{func_name}: Please use 0...2 order_aa value')
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
-    else:
-        raise ValueError(f'{func_name}: Please use 0...3 mode value')
-    
-    return clip
-
-
-def mode_factor(clip: VideoNode, mode: int = 0, factor: float = 1) -> VideoNode:
-    
-    func_name = 'mode_factor'
-    
-    if mode == 0:
-        clip = core.std.Expr(clip, f'x {factor} +')
-    elif mode == 1:
-        clip = core.std.Expr(clip, f'x {factor} *')
-    elif mode == 2:
-        clip = core.std.Expr(clip, f'x {factor} pow')
-    elif mode == 3:
-        half = 128 << clip.format.bits_per_sample - 8
-        clip = core.std.Expr(clip, f'x {half} / {factor} pow {half} *')
     else:
         raise ValueError(f'{func_name}: Please use 0...3 mode value')
     
