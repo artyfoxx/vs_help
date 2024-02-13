@@ -245,19 +245,26 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0)
     
     if mode == -3:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow').std.Invert()
     elif mode == -2:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow').std.Invert()
     elif mode == -1:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage / x *').std.Invert()
     elif mode == 0:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
     elif mode == 1:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
     elif mode == 2:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
     elif mode == 3:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
     
@@ -294,19 +301,26 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.PlaneStats()
     
     if mode == -3:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow').std.Invert()
     elif mode == -2:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow').std.Invert()
     elif mode == -1:
-        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *').std.Invert()
+        fix_line = core.akarin.Expr([target_line.std.Invert().std.PlaneStats(), donor_line.std.Invert().std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage / x *').std.Invert()
     elif mode == 0:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage - x +')
     elif mode == 1:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage x.PlaneStatsAverage / x *')
     elif mode == 2:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow')
     elif mode == 3:
-        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()], 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
+        fix_line = core.akarin.Expr([target_line.std.PlaneStats(), donor_line.std.PlaneStats()],
+                                    'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow')
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
     
