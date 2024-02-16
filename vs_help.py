@@ -407,7 +407,8 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
         if space == YUV and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError(f'{func_name}: "dx" or "dy" does not match the chroma subsampling of the output clip')
         
-        mask = core.resize.Bilinear(mask, dx, dy, **down_args)
+        kernel_down = down_args.pop('kernel', 'bilinear').capitalize()
+        mask = eval(f'core.resize.{kernel_down}(mask, dx, dy, **down_args)')
     
     if blur_more:
         mask = core.std.Convolution(mask, [1, 2, 1, 2, 4, 2, 1, 2, 1])
