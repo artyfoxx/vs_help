@@ -161,9 +161,9 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # All values are set in the "x" and "y" variables for columns and rows, respectively.
 # Variables can have the following values:
 # "None" - the axis is skipped, by default.
-# list[list[int | tuple | None]] - the list of iterations, in turn, each iteration is a list of the following parameters:
+# list[list[int]] - the list of iterations, in turn, each iteration is a list of the following parameters:
 # [target, donor, limit, mode, plane]. Only target is mandatory.
-# list[int | tuple | None] - the same thing, but there is only one iteration.
+# list[int] - the same thing, but there is only one iteration.
 # int - only the target is specified, all other parameters are in default values.
 # target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
