@@ -576,7 +576,7 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bo
         expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 x.PlaneStatsAverage / pow x pow'
         expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'
     else:
-        raise ValueError(f'{func_name}: Please use -3...3 mode value')
+        raise ValueError(f'{func_name}: Please use -3...3 or "None" mode value')
     
     if mode < 0:
         clip = core.std.Invert(clip)
