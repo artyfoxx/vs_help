@@ -168,8 +168,8 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
-# and limit the maximum lightening, negative values - on the contrary.
-# mode - target correction mode, 0 - subtraction and addition, -1 and 1 - division and multiplication,
+# and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
+# mode - target correction mode, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
 # -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
 # plane - by default 0.
 
@@ -229,13 +229,14 @@ def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = No
     return clip
 
 
-def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0) -> VideoNode:
+def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 1) -> VideoNode:
     
     func_name = 'fix_border_x_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
+    limit <<= clip.format.bits_per_sample - 8
     w = clip.width
     
     if donor is None:
@@ -281,13 +282,14 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     return clip
 
 
-def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 0) -> VideoNode:
+def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 1) -> VideoNode:
     
     func_name = 'fix_border_y_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
+    limit <<= clip.format.bits_per_sample - 8
     h = clip.height
     
     if donor is None:
@@ -517,35 +519,34 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, planes: int | list[int] | None = None) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields'
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = list(range(num_p))
-    elif isinstance(planes, int):
-        if planes in list(range(num_p)):
-            planes = [planes]
-        else:
-            raise ValueError(f'{func_name}: Plane {planes} not exist')
-    elif isinstance(planes, list):
-        if set(planes).issubset(set(range(num_p))):
+    if mode is None:
+        return clip
+    elif isinstance(mode, int):
+        mode = [mode] * num_p
+    elif isinstance(mode, list):
+        if len(mode) == num_p:
             pass
+        elif len(mode) < num_p:
+            mode += [None] * (num_p - len(mode))
         else:
-            raise ValueError(f'{func_name}: Invalid plane in planes')
+            raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
     else:
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or list')
+        raise ValueError(f'{func_name}: "mode" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode, by_lines)
+        clip = average_fields_simple(clip, mode[0], by_lines)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         for i in range(num_p):
-            if i in planes:
-                clips[i] = average_fields_simple(clips[i], mode, by_lines)
+            if mode[i] is not None:
+                clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -553,14 +554,16 @@ def average_fields(clip: VideoNode, mode: int = 0, by_lines: bool = False, plane
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int = 0, by_lines: bool = False) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if mode == 0:
+    if mode is None:
+        return clip
+    elif mode == 0:
         expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'
         expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'
     elif abs(mode) == 1:
@@ -990,7 +993,7 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     return clip
 
 
-def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order_aa: int = 0, mode: int = 0,
+def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order: int = 0, mode: int = 0,
               desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
               dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscale_args: Any) -> VideoNode:
     
@@ -1039,7 +1042,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         if dehalo:
             clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
         
-        upscaler_mod = partial(upscaler, mode = mode, order_aa = order_aa, **upscaler_args)
+        upscaler_mod = partial(upscaler, mode = mode, order = order, **upscaler_args)
         clip = rescaler.upscale(clip, w, h, upscaler_mod)
     else:
         if ext_aa.format.color_family == GRAY:
@@ -1065,7 +1068,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
 
 
 def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order_aa: int = 0, **upscaler_args: Any) -> VideoNode:
+            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'upscaler'
     
@@ -1093,17 +1096,17 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
         clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
     elif mode == 1:
-        if order_aa == 0:
+        if order == 0:
             clip = core.std.Transpose(clip)
             clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
             clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-        elif order_aa == 1:
+        elif order == 1:
             clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
             clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-        elif order_aa == 2:
+        elif order == 2:
             clip1 = core.std.Transpose(clip)
             clip1 = core.znedi3.nnedi3(clip1, field = 1, dh = True, **upscaler_args)
             clip1 = core.std.Transpose(clip1)
@@ -1116,21 +1119,21 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
-            raise ValueError(f'{func_name}: Please use 0...2 order_aa value')
+            raise ValueError(f'{func_name}: Please use 0...2 order value')
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     elif mode == 2:
-        if order_aa == 0:
+        if order == 0:
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-        elif order_aa == 1:
+        elif order == 1:
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-        elif order_aa == 2:
+        elif order == 2:
             clip1 = core.std.Transpose(clip)
             clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, **upscaler_args)
             clip1 = core.std.Transpose(clip1)
@@ -1143,24 +1146,24 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
-            raise ValueError(f'{func_name}: Please use 0...2 order_aa value')
+            raise ValueError(f'{func_name}: Please use 0...2 order value')
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     elif mode == 3:
         eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
         znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
         
-        if order_aa == 0:
+        if order == 0:
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-        elif order_aa == 1:
+        elif order == 1:
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
             clip = core.std.Transpose(clip)
-        elif order_aa == 2:
+        elif order == 2:
             clip1 = core.std.Transpose(clip)
             clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip1, field = 1, dh = True, **znedi3_args), **eedi3_args)
             clip1 = core.std.Transpose(clip1)
@@ -1173,7 +1176,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
-            raise ValueError(f'{func_name}: Please use 0...2 order_aa value')
+            raise ValueError(f'{func_name}: Please use 0...2 order value')
         
         clip = autotap3(clip, dx, dy, **dict(src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2))
     else:
