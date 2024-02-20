@@ -1153,6 +1153,9 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
         znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
         
+        if not all((i in eedi3_args or i in znedi3_args) for i in upscaler_args):
+            raise ValueError(f'{func_name}: Unsupported values in upscaler_args')
+        
         if order == 0:
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
