@@ -460,7 +460,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
 
 
 # Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
-# The internal Descale functions are unloaded as a dictionary.
+# The internal Descale functions are unloaded as usual.
 # The function values that differ for the upper and lower fields are indicated in the list.
 
 def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **descale_args: Any) -> VideoNode:
