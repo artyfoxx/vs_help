@@ -158,14 +158,10 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 
 
 # A simple functions for fix brightness artifacts at the borders of the frame.
-# All values are set in the "x" and "y" variables for columns and rows, respectively.
-# Variables can have the following values:
-# "None" - the axis is skipped, by default.
-# list[list[int]] - the list of iterations, in turn, each iteration is a list of the following parameters:
-# [target, donor, limit, mode, plane]. Only target is mandatory.
-# list[int] - the same thing, but there is only one iteration.
-# int - only the target is specified, all other parameters are in default values.
-# target - the target column/row, it is counted from the upper left edge of the screen, the countdown starts from 0.
+# All values are set as positional string arguments. The strings have the following format:
+# [axis, target, donor, limit, mode, plane]. Only axis is mandatory.
+# axis - can take the values "x" or "y" for columns and rows, respectively.
+# target - the target column/row, it is counted from the upper left edge of the screen, by default 0.
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
 # and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
@@ -173,7 +169,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = None, y: int | list[int] | list[list[int]] | None = None) -> VideoNode:
+def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     
     func_name = 'fix_border'
     
@@ -187,44 +183,23 @@ def fix_border(clip: VideoNode, x: int | list[int] | list[list[int]] | None = No
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if x is not None:
-        if isinstance(x, int):
-            clips[0] = fix_border_x_simple(clips[0], x)
-        elif isinstance(x, list):
-            if all(isinstance(i, int) for i in x):
-                plane = x.pop() if len(x) == 5 else 0
-                clips[plane] = fix_border_x_simple(clips[plane], *x)
-            else:
-                for i in x:
-                    if isinstance(i, list):
-                        plane = i.pop() if len(i) == 5 else 0
-                        clips[plane] = fix_border_x_simple(clips[plane], *i)
-                    else:
-                        raise ValueError(f'{func_name}: "x" must be list[int | tuple | None] or list[list[int | tuple | None]]')
+    for i in args:
+        if not isinstance(i, list):
+            raise ValueError(f'{func_name}: all args must be lists')
+        
+        plane = i.pop() if len(i) == 6 else 0
+        
+        if i[0] == 'x':
+            clips[plane] = fix_border_x_simple(clips[plane], *i[1:])
+        elif i[0] == 'y':
+            clips[plane] = fix_border_y_simple(clips[plane], *i[1:])
         else:
-            raise ValueError(f'{func_name}: "x" must be int, list or "None"')
-    
-    if y is not None:
-        if isinstance(y, int):
-            clips[0] = fix_border_y_simple(clips[0], y)
-        elif isinstance(y, list):
-            if all(isinstance(i, int) for i in y):
-                plane = y.pop() if len(y) == 5 else 0
-                clips[plane] = fix_border_y_simple(clips[plane], *y)
-            else:
-                for i in y:
-                    if isinstance(i, list):
-                        plane = i.pop() if len(i) == 5 else 0
-                        clips[plane] = fix_border_y_simple(clips[plane], *i)
-                    else:
-                        raise ValueError(f'{func_name}: "y" must be list[int | tuple | None] or list[list[int | tuple | None]]')
-        else:
-            raise ValueError(f'{func_name}: "y" must be int, list or "None"')
+            raise ValueError(f'{func_name}: "axis" must be "x" or "y"')
     
     if space == GRAY:
         clip = clips[0]
     else:
-        clip = core.std.ShufflePlanes(clips, list(range(num_p)), space)
+        clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     
     return clip
 
@@ -1153,7 +1128,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
         znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
         
-        if not all((i in eedi3_args or i in znedi3_args) for i in upscaler_args):
+        if not all(i in eedi3_args or i in znedi3_args for i in upscaler_args):
             raise ValueError(f'{func_name}: Unsupported values in upscaler_args')
         
         if order == 0:
