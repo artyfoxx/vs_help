@@ -42,8 +42,8 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
                 crop_args['src_height'] += h - crop_args.get('src_top', 0)
             back_args['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
         
-        if len(crop_args) != len(back_args):
-            raise ValueError(f'{func_name}: Unsupported keys in crop_args')
+        if not all((x := i) in back_args for i in crop_args):
+            raise ValueError(f'{func_name}: Unsupported key {x} in crop_args')
     
     space = clip.format.color_family
     
@@ -356,7 +356,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     elif kernel == 'spline64':
         rescaler = rescale.Spline64()
     else:
-        raise ValueError(f'{func_name}: Unsupported kernel type')
+        raise ValueError(f'{func_name}: {kernel} is unsupported kernel')
     
     if dx is None:
         resc = rescaler.rescale(clip, dy, h if frac else None)
@@ -957,7 +957,7 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     elif mode == 'h':
         coord = [0, 0, 0, 1, 1, 0, 0, 0]
     else:
-        raise ValueError(f'{func_name}: wrong mode')
+        raise ValueError(f'{func_name}: {mode} is wrong mode')
     
     clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
     mask_1 = core.std.Maximum(clip, coordinates = coord)
@@ -1002,7 +1002,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         elif kernel == 'spline64':
             rescaler = rescale.Spline64()
         else:
-            raise ValueError(f'{func_name}: Unsupported kernel type')
+            raise ValueError(f'{func_name}: {kernel} is unsupported kernel')
         
         if dx is None:
             dx = w / h * dy
@@ -1128,8 +1128,8 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
         znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
         
-        if not all(i in eedi3_args or i in znedi3_args for i in upscaler_args):
-            raise ValueError(f'{func_name}: Unsupported values in upscaler_args')
+        if not all((x := i) in eedi3_args or x in znedi3_args for i in upscaler_args):
+            raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
         
         if order == 0:
             clip = core.std.Transpose(clip)
