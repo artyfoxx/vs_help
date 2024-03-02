@@ -442,7 +442,7 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     second_args = {}
     
     for i in descale_args:
-        if isinstance(descale_args[i], list):
+        if isinstance(descale_args[i], list) and len(descale_args[i]) == 2:
             second_args[i] = descale_args[i][1]
             descale_args[i] = descale_args[i][0]
         else:
