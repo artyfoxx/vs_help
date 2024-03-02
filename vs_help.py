@@ -188,13 +188,7 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
             raise ValueError(f'{func_name}: all args must be lists')
         
         plane = i.pop() if len(i) == 6 else 0
-        
-        if i[0] == 'x':
-            clips[plane] = fix_border_x_simple(clips[plane], *i[1:])
-        elif i[0] == 'y':
-            clips[plane] = fix_border_y_simple(clips[plane], *i[1:])
-        else:
-            raise ValueError(f'{func_name}: "axis" must be "x" or "y"')
+        clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
     
     if space == GRAY:
         clip = clips[0]
@@ -749,22 +743,21 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         
         mask = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
-        mask[1] = core.std.Expr([mask[1], mask[2]], 'x y max')
-        
-        if clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0:
-            mask[1] = core.fmtc.resample(mask[1], clip.width, clip.height, kernel = "spline", taps = 6)
-            if bits != 16:
-                mask[1] = core.fmtc.bitdepth(mask[1], bits = bits, dmode = 1)
-        
-        clip = core.std.Expr([mask[0], mask[1]], 'x y max')
+        for i in range(num_p - 1, 0, -1):
+            if i == 1 and (clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0):
+                mask[i] = core.fmtc.resample(mask[i], clip.width, clip.height, kernel = 'spline', taps = 6)
+                if bits != 16:
+                    mask[i] = core.fmtc.bitdepth(mask[i], bits = bits, dmode = 1)
+            
+            mask[i - 1] = core.std.Expr([mask[i - 1], mask[i]], 'x y max')
         
         for _ in range(exp_n):
-            clip = core.std.Maximum(clip)
+            mask[0] = core.std.Maximum(mask[0])
         
         for _ in range(def_n):
-            clip = core.std.Deflate(clip)
+            mask[0] = core.std.Deflate(mask[0])
         
-        clip = core.resize.Point(clip, format = format_id)
+        clip = core.resize.Point(mask[0], format = format_id)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
