@@ -187,6 +187,9 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
         if not isinstance(i, list):
             raise ValueError(f'{func_name}: all args must be lists')
         
+        if i[0] not in {'x', 'y'}:
+            raise ValueError(f'{func_name}: "axis" must be "x" or "y"')
+        
         plane = i.pop() if len(i) == 6 else 0
         clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
     
