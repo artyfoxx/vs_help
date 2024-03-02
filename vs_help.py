@@ -743,13 +743,14 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         
         mask = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
-        for i in range(num_p - 1, 0, -1):
-            if i == 1 and (clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0):
-                mask[i] = core.fmtc.resample(mask[i], clip.width, clip.height, kernel = 'spline', taps = 6)
-                if bits != 16:
-                    mask[i] = core.fmtc.bitdepth(mask[i], bits = bits, dmode = 1)
-            
-            mask[i - 1] = core.std.Expr([mask[i - 1], mask[i]], 'x y max')
+        mask[1] = core.std.Expr([mask[1], mask[2]], 'x y max')
+        
+        if clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0:
+            mask[1] = core.fmtc.resample(mask[1], clip.width, clip.height, kernel = 'spline', taps = 6)
+            if bits != 16:
+                mask[1] = core.fmtc.bitdepth(mask[1], bits = bits, dmode = 1)
+        
+        mask[0] = core.std.Expr([mask[0], mask[1]], 'x y max')
         
         for _ in range(exp_n):
             mask[0] = core.std.Maximum(mask[0])
