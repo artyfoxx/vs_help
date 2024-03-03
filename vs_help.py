@@ -743,25 +743,28 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         pass
     elif space == YUV:
         format_id = clip.format.id
+        sub_w = clip.format.subsampling_w
+        sub_h = clip.format.subsampling_h
+        w = clip.width
+        h = clip.height
         
-        mask = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clip = core.std.Expr(clips[1:], 'x y max')
         
-        mask[1] = core.std.Expr([mask[1], mask[2]], 'x y max')
-        
-        if clip.format.subsampling_w > 0 or clip.format.subsampling_h > 0:
-            mask[1] = core.fmtc.resample(mask[1], clip.width, clip.height, kernel = 'spline', taps = 6)
+        if sub_w > 0 or sub_h > 0:
+            clip = core.fmtc.resample(clip, w, h, kernel = 'spline', taps = 6)
             if bits != 16:
-                mask[1] = core.fmtc.bitdepth(mask[1], bits = bits, dmode = 1)
+                clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
         
-        mask[0] = core.std.Expr([mask[0], mask[1]], 'x y max')
+        clip = core.std.Expr([clip, clips[0]], 'x y max')
         
         for _ in range(exp_n):
-            mask[0] = core.std.Maximum(mask[0])
+            clip = core.std.Maximum(clip)
         
         for _ in range(def_n):
-            mask[0] = core.std.Deflate(mask[0])
+            clip = core.std.Deflate(clip)
         
-        clip = core.resize.Point(mask[0], format = format_id)
+        clip = core.resize.Point(clip, format = format_id)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
