@@ -5,7 +5,7 @@ from math import sqrt
 from functools import partial
 from inspect import signature
 
-# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Float is not supported yet.
+# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Correct operation with float is not guaranteed.
 
 # Functions:
 # autotap3
