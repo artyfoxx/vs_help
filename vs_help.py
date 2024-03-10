@@ -5,8 +5,26 @@ from math import sqrt
 from functools import partial
 from inspect import signature
 
-# All filters support the following formats: GRAY and YUV 8 - 16 bit integer. Float is not supported yet.
+# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Float is not supported yet.
 
+# Functions:
+# autotap3
+# bion_dehalo
+# fix_border
+# mask_detail
+# degrain_n
+# destripe
+# daa
+# average_fields
+# rg_fix
+# znedi3aas
+# dehalo_mask
+# tp7_deband_mask
+# dehalo_alpha
+# fine_dehalo
+# fine_dehalo2
+# insane_aa
+# upscaler
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
