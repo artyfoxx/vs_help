@@ -102,7 +102,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], f'x y - {thresh} *').resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], [*range(orig.format.num_planes)], space)
     
     return clip
 
@@ -167,7 +167,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if m:
         clip = e3 if space == GRAY else core.resize.Point(e3, format = orig.format.id)
@@ -489,7 +489,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     num_p = clip.format.num_planes
     
     if planes is None:
-        planes = list(range(num_p))
+        planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
     
@@ -664,7 +664,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     num_p = clip.format.num_planes
     
     if planes is None:
-        planes = list(range(num_p))
+        planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
     
@@ -838,7 +838,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if showmask:
         clip = so if space == GRAY else core.resize.Point(so, format = orig.format.id)
@@ -905,7 +905,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     clip = core.std.MaskedMerge(clip, dehaloed, outside)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if showmask:
         if showmask == 1:
@@ -965,7 +965,7 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
     clip = core.std.MaskedMerge(clip, fix_v, mask_v)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if showmask:
         clip = core.std.Expr([mask_h, mask_v], 'x y max')
@@ -1064,7 +1064,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         clip = core.std.MaskedMerge(orig_gray, clip, mask)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     return clip
 
