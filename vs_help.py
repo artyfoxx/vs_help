@@ -133,6 +133,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         step = clip.format.bits_per_sample - 8
         half = 128 << step
         clamp = 20 << step
+        rg = 'rgvs'
         
         expr0 = f'x y - {4 << step} - 4 *'
         expr1 = 'x y 1.2 * -'
@@ -141,6 +142,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         expr4 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
     else:
         clamp = 0.078125
+        rg = 'rgsf'
         
         expr0 = 'x y - 0.015625 - 4 * 0.0 max 1.0 min'
         expr1 = 'x y 1.2 * - 0.0 max 1.0 min'
@@ -156,7 +158,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], expr2)
     m1 = core.std.Expr([clip, m0], expr3).std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
-    m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
+    m3 = eval(f'core.std.Expr([m1, m2], \'y x -\').{rg}.RemoveGrain(21).std.Maximum()')
     
     if mask == 1:
         pass
@@ -172,7 +174,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
-        dh1 = core.std.MaskedMerge(core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1), blurr, e3)
+        dh1 = eval(f'core.std.MaskedMerge(core.{rg}.Repair(clip, core.{rg}.RemoveGrain(clip, 21), 1), blurr, e3)')
     else:
         dh1 = core.std.MaskedMerge(clip, blurr, e3)
     
@@ -182,7 +184,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     DD  = core.std.Expr([dh1D, med2D], expr4)
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)
+    clip = eval(f'haf_Clamp(clip, core.{rg}.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)')
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
