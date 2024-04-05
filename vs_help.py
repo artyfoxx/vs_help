@@ -246,7 +246,6 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    limit <<= clip.format.bits_per_sample - 8
     w = clip.width
     
     if donor is None:
@@ -262,6 +261,12 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
+    
+    if clip.format.sample_type == INTEGER:
+        limit <<= clip.format.bits_per_sample - 8
+    else:
+        limit /= 256
+        expr += ' 0.0 max 1.0 min'
     
     if mode < 0:
         target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.Invert().std.PlaneStats()
@@ -299,7 +304,6 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    limit <<= clip.format.bits_per_sample - 8
     h = clip.height
     
     if donor is None:
@@ -315,6 +319,12 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
+    
+    if clip.format.sample_type == INTEGER:
+        limit <<= clip.format.bits_per_sample - 8
+    else:
+        limit /= 256
+        expr += ' 0.0 max 1.0 min'
     
     if mode < 0:
         target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.Invert().std.PlaneStats()
