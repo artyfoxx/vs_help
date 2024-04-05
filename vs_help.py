@@ -129,16 +129,32 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    half = 128 << step
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        half = 128 << step
+        clamp = 20 << step
+        
+        expr0 = f'x y - {4 << step} - 4 *'
+        expr1 = 'x y 1.2 * -'
+        expr2 = 'x y - abs 0 > x y - 0.3125 * x + x ?'
+        expr3 = f'x y - {1 << step} - 128 *'
+        expr4 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
+    else:
+        clamp = 0.078125
+        
+        expr0 = 'x y - 0.015625 - 4 * 0.0 max 1.0 min'
+        expr1 = 'x y 1.2 * - 0.0 max 1.0 min'
+        expr2 = 'x y - abs 0 > x y - 0.3125 * x + x ? 0.0 max 1.0 min'
+        expr3 = 'x y - 0.00390625 - 128 * 0.0 max 1.0 min'
+        expr4 = 'x 0.5 - y 0.5 - * 0 < 0.5 x 0.5 - abs y 0.5 - abs 2 * < x y 0.5 - 2 * 0.5 + ? ? 0.0 max 1.0 min'
     
-    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
+    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], expr0)
     e2 = core.std.Maximum(e1).std.Maximum()
     e2 = core.std.Merge(e2, core.std.Maximum(e2)).std.Inflate()
-    e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], 'x y 1.2 * -').std.Inflate()
+    e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], expr1).std.Inflate()
     
-    m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *').std.Maximum().std.Inflate()
+    m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], expr2)
+    m1 = core.std.Expr([clip, m0], expr3).std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
     m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
@@ -163,10 +179,10 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
-    DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
+    DD  = core.std.Expr([dh1D, med2D], expr4)
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
+    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
