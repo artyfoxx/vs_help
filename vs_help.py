@@ -380,8 +380,13 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    full = 256 << step
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        full = 256 << step
+        expr = f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?'
+    else:
+        expr = f'x {cutoff / 256} < 0 x {gain} 1.0 x + * * ? 0.0 max 1.0 min'
+    
     w = clip.width
     h = clip.height
     
@@ -406,12 +411,12 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     if dx is None:
         resc = rescaler.rescale(clip, dy, h if frac else None)
     else:
-        desc = rescaler.descale(clip, dx, dy, h if frac else None)
-        resc = rescaler.upscale(desc, w, h)
+        resc = rescaler.descale(clip, dx, dy, h if frac else None)
+        resc = rescaler.upscale(resc, w, h)
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
     mask = rg_fix_simple(mask, rg)
-    mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
+    mask = core.std.Expr(mask, expr)
     
     for _ in range(expand_n):
         mask = core.std.Maximum(mask)
@@ -682,7 +687,7 @@ def rg_fix_simple(clip: VideoNode, mode: int = 2) -> VideoNode:
     elif mode == 20:
         clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
     else:
-        clip = core.rgvs.RemoveGrain(clip, mode)
+        clip = core.rgvs.RemoveGrain(clip, mode) if clip.format.sample_type == INTEGER else core.rgsf.RemoveGrain(clip, mode)
     
     return clip
 
