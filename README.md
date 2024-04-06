@@ -9,6 +9,7 @@ Just a few vapoursynth function...
 and some dependencies on them.
 ## Plugins
 * [vs-removegrain](https://github.com/vapoursynth/vs-removegrain)
+* [RGSF](https://github.com/IFeelBloated/RGSF)
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
