@@ -221,15 +221,17 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    for i in args:
-        if not isinstance(i, list):
-            raise ValueError(f'{func_name}: all args must be lists')
-        
-        if i[0] not in {'x', 'y'}:
-            raise ValueError(f'{func_name}: "axis" must be "x" or "y"')
-        
-        plane = i.pop() if len(i) == 6 else 0
-        clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
+    if clip.format.sample_type == INTEGER:
+        for i in args:
+            plane = i.pop() if len(i) == 6 else 0
+            clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
+    else:
+        for i in args:
+            plane = i.pop() if len(i) == 6 else 0
+            if plane:
+                clips[plane] = eval(f'fix_border_{i[0]}_simple(core.std.Expr(clips[plane], \'x 0.5 +\'), *i[1:]).std.Expr(\'x 0.5 -\')')
+            else:
+                clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
     
     if space == GRAY:
         clip = clips[0]
@@ -457,6 +459,9 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     
     func_name = 'degrain_n'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if tr > 6 or tr < 1:
         raise ValueError(f'{func_name}: 1 <= "tr" <= 6')
     
@@ -534,7 +539,12 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
     shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix, planes = planes), planes = planes)
-    DD = core.rgvs.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
+    
+    if clip.format.sample_type == INTEGER:
+        DD = core.rgvs.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
+    else:
+        DD = core.rgsf.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
+    
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
@@ -544,7 +554,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, average: int = 0, by_lines: bool = False) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -566,12 +576,22 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
         raise ValueError(f'{func_name}: "mode" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode[0], average, by_lines)
+        clip = average_fields_simple(clip, mode[0], by_lines)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        for i in range(num_p):
-            if mode[i] is not None:
-                clips[i] = average_fields_simple(clips[i], mode[i], average, by_lines)
+        
+        if clip.format.sample_type == INTEGER:
+            for i in range(num_p):
+                if mode[i] is not None:
+                    clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
+        else:
+            for i in range(num_p):
+                if mode[i] is not None:
+                    if i:
+                        clips[i] = average_fields_simple(core.std.Expr(clips[i], 'x 0.5 +'), mode[i], by_lines).std.Expr('x 0.5 -')
+                    else:
+                        clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
+        
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -579,38 +599,33 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int | None = None, average: int = 0, by_lines: bool = False) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if average == 0:
-        expr0 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 /'
-    elif average == 1:
-        expr0 = 'x.PlaneStatsAverage y.PlaneStatsAverage * sqrt'
-    elif average == 2:
-        expr0 = 'x.PlaneStatsAverage y.PlaneStatsAverage * 2 * x.PlaneStatsAverage y.PlaneStatsAverage + /'
-    else:
-        raise ValueError(f'{func_name}: Please use 0...2 average value')
-    
     if mode is None:
         return clip
     elif mode == 0:
-        expr1 = expr0 + ' x.PlaneStatsAverage - x +'
-        expr2 = expr0 + ' y.PlaneStatsAverage - y +'
+        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'
+        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'
     elif abs(mode) == 1:
-        expr1 = expr0 + ' x.PlaneStatsAverage / x *'
-        expr2 = expr0 + ' y.PlaneStatsAverage / y *'
+        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'
+        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'
     elif abs(mode) == 2:
-        expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
-        expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
+        expr1 = 'x x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log x.PlaneStatsAverage log / pow'
+        expr2 = 'y x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log y.PlaneStatsAverage log / pow'
     elif abs(mode) == 3:
-        expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
-        expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
+        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 x.PlaneStatsAverage / pow x pow'
+        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 or "None" mode value')
+    
+    if clip.format.sample_type != INTEGER:
+        expr1 += ' 0.0 max 1.0 min'
+        expr2 += ' 0.0 max 1.0 min'
     
     if mode < 0:
         clip = core.std.Invert(clip)
@@ -708,13 +723,20 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
+    if clip.format.sample_type == INTEGER:
+        rg = 'rgvs'
+        clamp <<= clip.format.bits_per_sample - 8
+    else:
+        rg = 'rgsf'
+        clamp /= 256
+    
     if clamp > 0:
         shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
-                                  dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
+                                  dbl, 0, clamp, planes = planes), planes = planes)
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes = planes)
     
-    DD = core.rgvs.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
+    DD = eval(f'core.{rg}.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])')
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
