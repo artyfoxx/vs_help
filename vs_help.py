@@ -767,10 +767,20 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        expr1 = f'y x - {shift << step} - 128 *'
+        expr2 = 'x 16 *'
+        tr1 = 80 << step
+        tr2 = brz << step
+    else:
+        expr1 = f'y x - {shift / 256} - 128 * 0.0 max 1.0 min'
+        expr2 = 'x 16 * 0.0 max 1.0 min'
+        tr1 = 0.3125
+        tr2 = brz / 256
     
-    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift << step} - 128 *')
-    mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
+    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], expr1)
+    mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr(expr2)
     
     for _ in range(iterations):
         clip = core.std.Maximum(clip)
@@ -778,10 +788,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     for _ in range(iterations):
         clip = core.std.Minimum(clip)
     
-    clip = core.std.InvertMask(clip).std.BinarizeMask(80 << step)
+    clip = core.std.InvertMask(clip).std.BinarizeMask(tr1)
     
     if brz < 255:
-        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(brz << step)
+        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(tr2)
     
     clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
