@@ -133,7 +133,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         step = clip.format.bits_per_sample - 8
         half = 128 << step
         clamp = 20 << step
-        rg_ = 'rgvs'
+        rg_func = 'rgvs'
         
         expr0 = f'x y - {4 << step} - 4 *'
         expr1 = 'x y 1.2 * -'
@@ -142,7 +142,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         expr4 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
     else:
         clamp = 0.078125
-        rg_ = 'rgsf'
+        rg_func = 'rgsf'
         
         expr0 = 'x y - 0.015625 - 4 * 0.0 max 1.0 min'
         expr1 = 'x y 1.2 * - 0.0 max 1.0 min'
@@ -158,7 +158,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], expr2)
     m1 = core.std.Expr([clip, m0], expr3).std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
-    m3 = eval(f'core.std.Expr([m1, m2], \'y x -\').{rg_}.RemoveGrain(21).std.Maximum()')
+    m3 = eval(f'core.std.Expr([m1, m2], \'y x -\').{rg_func}.RemoveGrain(21).std.Maximum()')
     
     if mask == 1:
         pass
@@ -174,7 +174,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
-        dh1 = eval(f'core.std.MaskedMerge(core.{rg_}.Repair(clip, core.{rg_}.RemoveGrain(clip, 21), 1), blurr, e3)')
+        dh1 = eval(f'core.std.MaskedMerge(core.{rg_func}.Repair(clip, core.{rg_func}.RemoveGrain(clip, 21), 1), blurr, e3)')
     else:
         dh1 = core.std.MaskedMerge(clip, blurr, e3)
     
@@ -184,7 +184,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     DD  = core.std.Expr([dh1D, med2D], expr4)
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = eval(f'haf_Clamp(clip, core.{rg_}.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)')
+    clip = eval(f'haf_Clamp(clip, core.{rg_func}.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)')
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -724,10 +724,10 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
     if clip.format.sample_type == INTEGER:
-        rg = 'rgvs'
+        rg_func = 'rgvs'
         clamp <<= clip.format.bits_per_sample - 8
     else:
-        rg = 'rgsf'
+        rg_func = 'rgsf'
         clamp /= 256
     
     if clamp > 0:
@@ -736,7 +736,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes = planes)
     
-    DD = eval(f'core.{rg}.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])')
+    DD = eval(f'core.{rg_func}.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])')
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
@@ -814,11 +814,11 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     if clip.format.sample_type == INTEGER:
         factor = 1 << bits - 8
-        rg = 'rgvs'
+        rg_func = 'rgvs'
         expr = 'x y max'
     else:
         factor = 0.00390625
-        rg = 'rgsf'
+        rg_func = 'rgsf'
         expr = 'x y max 0.5 +'
     
     if fake_prewitt:
@@ -839,7 +839,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         clip = core.std.BinarizeMask(clip, thr * factor)
     
     if rg:
-        clip = eval(f'core.{rg}.RemoveGrain(clip, 3).std.Median()')
+        clip = eval(f'core.{rg_func}.RemoveGrain(clip, 3).std.Median()')
     
     if space == GRAY:
         pass
