@@ -815,9 +815,11 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     if clip.format.sample_type == INTEGER:
         factor = 1 << bits - 8
         rg = 'rgvs'
+        expr = 'x y max'
     else:
         factor = 0.00390625
         rg = 'rgsf'
+        expr = 'x y max 0.5 +'
     
     if fake_prewitt:
         clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
@@ -849,11 +851,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         h = clip.height
         
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        
-        if clip.format.sample_type == INTEGER:
-            clip = core.std.Expr(clips[1:], 'x y max')
-        else:
-            clip = core.std.Expr(clips[1:], 'x y max 0.5 +')
+        clip = core.std.Expr(clips[1:], expr)
         
         if sub_w > 0 or sub_h > 0:
             clip = core.fmtc.resample(clip, w, h, kernel = 'spline', taps = 6)
