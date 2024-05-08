@@ -1207,6 +1207,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     if mode == 0:
         kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
         clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
+        return clip
     elif mode == 1:
         if order == 0:
             clip = core.std.Transpose(clip)
@@ -1232,8 +1233,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
             raise ValueError(f'{func_name}: Please use 0...2 order value')
-        
-        clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     elif mode == 2:
         if order == 0:
             clip = core.std.Transpose(clip)
@@ -1259,8 +1258,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
             raise ValueError(f'{func_name}: Please use 0...2 order value')
-        
-        clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     elif mode == 3:
         eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
         znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
@@ -1292,9 +1289,9 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             clip = core.std.Expr([clip1, clip2], 'x y max')
         else:
             raise ValueError(f'{func_name}: Please use 0...2 order value')
-        
-        clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     else:
         raise ValueError(f'{func_name}: Please use 0...3 mode value')
+    
+    clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     
     return clip
