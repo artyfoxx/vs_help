@@ -891,15 +891,22 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    full = 256 << step
-    factor = 1 << step
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        full = 256 << step
+        factor = 1 << step
+        expr1 = f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *'
+        expr2 = f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?'
+    else:
+        expr1 = f'y x - y 0.00000390625 + / 1.0 * {lowsens * 0.00390625} - y 1.0 + 2.0 / {highsens / 100} + * 0.0 max 1.0 min'
+        expr2 = f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ? 0.0 max 1.0 min'
+    
     m4 = lambda x: 16 if x < 16 else int(x / 4 + 0.5) * 4
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {512 << step} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], expr1)
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
@@ -910,7 +917,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
         remove = core.std.Expr([remove, core.std.Minimum(lets).resize.Bicubic(m4(w * ss), m4(h * ss), filter_param_a = 1/3, filter_param_b = 1/3)], 'x y max')
         remove = core.resize.Lanczos(remove, w, h, filter_param_a = 3)
     
-    clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
+    clip = core.std.Expr([clip, remove], expr2)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -937,12 +944,31 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    thmi <<= step
-    thma <<= step
-    thlimi <<= step
-    thlima <<= step
-    full = (256 << step) - 1
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        thmi <<= step
+        thma <<= step
+        thlimi <<= step
+        thlima <<= step
+        full = (256 << step) - 1
+        expr1 = f'x {thmi} - {thma - thmi} / {full} *'
+        expr2 = f'x {thlimi} - {thlima - thlimi} / {full} *'
+        expr3 = 'x 4 *'
+        expr4 = 'x y - 2 *'
+        expr5 = f'x y {edgeproc * 0.66} * +'
+        expr6 = 'x 2 *'
+        
+    else:
+        thmi /= 256
+        thma /= 256
+        thlimi /= 256
+        thlima /= 256
+        expr1 = f'x {thmi} - {thma - thmi} / 0.0 max 1.0 min'
+        expr2 = f'x {thlimi} - {thlima - thlimi} / 0.0 max 1.0 min'
+        expr3 = 'x 4 * 0.0 max 1.0 min'
+        expr4 = 'x y - 2 * 0.0 max 1.0 min'
+        expr5 = f'x y {edgeproc * 0.66} * + 0.0 max 1.0 min'
+        expr6 = 'x 2 * 0.0 max 1.0 min'
     
     if ry is None:
         ry = rx
@@ -964,18 +990,18 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     else:
         edges = core.std.Prewitt(clip)
     
-    strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
+    strong = core.std.Expr(edges, expr1)
     large = haf_mt_expand_multi(strong, sw = rx_i, sh = ry_i)
-    light = core.std.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
-    shrink = haf_mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr('x 4 *')
+    light = core.std.Expr(edges, expr2)
+    shrink = haf_mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr(expr3)
     shrink = haf_mt_inpand_multi(shrink, mode = 'ellipse', sw = rx_i, sh = ry_i)
     shrink = core.std.Convolution(shrink, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Convolution([1, 1, 1, 1, 1, 1, 1, 1, 1])
-    outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], 'x y - 2 *')
+    outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], expr4)
     
     if edgeproc > 0:
-        outside = core.std.Expr([outside, strong], f'x y {edgeproc * 0.66} * +')
+        outside = core.std.Expr([outside, strong], expr5)
     
-    outside = core.std.Convolution(outside, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Expr('x 2 *')
+    outside = core.std.Convolution(outside, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Expr(expr6)
     
     clip = core.std.MaskedMerge(clip, dehaloed, outside)
     
@@ -999,13 +1025,18 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
 
 def fine_dehalo_contrasharp(dehaloed: VideoNode, clip: VideoNode, level: float) -> VideoNode:
     
-    step = dehaloed.format.bits_per_sample - 8
-    half = 128 << step
+    if clip.format.sample_type == INTEGER:
+        half = 128 << dehaloed.format.bits_per_sample - 8
+        expr1 = f'x {half} - 2.49 * {level} * {half} +'
+        expr2 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    else:
+        expr1 = f'x 0.5 - 2.49 * {level} * 0.5 + 0.0 max 1.0 min'
+        expr2 = 'x 0.5 - y 0.5 - * 0 < 0.5 x 0.5 - abs y 0.5 - abs < x y ? ?'
     
     bb = core.std.Convolution(dehaloed, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     bb2 = core.rgvs.Repair(bb, core.rgvs.Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
-    xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {level} * {half} +')
-    xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
+    xd = core.std.MakeDiff(bb, bb2).std.Expr(expr1)
+    xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], expr2)
     clip = core.std.MergeDiff(dehaloed, xdd)
     
     return clip
@@ -1026,12 +1057,14 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
+    expr = 'x 3 * y -' if clip.format.sample_type == INTEGER else 'x 3 * y - 0.0 max 1.0 min'
+    
     fix_h = core.std.Convolution(clip, vconv, mode = 'v')
     fix_v = core.std.Convolution(clip, hconv, mode = 'h')
     mask_h = core.std.Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], divisor = 4, saturate = False)
     mask_v = core.std.Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], divisor = 4, saturate = False)
-    temp_h = core.std.Expr([mask_h, mask_v], 'x 3 * y -')
-    temp_v = core.std.Expr([mask_v, mask_h], 'x 3 * y -')
+    temp_h = core.std.Expr([mask_h, mask_v], expr)
+    temp_v = core.std.Expr([mask_v, mask_h], expr)
     
     mask_h = fine_dehalo2_grow_mask(temp_h, 'v')
     mask_v = fine_dehalo2_grow_mask(temp_v, 'h')
@@ -1061,18 +1094,20 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     else:
         raise ValueError(f'{func_name}: {mode} is wrong mode')
     
+    expr = 'x 1.8 *' if clip.format.sample_type == INTEGER else 'x 1.8 * 0.0 max 1.0 min'
+    
     clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
     mask_1 = core.std.Maximum(clip, coordinates = coord)
     mask_2 = core.std.Maximum(mask_1, coordinates = coord).std.Maximum(coordinates = coord)
     clip = core.std.Expr([mask_2, mask_1], 'x y -')
-    clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr('x 1.8 *')
+    clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr(expr)
     
     return clip
 
 
 def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order: int = 0, mode: int = 0,
               desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
-              dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscale_args: Any) -> VideoNode:
+              dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'insane_aa'
     
