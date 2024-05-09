@@ -1207,91 +1207,52 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     if mode == 0:
         kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
         clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
-        return clip
-    elif mode == 1:
+    elif mode in {1, 2, 3}:
         if order == 0:
-            clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
+            clip = edi3_aa(clip, mode, True, **upscaler_args)
         elif order == 1:
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
+            clip = edi3_aa(clip, mode, False, **upscaler_args)
         elif order == 2:
-            clip1 = core.std.Transpose(clip)
-            clip1 = core.znedi3.nnedi3(clip1, field = 1, dh = True, **upscaler_args)
-            clip1 = core.std.Transpose(clip1)
-            clip1 = core.znedi3.nnedi3(clip1, field = 1, dh = True, **upscaler_args)
-            
-            clip2 = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-            clip2 = core.std.Transpose(clip2)
-            clip2 = core.znedi3.nnedi3(clip2, field = 1, dh = True, **upscaler_args)
-            clip2 = core.std.Transpose(clip2)
-            
-            clip = core.std.Expr([clip1, clip2], 'x y max')
+            clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
         else:
             raise ValueError(f'{func_name}: Please use 0...2 order value')
-    elif mode == 2:
-        if order == 0:
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-        elif order == 1:
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-        elif order == 2:
-            clip1 = core.std.Transpose(clip)
-            clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, **upscaler_args)
-            clip1 = core.std.Transpose(clip1)
-            clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, **upscaler_args)
-            
-            clip2 = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            clip2 = core.std.Transpose(clip2)
-            clip2 = core.eedi3m.EEDI3(clip2, field = 1, dh = True, **upscaler_args)
-            clip2 = core.std.Transpose(clip2)
-            
-            clip = core.std.Expr([clip1, clip2], 'x y max')
-        else:
-            raise ValueError(f'{func_name}: Please use 0...2 order value')
-    elif mode == 3:
-        eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
-        znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
         
-        if not all((x := i) in eedi3_args or x in znedi3_args for i in upscaler_args):
-            raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
-        
-        if order == 0:
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-        elif order == 1:
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip = core.std.Transpose(clip)
-        elif order == 2:
-            clip1 = core.std.Transpose(clip)
-            clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip1, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip1 = core.std.Transpose(clip1)
-            clip1 = core.eedi3m.EEDI3(clip1, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip1, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            
-            clip2 = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip2 = core.std.Transpose(clip2)
-            clip2 = core.eedi3m.EEDI3(clip2, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip2, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip2 = core.std.Transpose(clip2)
-            
-            clip = core.std.Expr([clip1, clip2], 'x y max')
-        else:
-            raise ValueError(f'{func_name}: Please use 0...2 order value')
+        clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     else:
         raise ValueError(f'{func_name}: Please use 0...3 mode value')
     
-    clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
+    return clip
+
+
+def edi3_aa(clip: VideoNode, mode: int = 0, order: bool = True, **edi3_args: Any) -> VideoNode:
+    
+    func_name = 'edi3_aa'
+    
+    if order:
+        clip = core.std.Transpose(clip)
+    
+    if mode == 1:
+        clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+        clip = core.std.Transpose(clip)
+        clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+    elif mode == 2:
+        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
+        clip = core.std.Transpose(clip)
+        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
+    elif mode == 3:
+        eedi3_args = {i:edi3_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in edi3_args}
+        znedi3_args = {i:edi3_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in edi3_args}
+        
+        if not all((x := i) in eedi3_args or x in znedi3_args for i in edi3_args):
+            raise ValueError(f'{func_name}: Unsupported key {x} in edi3_args')
+        
+        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+        clip = core.std.Transpose(clip)
+        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+    else:
+        raise ValueError(f'{func_name}: Please use 1...3 mode value')
+    
+    if not order:
+        clip = core.std.Transpose(clip)
     
     return clip
