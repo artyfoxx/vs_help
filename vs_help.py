@@ -822,11 +822,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         expr = 'x y max 0.5 +'
     
     if fake_prewitt:
-        clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
-                              f'x y max z a max max {scale} *')
+        clip = custom_mask(clip, scale = scale)
     else:
         clip = core.std.Prewitt(clip, scale = scale)
     
@@ -982,11 +978,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
         dehaloed = fine_dehalo_contrasharp(dehaloed, clip, contra)
     
     if fake_prewitt:
-        edges = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
-                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
-                               core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
-                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
-                               'x y max z a max max')
+        edges = custom_mask(clip)
     else:
         edges = core.std.Prewitt(clip)
     
@@ -1224,7 +1216,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     return clip
 
 
-def edi3_aa(clip: VideoNode, mode: int = 0, order: bool = True, **edi3_args: Any) -> VideoNode:
+def edi3_aa(clip: VideoNode, mode: int = 1, order: bool = True, **edi3_args: Any) -> VideoNode:
     
     func_name = 'edi3_aa'
     
@@ -1254,5 +1246,42 @@ def edi3_aa(clip: VideoNode, mode: int = 0, order: bool = True, **edi3_args: Any
     
     if not order:
         clip = core.std.Transpose(clip)
+    
+    return clip
+
+
+def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool = False, offset: float = 0.0) -> VideoNode:
+    
+    func_name = 'custom_mask'
+    
+    if clip.format.sample_type == INTEGER:
+        step = clip.format.bits_per_sample - 8
+        expr1 = f'x y max z a max max {scale} *'
+        expr2 = f'x y max {scale} *'
+        expr3 = f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *'
+    else:
+        expr1 = f'x y max z a max max {scale} * 0.0 max 1.0 min'
+        expr2 = f'x y max {scale} * 0.0 max 1.0 min'
+        expr3 = f'x 2 * 0.86 {offset} + 0.0 max 1.0 min'
+    
+    if mask == 0:
+        clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
+                              core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
+                              expr1)
+    elif mask == 1:
+        clip = core.std.Expr([core.std.Convolution(clip, [5, 10, 5, 0, 0, 0, -5, -10, -5], divisor = 4, saturate = False),
+                              core.std.Convolution(clip, [5, 0, -5, 10, 0, -10, 5, 0, -5], divisor = 4, saturate = False)],
+                              expr2)
+    elif mask == 2:
+        clip = core.std.Expr([core.std.Convolution(clip, [8, 16, 8, 0, 0, 0, -8, -16, -8], divisor = 8, saturate = False),
+                              core.std.Convolution(clip, [8, 0, -8, 16, 0, -16, 8, 0, -8], divisor = 8, saturate = False)],
+                              expr2)
+    else:
+        raise ValueError(f'{func_name}: Please use 0...2 mask value')
+    
+    if boost:
+        clip = core.std.Expr(clip, expr3)
     
     return clip
