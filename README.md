@@ -9,12 +9,12 @@ Just a few vapoursynth function...
 and some dependencies on them.
 ## Plugins
 * [vs-removegrain](https://github.com/vapoursynth/vs-removegrain)
-* [RGSF](https://github.com/IFeelBloated/RGSF) (for 32-bit float support)
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
+* [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
 * [vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
 * [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
 * [vapoursynth-mvtools](https://github.com/AmusementClub/vapoursynth-mvtools)
 * [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
-* [VapourSynth-TCanny ](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
+* [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
 * [fmtconv](https://github.com/EleonoreMizo/fmtconv)
