@@ -5,7 +5,7 @@ from math import sqrt
 from functools import partial
 from inspect import signature
 
-# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Correct operation with float is not guaranteed.
+# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Floating point sample type is not supported.
 
 # Functions:
 # autotap3
@@ -33,6 +33,9 @@ from inspect import signature
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
     
     func_name = 'autotap3'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     w = clip.width
     h = clip.height
@@ -90,7 +93,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a = 3, **back_args)], 'x y - abs')
     m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a = 6, **back_args)], 'x y - abs')
     
-    expr = f'x y - {thresh} *' if clip.format.sample_type == INTEGER else f'x y - {thresh} * 0.0 max 1.0 min'
+    expr = f'x y - {thresh} *'
     
     cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
@@ -120,6 +123,9 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     func_name = 'bion_dehalo'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: ')
+    
     space = clip.format.color_family
     
     if space == GRAY:
@@ -130,36 +136,18 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        half = 128 << step
-        clamp = 20 << step
-        rg_func = 'rgvs'
-        
-        expr0 = f'x y - {4 << step} - 4 *'
-        expr1 = 'x y 1.2 * -'
-        expr2 = 'x y - abs 0 > x y - 0.3125 * x + x ?'
-        expr3 = f'x y - {1 << step} - 128 *'
-        expr4 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
-    else:
-        clamp = 0.078125
-        rg_func = 'rgsf'
-        
-        expr0 = 'x y - 0.015625 - 4 * 0.0 max 1.0 min'
-        expr1 = 'x y 1.2 * - 0.0 max 1.0 min'
-        expr2 = 'x y - abs 0 > x y - 0.3125 * x + x ? 0.0 max 1.0 min'
-        expr3 = 'x y - 0.00390625 - 128 * 0.0 max 1.0 min'
-        expr4 = 'x 0.5 - y 0.5 - * 0 < 0.5 x 0.5 - abs y 0.5 - abs 2 * < x y 0.5 - 2 * 0.5 + ? ? 0.0 max 1.0 min'
+    step = clip.format.bits_per_sample - 8
+    half = 128 << step
     
-    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], expr0)
+    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
     e2 = core.std.Maximum(e1).std.Maximum()
     e2 = core.std.Merge(e2, core.std.Maximum(e2)).std.Inflate()
-    e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], expr1).std.Inflate()
+    e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], 'x y 1.2 * -').std.Inflate()
     
-    m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], expr2)
-    m1 = core.std.Expr([clip, m0], expr3).std.Maximum().std.Inflate()
+    m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
+    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *').std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
-    m3 = eval(f'core.std.Expr([m1, m2], \'y x -\').{rg_func}.RemoveGrain(21).std.Maximum()')
+    m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
     if mask == 1:
         pass
@@ -175,17 +163,17 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
-        dh1 = eval(f'core.std.MaskedMerge(core.{rg_func}.Repair(clip, core.{rg_func}.RemoveGrain(clip, 21), 1), blurr, e3)')
+        dh1 = core.std.MaskedMerge(core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1), blurr, e3)
     else:
         dh1 = core.std.MaskedMerge(clip, blurr, e3)
     
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
-    DD  = core.std.Expr([dh1D, med2D], expr4)
+    DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = eval(f'haf_Clamp(clip, core.{rg_func}.Repair(clip, dh2, mode) if rep else dh2, clip, 0, clamp)')
+    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -212,6 +200,9 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     
     func_name = 'fix_border'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     space = clip.format.color_family
     
     if space == GRAY:
@@ -222,17 +213,9 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        for i in args:
-            plane = i.pop() if len(i) == 6 else 0
-            clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
-    else:
-        for i in args:
-            plane = i.pop() if len(i) == 6 else 0
-            if plane:
-                clips[plane] = eval(f'fix_border_{i[0]}_simple(core.std.Expr(clips[plane], \'x 0.5 +\'), *i[1:]).std.Expr(\'x 0.5 -\')')
-            else:
-                clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
+    for i in args:
+        plane = i.pop() if len(i) == 6 else 0
+        clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
     
     if space == GRAY:
         clip = clips[0]
@@ -246,9 +229,13 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     
     func_name = 'fix_border_x_simple'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
+    limit <<= clip.format.bits_per_sample - 8
     w = clip.width
     
     if donor is None:
@@ -264,12 +251,6 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
-    
-    if clip.format.sample_type == INTEGER:
-        limit <<= clip.format.bits_per_sample - 8
-    else:
-        limit /= 256
-        expr += ' 0.0 max 1.0 min'
     
     if mode < 0:
         target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.Invert().std.PlaneStats()
@@ -304,9 +285,13 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     
     func_name = 'fix_border_y_simple'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
+    limit <<= clip.format.bits_per_sample - 8
     h = clip.height
     
     if donor is None:
@@ -322,12 +307,6 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 mode value')
-    
-    if clip.format.sample_type == INTEGER:
-        limit <<= clip.format.bits_per_sample - 8
-    else:
-        limit /= 256
-        expr += ' 0.0 max 1.0 min'
     
     if mode < 0:
         target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.Invert().std.PlaneStats()
@@ -371,6 +350,9 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     func_name = 'mask_detail'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     space = clip.format.color_family
     
     if space == GRAY:
@@ -383,13 +365,8 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        full = 256 << step
-        expr = f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?'
-    else:
-        expr = f'x {cutoff / 256} < 0 x {gain} 1.0 x + * * ? 0.0 max 1.0 min'
-    
+    step = clip.format.bits_per_sample - 8
+    full = 256 << step
     w = clip.width
     h = clip.height
     
@@ -419,7 +396,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
     mask = rg_fix_simple(mask, rg)
-    mask = core.std.Expr(mask, expr)
+    mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     
     for _ in range(expand_n):
         mask = core.std.Maximum(mask)
@@ -527,6 +504,11 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
 
 def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
     
+    func_name = 'daa'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     num_p = clip.format.num_planes
     
     if planes is None:
@@ -540,12 +522,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
     shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix, planes = planes), planes = planes)
-    
-    if clip.format.sample_type == INTEGER:
-        DD = core.rgvs.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
-    else:
-        DD = core.rgsf.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
-    
+    DD = core.rgvs.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
@@ -558,6 +535,9 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
@@ -581,17 +561,9 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
-        if clip.format.sample_type == INTEGER:
-            for i in range(num_p):
-                if mode[i] is not None:
-                    clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
-        else:
-            for i in range(num_p):
-                if mode[i] is not None:
-                    if i:
-                        clips[i] = average_fields_simple(core.std.Expr(clips[i], 'x 0.5 +'), mode[i], by_lines).std.Expr('x 0.5 -')
-                    else:
-                        clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
+        for i in range(num_p):
+            if mode[i] is not None:
+                clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
@@ -603,6 +575,9 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
 def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
@@ -623,10 +598,6 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bo
         expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 or "None" mode value')
-    
-    if clip.format.sample_type != INTEGER:
-        expr1 += ' 0.0 max 1.0 min'
-        expr2 += ' 0.0 max 1.0 min'
     
     if mode < 0:
         clip = core.std.Invert(clip)
@@ -664,6 +635,9 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     func_name = 'rg_fix'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
@@ -692,6 +666,11 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
 
 def rg_fix_simple(clip: VideoNode, mode: int = 2) -> VideoNode:
     
+    func_name = 'rg_fix_simple'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if mode == 0:
         pass
     elif mode == 4:
@@ -703,7 +682,7 @@ def rg_fix_simple(clip: VideoNode, mode: int = 2) -> VideoNode:
     elif mode == 20:
         clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
     else:
-        clip = core.rgvs.RemoveGrain(clip, mode) if clip.format.sample_type == INTEGER else core.rgsf.RemoveGrain(clip, mode)
+        clip = core.rgvs.RemoveGrain(clip, mode)
     
     return clip
 
@@ -711,6 +690,11 @@ def rg_fix_simple(clip: VideoNode, mode: int = 2) -> VideoNode:
 # nnedi2aas by Didée, ported from AviSynth version with minor additions.
 
 def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+    
+    func_name = 'znedi3aas'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
     
@@ -724,20 +708,13 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
-    if clip.format.sample_type == INTEGER:
-        rg_func = 'rgvs'
-        clamp <<= clip.format.bits_per_sample - 8
-    else:
-        rg_func = 'rgsf'
-        clamp /= 256
-    
     if clamp > 0:
         shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
-                                  dbl, 0, clamp, planes = planes), planes = planes)
+                                  dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes = planes)
     
-    DD = eval(f'core.{rg_func}.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])')
+    DD = core.rgvs.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes = planes)
     
     return clip
@@ -755,6 +732,9 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     func_name = 'dehalo_mask'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if brz > 255 or brz < 0:
         raise ValueError(f'{func_name}: brz must be between 0 and 255')
 
@@ -768,20 +748,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        expr1 = f'y x - {shift << step} - 128 *'
-        expr2 = 'x 16 *'
-        tr1 = 80 << step
-        tr2 = brz << step
-    else:
-        expr1 = f'y x - {shift / 256} - 128 * 0.0 max 1.0 min'
-        expr2 = 'x 16 * 0.0 max 1.0 min'
-        tr1 = 0.3125
-        tr2 = brz / 256
+    step = clip.format.bits_per_sample - 8
     
-    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], expr1)
-    mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr(expr2)
+    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift << step} - 128 *')
+    mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
     
     for _ in range(iterations):
         clip = core.std.Maximum(clip)
@@ -789,10 +759,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     for _ in range(iterations):
         clip = core.std.Minimum(clip)
     
-    clip = core.std.InvertMask(clip).std.BinarizeMask(tr1)
+    clip = core.std.InvertMask(clip).std.BinarizeMask(80 << step)
     
     if brz < 255:
-        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(tr2)
+        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(brz << step)
     
     clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
@@ -809,18 +779,13 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     func_name = 'tp7_deband_mask'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     space = clip.format.color_family
     num_p = clip.format.num_planes
     bits = clip.format.bits_per_sample
-    
-    if clip.format.sample_type == INTEGER:
-        factor = 1 << bits - 8
-        rg_func = 'rgvs'
-        expr = 'x y max'
-    else:
-        factor = 0.00390625
-        rg_func = 'rgsf'
-        expr = 'x y max 0.5 +'
+    factor = 1 << bits - 8
     
     if fake_prewitt:
         clip = custom_mask(clip, 1, scale)
@@ -836,7 +801,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         clip = core.std.BinarizeMask(clip, thr * factor)
     
     if rg:
-        clip = eval(f'core.{rg_func}.RemoveGrain(clip, 3).std.Median()')
+        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
     if space == GRAY:
         pass
@@ -848,11 +813,11 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         h = clip.height
         
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
-        clip = core.std.Expr(clips[1:], expr)
+        clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w > 0 or sub_h > 0:
             clip = core.fmtc.resample(clip, w, h, kernel = 'spline', taps = 6)
-            if bits < 16:
+            if bits != 16:
                 clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
@@ -875,6 +840,9 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     
     func_name = 'dehalo_alpha'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     w = clip.width
     h = clip.height
     
@@ -888,22 +856,15 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        full = 256 << step
-        factor = 1 << step
-        expr1 = f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *'
-        expr2 = f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?'
-    else:
-        expr1 = f'y x - y 0.00000390625 + / 1.0 * {lowsens * 0.00390625} - y 1.0 + 2.0 / {highsens / 100} + * 0.0 max 1.0 min'
-        expr2 = f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ? 0.0 max 1.0 min'
-    
+    step = clip.format.bits_per_sample - 8
+    full = 256 << step
+    factor = 1 << step
     m4 = lambda x: 16 if x < 16 else int(x / 4 + 0.5) * 4
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], expr1)
+    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full << 1} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
@@ -914,7 +875,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
         remove = core.std.Expr([remove, core.std.Minimum(lets).resize.Bicubic(m4(w * ss), m4(h * ss), filter_param_a = 1/3, filter_param_b = 1/3)], 'x y max')
         remove = core.resize.Lanczos(remove, w, h, filter_param_a = 3)
     
-    clip = core.std.Expr([clip, remove], expr2)
+    clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -931,6 +892,9 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     
     func_name = 'fine_dehalo'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     space = clip.format.color_family
     
     if space == GRAY:
@@ -941,31 +905,12 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        thmi <<= step
-        thma <<= step
-        thlimi <<= step
-        thlima <<= step
-        full = (256 << step) - 1
-        expr1 = f'x {thmi} - {thma - thmi} / {full} *'
-        expr2 = f'x {thlimi} - {thlima - thlimi} / {full} *'
-        expr3 = 'x 4 *'
-        expr4 = 'x y - 2 *'
-        expr5 = f'x y {edgeproc * 0.66} * +'
-        expr6 = 'x 2 *'
-        
-    else:
-        thmi /= 256
-        thma /= 256
-        thlimi /= 256
-        thlima /= 256
-        expr1 = f'x {thmi} - {thma - thmi} / 0.0 max 1.0 min'
-        expr2 = f'x {thlimi} - {thlima - thlimi} / 0.0 max 1.0 min'
-        expr3 = 'x 4 * 0.0 max 1.0 min'
-        expr4 = 'x y - 2 * 0.0 max 1.0 min'
-        expr5 = f'x y {edgeproc * 0.66} * + 0.0 max 1.0 min'
-        expr6 = 'x 2 * 0.0 max 1.0 min'
+    step = clip.format.bits_per_sample - 8
+    thmi <<= step
+    thma <<= step
+    thlimi <<= step
+    thlima <<= step
+    full = (256 << step) - 1
     
     if ry is None:
         ry = rx
@@ -983,18 +928,18 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     else:
         edges = core.std.Prewitt(clip)
     
-    strong = core.std.Expr(edges, expr1)
+    strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
     large = haf_mt_expand_multi(strong, sw = rx_i, sh = ry_i)
-    light = core.std.Expr(edges, expr2)
-    shrink = haf_mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr(expr3)
+    light = core.std.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
+    shrink = haf_mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr('x 4 *')
     shrink = haf_mt_inpand_multi(shrink, mode = 'ellipse', sw = rx_i, sh = ry_i)
     shrink = core.std.Convolution(shrink, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Convolution([1, 1, 1, 1, 1, 1, 1, 1, 1])
-    outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], expr4)
+    outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], 'x y - 2 *')
     
     if edgeproc > 0:
-        outside = core.std.Expr([outside, strong], expr5)
+        outside = core.std.Expr([outside, strong], f'x y {edgeproc * 0.66} * +')
     
-    outside = core.std.Convolution(outside, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Expr(expr6)
+    outside = core.std.Convolution(outside, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Expr('x 2 *')
     
     clip = core.std.MaskedMerge(clip, dehaloed, outside)
     
@@ -1018,18 +963,17 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
 
 def fine_dehalo_contrasharp(dehaloed: VideoNode, clip: VideoNode, level: float) -> VideoNode:
     
-    if clip.format.sample_type == INTEGER:
-        half = 128 << dehaloed.format.bits_per_sample - 8
-        expr1 = f'x {half} - 2.49 * {level} * {half} +'
-        expr2 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
-    else:
-        expr1 = f'x 0.5 - 2.49 * {level} * 0.5 + 0.0 max 1.0 min'
-        expr2 = 'x 0.5 - y 0.5 - * 0 < 0.5 x 0.5 - abs y 0.5 - abs < x y ? ?'
+    func_name = 'fine_dehalo_contrasharp'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    half = 128 << dehaloed.format.bits_per_sample - 8
     
     bb = core.std.Convolution(dehaloed, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     bb2 = core.rgvs.Repair(bb, core.rgvs.Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
-    xd = core.std.MakeDiff(bb, bb2).std.Expr(expr1)
-    xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], expr2)
+    xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {level} * {half} +')
+    xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
     clip = core.std.MergeDiff(dehaloed, xdd)
     
     return clip
@@ -1039,6 +983,9 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
                  showmask: bool = False) -> VideoNode:
     
     func_name = 'fine_dehalo2'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -1050,14 +997,12 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    expr = 'x 3 * y -' if clip.format.sample_type == INTEGER else 'x 3 * y - 0.0 max 1.0 min'
-    
     fix_h = core.std.Convolution(clip, vconv, mode = 'v')
     fix_v = core.std.Convolution(clip, hconv, mode = 'h')
     mask_h = core.std.Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], divisor = 4, saturate = False)
     mask_v = core.std.Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], divisor = 4, saturate = False)
-    temp_h = core.std.Expr([mask_h, mask_v], expr)
-    temp_v = core.std.Expr([mask_v, mask_h], expr)
+    temp_h = core.std.Expr([mask_h, mask_v], 'x 3 * y -')
+    temp_v = core.std.Expr([mask_v, mask_h], 'x 3 * y -')
     
     mask_h = fine_dehalo2_grow_mask(temp_h, 'v')
     mask_v = fine_dehalo2_grow_mask(temp_v, 'h')
@@ -1080,6 +1025,9 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     
     func_name = 'fine_dehalo2_grow_mask'
     
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
     if mode == 'v':
         coord = [0, 1, 0, 0, 0, 0, 1, 0]
     elif mode == 'h':
@@ -1087,13 +1035,11 @@ def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
     else:
         raise ValueError(f'{func_name}: {mode} is wrong mode')
     
-    expr = 'x 1.8 *' if clip.format.sample_type == INTEGER else 'x 1.8 * 0.0 max 1.0 min'
-    
     clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
     mask_1 = core.std.Maximum(clip, coordinates = coord)
     mask_2 = core.std.Maximum(mask_1, coordinates = coord).std.Maximum(coordinates = coord)
     clip = core.std.Expr([mask_2, mask_1], 'x y -')
-    clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr(expr)
+    clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr('x 1.8 *')
     
     return clip
 
@@ -1255,15 +1201,8 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     
     func_name = 'custom_mask'
     
-    if clip.format.sample_type == INTEGER:
-        step = clip.format.bits_per_sample - 8
-        expr1 = f'x y max z a max max {scale} *'
-        expr2 = f'x y max {scale} *'
-        expr3 = f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *'
-    else:
-        expr1 = f'x y max z a max max {scale} * 0.0 max 1.0 min'
-        expr2 = f'x y max {scale} * 0.0 max 1.0 min'
-        expr3 = f'x 2 * 0.86 {offset} + 0.0 max 1.0 min'
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     if mask == 0:
         pass
@@ -1272,19 +1211,20 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
                               core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
                               core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
                               core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
-                              expr1)
+                              f'x y max z a max max {scale} *')
     elif mask == 2:
         clip = core.std.Expr([core.std.Convolution(clip, [5, 10, 5, 0, 0, 0, -5, -10, -5], divisor = 4, saturate = False),
                               core.std.Convolution(clip, [5, 0, -5, 10, 0, -10, 5, 0, -5], divisor = 4, saturate = False)],
-                              expr2)
+                              f'x y max {scale} *')
     elif mask == 3:
         clip = core.std.Expr([core.std.Convolution(clip, [8, 16, 8, 0, 0, 0, -8, -16, -8], divisor = 8, saturate = False),
                               core.std.Convolution(clip, [8, 0, -8, 16, 0, -16, 8, 0, -8], divisor = 8, saturate = False)],
-                              expr2)
+                              f'x y max {scale} *')
     else:
         raise ValueError(f'{func_name}: Please use 0...3 mask value')
     
     if boost:
-        clip = core.std.Expr(clip, expr3)
+        step = clip.format.bits_per_sample - 8
+        clip = core.std.Expr(clip, f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *')
     
     return clip
