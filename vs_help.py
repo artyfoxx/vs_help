@@ -1247,14 +1247,14 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 20, scale: float
         format_id = first.format.id
         first = core.std.ShufflePlanes(first, 0, GRAY)
     else:
-        raise ValueError(f'{func_name}: Unsupported color family first clip')
+        raise ValueError(f'{func_name}: Unsupported color family in the first clip')
     
     if space_s == GRAY:
         pass
     elif space_s == YUV:
         second = core.std.ShufflePlanes(second, 0, GRAY)
     else:
-        raise ValueError(f'{func_name}: Unsupported color family second clip')
+        raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
     if (bits := first.format.bits_per_sample) == second.format.bits_per_sample:
         thr *= 1 << bits - 8
