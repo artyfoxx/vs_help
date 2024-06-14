@@ -1228,3 +1228,54 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
         clip = core.std.Expr(clip, f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *')
     
     return clip
+
+
+def diff_mask(first: VideoNode, second: VideoNode, thr: float = 20, scale: float = 1.0, rg: bool = True,
+              exp_n: int = 1, def_n: int = 0) -> VideoNode:
+    
+    func_name = 'custom_mask'
+    
+    if first.format.sample_type != INTEGER or second.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    space_f = first.format.color_family
+    space_s = second.format.color_family
+    
+    if space_f == GRAY:
+        pass
+    elif space_f == YUV:
+        format_id = first.format.id
+        first = core.std.ShufflePlanes(first, 0, GRAY)
+    else:
+        raise ValueError(f'{func_name}: Unsupported color family first clip')
+    
+    if space_s == GRAY:
+        pass
+    elif space_s == YUV:
+        second = core.std.ShufflePlanes(second, 0, GRAY)
+    else:
+        raise ValueError(f'{func_name}: Unsupported color family second clip')
+    
+    if (bits := first.format.bits_per_sample) == second.format.bits_per_sample:
+        thr *= 1 << bits - 8
+    else:
+        raise ValueError(f'{func_name}: Sample types of clips do not match')
+    
+    clip = core.std.Expr([first, second], f'x y - abs {scale} *')
+    
+    if thr > 0:
+        clip = core.std.BinarizeMask(clip, thr)
+    
+    if rg:
+        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+    
+    for _ in range(exp_n):
+        clip = core.std.Maximum(clip)
+    
+    for _ in range(def_n):
+        clip = core.std.Deflate(clip)
+    
+    if space_f == YUV:
+        clip = core.resize.Point(clip, format = format_id)
+    
+    return clip
