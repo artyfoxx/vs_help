@@ -1234,7 +1234,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 20, scale: float = 1.0, rg: bool = True,
               exp_n: int = 1, def_n: int = 0) -> VideoNode:
     
-    func_name = 'custom_mask'
+    func_name = 'diff_mask'
     
     if first.format.sample_type != INTEGER or second.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
