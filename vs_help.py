@@ -26,6 +26,7 @@ from inspect import signature
 # insane_aa
 # upscaler
 # custom_mask
+# diff_mask
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
