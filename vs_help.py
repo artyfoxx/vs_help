@@ -533,7 +533,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, by_lines: bool = False) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, shift: float = 0, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -558,13 +558,13 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
         raise ValueError(f'{func_name}: "mode" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode[0], by_lines)
+        clip = average_fields_simple(clip, mode[0], shift, by_lines)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
             if mode[i] is not None:
-                clips[i] = average_fields_simple(clips[i], mode[i], by_lines)
+                clips[i] = average_fields_simple(clips[i], mode[i], shift, by_lines)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
@@ -573,7 +573,7 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bool = False) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int | None = None, shift: float = 0, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
@@ -583,20 +583,25 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, by_lines: bo
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
+    if shift >= 0 and shift <= 1:
+        expr0 = f'x.PlaneStatsAverage {1 - shift} * y.PlaneStatsAverage {shift} * +'
+    else:
+        raise ValueError(f'{func_name}: 0 <= "shift" <= 1')
+    
     if mode is None:
         return clip
     elif mode == 0:
-        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage - x +'
-        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage - y +'
+        expr1 = expr0 + ' x.PlaneStatsAverage - x +'
+        expr2 = expr0 + ' y.PlaneStatsAverage - y +'
     elif abs(mode) == 1:
-        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / x.PlaneStatsAverage / x *'
-        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / y.PlaneStatsAverage / y *'
+        expr1 = expr0 + ' x.PlaneStatsAverage / x *'
+        expr2 = expr0 + ' y.PlaneStatsAverage / y *'
     elif abs(mode) == 2:
-        expr1 = 'x x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log x.PlaneStatsAverage log / pow'
-        expr2 = 'y x.PlaneStatsAverage y.PlaneStatsAverage + 2 / log y.PlaneStatsAverage log / pow'
+        expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
+        expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
     elif abs(mode) == 3:
-        expr1 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 x.PlaneStatsAverage / pow x pow'
-        expr2 = 'x.PlaneStatsAverage y.PlaneStatsAverage + 2 / 1 y.PlaneStatsAverage / pow y pow'
+        expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
+        expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
     else:
         raise ValueError(f'{func_name}: Please use -3...3 or "None" mode value')
     
