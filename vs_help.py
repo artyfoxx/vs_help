@@ -1244,6 +1244,9 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     if first.format.sample_type != INTEGER or second.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    if first.num_frames != second.num_frames:
+        raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
+    
     space_f = first.format.color_family
     space_s = second.format.color_family
     
