@@ -583,7 +583,12 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: floa
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if weight >= 0 and weight <= 1:
+    
+    if weight == 0:
+        expr0 = 'x.PlaneStatsAverage'
+    elif weight == 1:
+        expr0 = 'y.PlaneStatsAverage'
+    elif weight > 0 and weight < 1:
         expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
     else:
         raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
@@ -612,16 +617,28 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: floa
         h = clip.height
         clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
         
-        for i in range(0, h - 1, 2):
-            clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
-                                     core.akarin.Expr([clips[i], clips[i + 1]], expr2)
+        if weight == 0:
+            for i in range(1, h, 2):
+                clips[i] = core.akarin.Expr([clips[i - 1], clips[i]], expr2)
+        elif weight == 1:
+            for i in range(0, h - 1, 2):
+                clips[i] = core.akarin.Expr([clips[i], clips[i + 1]], expr1)
+        else:
+            for i in range(0, h - 1, 2):
+                clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
+                                         core.akarin.Expr([clips[i], clips[i + 1]], expr2)
         
         clip = core.std.StackVertical(clips)
     else:
         clip = core.std.SeparateFields(clip, True).std.PlaneStats()
         fields = [clip[::2], clip[1::2]]
         
-        fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+        if weight == 0:
+            fields[1] = core.akarin.Expr(fields, expr2)
+        elif weight == 1:
+            fields[0] = core.akarin.Expr(fields, expr1)
+        else:
+            fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
         
         clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
