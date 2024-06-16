@@ -533,7 +533,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, shift: float = 0, by_lines: bool = False) -> VideoNode:
+def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, weight: float = 0.5, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -558,13 +558,13 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
         raise ValueError(f'{func_name}: "mode" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode[0], shift, by_lines)
+        clip = average_fields_simple(clip, mode[0], weight, by_lines)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
             if mode[i] is not None:
-                clips[i] = average_fields_simple(clips[i], mode[i], shift, by_lines)
+                clips[i] = average_fields_simple(clips[i], mode[i], weight, by_lines)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
@@ -573,7 +573,7 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int | None = None, shift: float = 0, by_lines: bool = False) -> VideoNode:
+def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: float = 0.5, by_lines: bool = False) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
@@ -583,10 +583,10 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, shift: float
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    if shift >= 0 and shift <= 1:
-        expr0 = f'x.PlaneStatsAverage {1 - shift} * y.PlaneStatsAverage {shift} * +'
+    if weight >= 0 and weight <= 1:
+        expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
     else:
-        raise ValueError(f'{func_name}: 0 <= "shift" <= 1')
+        raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
     
     if mode is None:
         return clip
@@ -1236,7 +1236,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     return clip
 
 
-def diff_mask(first: VideoNode, second: VideoNode, thr: float = 20, scale: float = 1.0, rg: bool = True,
+def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
               exp_n: int = 1, def_n: int = 0) -> VideoNode:
     
     func_name = 'diff_mask'
