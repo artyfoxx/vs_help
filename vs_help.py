@@ -27,6 +27,7 @@ from inspect import signature
 # upscaler
 # custom_mask
 # diff_mask
+# apply_range
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
@@ -582,7 +583,6 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: floa
     
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
-    
     
     if weight == 0:
         expr0 = 'x.PlaneStatsAverage'
@@ -1305,3 +1305,37 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         clip = core.resize.Point(clip, format = format_id)
     
     return clip
+
+
+def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoNode:
+    
+    func_name = 'apply_range'
+    
+    if first.num_frames != second.num_frames:
+        raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
+    
+    if first.format.name != second.format.name:
+        raise ValueError(f'{func_name}: The clip formats do not match')
+    
+    if first.format.color_family not in {GRAY, YUV}:
+        raise ValueError(f'{func_name}: Unsupported color family in the first clip')
+    
+    for i in args:
+        if len(i) == 2:
+            if i[0] == 0:
+                first = second[:i[1] + 1] + first[i[1] + 1:]
+            elif i[1] == first.num_frames - 1:
+                first = first[:i[0]] + second[i[0]:]
+            else:
+                first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
+        elif len(i) == 1:
+            if i[0] == 0:
+                first = second[i[0]] + first[i[0] + 1:]
+            elif i[0] == first.num_frames - 1:
+                first = first[:i[0]] + second[i[0]]
+            else:
+                first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
+        else:
+            raise ValueError(f'{func_name}: Args length must be 1 or 2')
+    
+    return first
