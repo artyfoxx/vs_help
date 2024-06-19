@@ -1317,9 +1317,6 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
     if first.format.name != second.format.name:
         raise ValueError(f'{func_name}: The clip formats do not match')
     
-    if first.format.color_family not in {GRAY, YUV}:
-        raise ValueError(f'{func_name}: Unsupported color family in the first clip')
-    
     for i in args:
         if len(i) == 2:
             if i[0] == 0:
@@ -1339,3 +1336,54 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
             raise ValueError(f'{func_name}: Args length must be 1 or 2')
     
     return first
+
+
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, exp_n: int = 1, def_n: int = 0,
+                flatten: int = 0, borders: list[int] | None = None) -> VideoNode:
+    
+    func_name = 'titles_mask'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    space = clip.format.color_family
+    
+    if space == GRAY:
+        pass
+    elif space == YUV:
+        format_id = clip.format.id
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+    else:
+        raise ValueError(f'{func_name}: Unsupported color family')
+    
+    step = clip.format.bits_per_sample - 8
+    
+    clip = core.std.BinarizeMask(clip, thr * (1 << step))
+    
+    if rg:
+        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+    
+    for i in range(flatten):
+        clip = core.std.Expr([clip, clip[i:]], 'x y min')
+    
+    for _ in range(exp_n):
+        clip = core.std.Maximum(clip)
+    
+    for _ in range(def_n):
+        clip = core.std.Deflate(clip)
+    
+    if borders is not None:
+        if len(borders) == 4:
+            pass
+        elif len(borders) < 4:
+            sample = [0, clip.width - 1, 0, clip.height - 1]
+            borders += sample[len(borders):]
+        else:
+            raise ValueError(f'{func_name}: borders length must be <= 4')
+        
+        clip = core.akarin.Expr(clip, f'X {borders[0]} > X {borders[1]} < Y {borders[2]} > Y {borders[3]} < and and and {(256 << step) - 1} 0 ? x min')
+    
+    if space_f == YUV:
+        clip = core.resize.Point(clip, format = format_id)
+    
+    return clip
