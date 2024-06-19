@@ -28,6 +28,7 @@ from inspect import signature
 # custom_mask
 # diff_mask
 # apply_range
+# titles_mask
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
@@ -1254,7 +1255,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
 
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              exp_n: int = 1, def_n: int = 0) -> VideoNode:
+              flatten: int = 0, exp_n: int = 1, def_n: int = 0) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1294,6 +1295,9 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+    
+    for i in range(flatten):
+        clip = core.std.Expr([clip, clip[i:], clip[0] * i + clip], 'x y max z max')
     
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
@@ -1338,8 +1342,8 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
     return first
 
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, exp_n: int = 1, def_n: int = 0,
-                flatten: int = 0, borders: list[int] | None = None) -> VideoNode:
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, exp_n: int = 1,
+                def_n: int = 0, borders: list[int] | None = None) -> VideoNode:
     
     func_name = 'titles_mask'
     
@@ -1364,7 +1368,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, exp_n: int =
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
     for i in range(flatten):
-        clip = core.std.Expr([clip, clip[i:]], 'x y min')
+        clip = core.std.Expr([clip, clip[i:], clip[0] * i + clip], 'x y min z min')
     
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
