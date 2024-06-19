@@ -1296,8 +1296,12 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
-    for i in range(flatten):
-        clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y max z max')
+    if flatten > 0:
+        for i in range(1, flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y max z max')
+    elif flatten < 0:
+        for i in range(1, -flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
@@ -1367,8 +1371,12 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
-    for i in range(flatten):
-        clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
+    if flatten > 0:
+        for i in range(1, flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y max z max')
+    elif flatten < 0:
+        for i in range(1, -flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
