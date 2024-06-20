@@ -535,7 +535,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, weight: float = 0.5, by_lines: bool = False) -> VideoNode:
+def average_fields(clip: VideoNode, rate: int | list[int | None] | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -545,28 +545,28 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if mode is None:
+    if rate is None:
         return clip
-    elif isinstance(mode, int):
-        mode = [mode] * num_p
-    elif isinstance(mode, list):
-        if len(mode) == num_p:
+    elif isinstance(rate, int):
+        rate = [rate] * num_p
+    elif isinstance(rate, list):
+        if len(rate) == num_p:
             pass
-        elif len(mode) < num_p:
-            mode += [None] * (num_p - len(mode))
+        elif len(rate) < num_p:
+            rate += [None] * (num_p - len(rate))
         else:
-            raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
+            raise ValueError(f'{func_name}: "rate" must be shorter or the same length to number of planes, or "rate" must be "int"')
     else:
-        raise ValueError(f'{func_name}: "mode" must be int, list or "None"')
+        raise ValueError(f'{func_name}: "rate" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, mode[0], weight, by_lines)
+        clip = average_fields_simple(clip, rate[0], weight, mode)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
-            if mode[i] is not None:
-                clips[i] = average_fields_simple(clips[i], mode[i], weight, by_lines)
+            if rate[i] is not None:
+                clips[i] = average_fields_simple(clips[i], rate[i], weight, mode)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
@@ -575,7 +575,7 @@ def average_fields(clip: VideoNode, mode: int | list[int | None] | None = None, 
     return clip
 
 
-def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: float = 0.5, by_lines: bool = False) -> VideoNode:
+def average_fields_simple(clip: VideoNode, rate: int | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
@@ -594,27 +594,41 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: floa
     else:
         raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
     
-    if mode is None:
+    if rate is None:
         return clip
-    elif mode == 0:
+    elif rate == 0:
         expr1 = expr0 + ' x.PlaneStatsAverage - x +'
         expr2 = expr0 + ' y.PlaneStatsAverage - y +'
-    elif abs(mode) == 1:
+    elif abs(rate) == 1:
         expr1 = expr0 + ' x.PlaneStatsAverage / x *'
         expr2 = expr0 + ' y.PlaneStatsAverage / y *'
-    elif abs(mode) == 2:
+    elif abs(rate) == 2:
         expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
         expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
-    elif abs(mode) == 3:
+    elif abs(rate) == 3:
         expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
         expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
     else:
-        raise ValueError(f'{func_name}: Please use -3...3 or "None" mode value')
+        raise ValueError(f'{func_name}: Please use -3...3 or "None" rate value')
     
-    if mode < 0:
+    if rate < 0:
         clip = core.std.Invert(clip)
     
-    if by_lines:
+    if mode == 0:
+        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+        fields = [clip[::2], clip[1::2]]
+        
+        if weight == 0:
+            fields[1] = core.akarin.Expr(fields, expr2)
+        elif weight == 1:
+            fields[0] = core.akarin.Expr(fields, expr1)
+        else:
+            fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+        
+        clip = core.std.Interleave(fields)
+        clip = core.std.DoubleWeave(clip, True)[::2]
+        clip = core.std.SetFieldBased(clip, 0)
+    elif mode == 1:
         h = clip.height
         clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
         
@@ -630,22 +644,24 @@ def average_fields_simple(clip: VideoNode, mode: int | None = None, weight: floa
                                          core.akarin.Expr([clips[i], clips[i + 1]], expr2)
         
         clip = core.std.StackVertical(clips)
-    else:
-        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+    elif mode == 2:
+        clip = core.std.SeparateFields(clip, True)
         fields = [clip[::2], clip[1::2]]
         
         if weight == 0:
-            fields[1] = core.akarin.Expr(fields, expr2)
+            fields[1] = fields[0]
         elif weight == 1:
-            fields[0] = core.akarin.Expr(fields, expr1)
+            fields[0] = fields[1]
         else:
-            fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+            fields[0] = fields[1] = core.std.Expr(fields, f'x {1 - weight} * y {weight} * +')
         
         clip = core.std.Interleave(fields)
         clip = core.std.DoubleWeave(clip, True)[::2]
         clip = core.std.SetFieldBased(clip, 0)
+    else:
+        raise ValueError(f'{func_name}: Please use 0...2 mode value')
     
-    if mode < 0:
+    if rate < 0:
         clip = core.std.Invert(clip)
     
     clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
@@ -798,8 +814,8 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     return mask
 
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, def_n: int = 0,
-                    fake_prewitt: bool = False) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, inp_n: int = 0,
+                    def_n: int = 0, inf_n: int = 0, fake_prewitt: bool = False) -> VideoNode:
     
     func_name = 'tp7_deband_mask'
     
@@ -849,8 +865,14 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         for _ in range(exp_n):
             clip = core.std.Maximum(clip)
         
+        for _ in range(inp_n):
+            clip = core.std.Minimum(clip)
+        
         for _ in range(def_n):
             clip = core.std.Deflate(clip)
+        
+        for _ in range(inf_n):
+            clip = core.std.Inflate(clip)
         
         clip = core.resize.Point(clip, format = format_id)
     else:
@@ -1255,7 +1277,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
 
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              flatten: int = 0, exp_n: int = 1, def_n: int = 0) -> VideoNode:
+              flatten: int = 0, exp_n: int = 1, inp_n: int = 0, def_n: int = 0, inf_n: int = 0) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1306,8 +1328,14 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
     
+    for _ in range(inp_n):
+        clip = core.std.Minimum(clip)
+    
     for _ in range(def_n):
         clip = core.std.Deflate(clip)
+    
+    for _ in range(inf_n):
+        clip = core.std.Inflate(clip)
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
@@ -1346,8 +1374,8 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
     return first
 
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, exp_n: int = 1,
-                def_n: int = 0, borders: list[int] | None = None) -> VideoNode:
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, exp_n: int = 1, inp_n: int = 0,
+                def_n: int = 0, inf_n: int = 0, borders: list[int] | None = None) -> VideoNode:
     
     func_name = 'titles_mask'
     
@@ -1381,8 +1409,14 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
     
+    for _ in range(inp_n):
+        clip = core.std.Minimum(clip)
+    
     for _ in range(def_n):
         clip = core.std.Deflate(clip)
+    
+    for _ in range(inf_n):
+        clip = core.std.Inflate(clip)
     
     if borders is not None:
         if len(borders) == 4:
@@ -1393,7 +1427,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
-        clip = core.akarin.Expr(clip, f'X {borders[0]} > X {borders[1]} < Y {borders[2]} > Y {borders[3]} < and and and {(256 << step) - 1} 0 ? x min')
+        clip = core.akarin.Expr(clip, f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 << step) - 1} 0 ? x min')
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
