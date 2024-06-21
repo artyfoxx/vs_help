@@ -1019,8 +1019,7 @@ def fine_dehalo_contrasharp(dehaloed: VideoNode, clip: VideoNode, level: float) 
     return clip
 
 
-def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2, -1], vconv: list[int] = [-2, -1, 0, 0, 40, 0, 0, -1, -2],
-                 showmask: bool = False) -> VideoNode:
+def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None, showmask: bool = False) -> VideoNode:
     
     func_name = 'fine_dehalo2'
     
@@ -1036,6 +1035,12 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] = [-1, -2, 0, 0, 40, 0, 0, -2
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if hconv is None:
+        hconv = [-1, -2, 0, 0, 40, 0, 0, -2, -1]
+    
+    if vconv is None:
+        vconv = [-2, -1, 0, 0, 40, 0, 0, -1, -2]
     
     fix_h = core.std.Convolution(clip, vconv, mode = 'v')
     fix_v = core.std.Convolution(clip, hconv, mode = 'h')
