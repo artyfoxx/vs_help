@@ -814,8 +814,8 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     return mask
 
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, exp_n: int = 1, inp_n: int = 0,
-                    def_n: int = 0, inf_n: int = 0, fake_prewitt: bool = False) -> VideoNode:
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, fake_prewitt: bool = False,
+                    **deform_args: int) -> VideoNode:
     
     func_name = 'tp7_deband_mask'
     
@@ -861,22 +861,16 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
                 clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
-        
-        for _ in range(exp_n):
-            clip = core.std.Maximum(clip)
-        
-        for _ in range(inp_n):
-            clip = core.std.Minimum(clip)
-        
-        for _ in range(def_n):
-            clip = core.std.Deflate(clip)
-        
-        for _ in range(inf_n):
-            clip = core.std.Inflate(clip)
-        
-        clip = core.resize.Point(clip, format = format_id)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
+    
+    clip = deform_mask(clip, **deform_args)
+    
+    if space == YUV:
+        clip = core.resize.Point(clip, format = format_id)
     
     return clip
 
@@ -1277,7 +1271,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
 
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              flatten: int = 0, exp_n: int = 1, inp_n: int = 0, def_n: int = 0, inf_n: int = 0) -> VideoNode:
+              flatten: int = 0, **deform_args: int) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1325,17 +1319,10 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
-    for _ in range(exp_n):
-        clip = core.std.Maximum(clip)
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
     
-    for _ in range(inp_n):
-        clip = core.std.Minimum(clip)
-    
-    for _ in range(def_n):
-        clip = core.std.Deflate(clip)
-    
-    for _ in range(inf_n):
-        clip = core.std.Inflate(clip)
+    clip = deform_mask(clip, **deform_args)
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
@@ -1374,8 +1361,8 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
     return first
 
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, exp_n: int = 1, inp_n: int = 0,
-                def_n: int = 0, inf_n: int = 0, borders: list[int] | None = None) -> VideoNode:
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, borders: list[int] | None = None
+                **deform_args: int) -> VideoNode:
     
     func_name = 'titles_mask'
     
@@ -1406,17 +1393,10 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
-    for _ in range(exp_n):
-        clip = core.std.Maximum(clip)
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
     
-    for _ in range(inp_n):
-        clip = core.std.Minimum(clip)
-    
-    for _ in range(def_n):
-        clip = core.std.Deflate(clip)
-    
-    for _ in range(inf_n):
-        clip = core.std.Inflate(clip)
+    clip = deform_mask(clip, **deform_args)
     
     if borders is not None:
         if len(borders) == 4:
@@ -1431,5 +1411,18 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
+    
+    return clip
+
+
+def deform_mask(clip: VideoNode, **deform_args: int) -> VideoNode:
+    
+    func_name = 'deform_mask'
+    
+    sample = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
+    
+    for i in deform_args:
+        for _ in range(deform_args[i]):
+            clip = eval(f'core.std.{sample[i]}(clip)')
     
     return clip
