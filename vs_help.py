@@ -1329,7 +1329,7 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     return clip
 
 
-def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoNode:
+def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> VideoNode:
     
     func_name = 'apply_range'
     
@@ -1340,6 +1340,9 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
         raise ValueError(f'{func_name}: The clip formats do not match')
     
     for i in args:
+        if isinstance(i, int):
+            i = [i]
+        
         if len(i) == 2:
             if i[0] == 0:
                 first = second[:i[1] + 1] + first[i[1] + 1:]
@@ -1355,7 +1358,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
             else:
                 first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
         else:
-            raise ValueError(f'{func_name}: Args length must be 1 or 2')
+            raise ValueError(f'{func_name}: Args length must be 1, 2 or must be "int"')
     
     return first
 
