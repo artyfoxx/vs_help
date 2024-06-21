@@ -864,9 +864,6 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if 'exp_n' not in deform_args:
-        deform_args['exp_n'] = 1
-    
     clip = deform_mask(clip, **deform_args)
     
     if space == YUV:
@@ -1324,9 +1321,6 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
-    if 'exp_n' not in deform_args:
-        deform_args['exp_n'] = 1
-    
     clip = deform_mask(clip, **deform_args)
     
     if space_f == YUV:
@@ -1366,7 +1360,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: list[int]) -> VideoN
     return first
 
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, borders: list[int] | None = None
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, borders: list[int] | None = None,
                 **deform_args: int) -> VideoNode:
     
     func_name = 'titles_mask'
@@ -1398,9 +1392,6 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
-    if 'exp_n' not in deform_args:
-        deform_args['exp_n'] = 1
-    
     clip = deform_mask(clip, **deform_args)
     
     if borders is not None:
@@ -1426,8 +1417,14 @@ def deform_mask(clip: VideoNode, **deform_args: int) -> VideoNode:
     
     sample = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
     
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
+    
     for i in deform_args:
-        for _ in range(deform_args[i]):
-            clip = eval(f'core.std.{sample[i]}(clip)')
+        if i in sample:
+            for _ in range(deform_args[i]):
+                clip = eval(f'core.std.{sample[i]}(clip)')
+        else:
+            raise ValueError(f'{func_name}: Unsupported key {i} in deform_args')
     
     return clip
