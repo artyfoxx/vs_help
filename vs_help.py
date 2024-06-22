@@ -1431,3 +1431,30 @@ def deform_mask(clip: VideoNode, **deform_args: int) -> VideoNode:
             raise ValueError(f'{func_name}: Unsupported key {i} in deform_args')
     
     return clip
+
+
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field_diffs.txt') -> VideoNode:
+    
+    func_name = 'search_field_diffs'
+    
+    def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, output: str) -> VideoNode:
+        
+        file = open(output, 'a')
+        
+        top = f[0].props['PlaneStatsAverage']
+        bottom = f[1].props['PlaneStatsAverage']
+        result = abs(top - bottom)
+        
+        if result >= thr:
+            file.write(f'{n} {result}\n')
+        
+        file.close
+        
+        return clip
+    
+    temp = core.std.SeparateFields(clip, True).std.PlaneStats()
+    fields = [temp[::2], temp[1::2]]
+    
+    clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, output = output), prop_src = fields)
+    
+    return clip
