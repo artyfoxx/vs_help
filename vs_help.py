@@ -535,7 +535,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, rate: int | list[int | None] | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
+def average_fields(clip: VideoNode, curve: int | list[int | None] | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -545,28 +545,28 @@ def average_fields(clip: VideoNode, rate: int | list[int | None] | None = None, 
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if rate is None:
+    if curve is None:
         return clip
-    elif isinstance(rate, int):
-        rate = [rate] * num_p
-    elif isinstance(rate, list):
-        if len(rate) == num_p:
+    elif isinstance(curve, int):
+        curve = [curve] * num_p
+    elif isinstance(curve, list):
+        if len(curve) == num_p:
             pass
-        elif len(rate) < num_p:
-            rate += [None] * (num_p - len(rate))
+        elif len(curve) < num_p:
+            curve += [None] * (num_p - len(curve))
         else:
-            raise ValueError(f'{func_name}: "rate" must be shorter or the same length to number of planes, or "rate" must be "int"')
+            raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
     else:
-        raise ValueError(f'{func_name}: "rate" must be int, list or "None"')
+        raise ValueError(f'{func_name}: "curve" must be int, list or "None"')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, rate[0], weight, mode)
+        clip = average_fields_simple(clip, curve[0], weight, mode)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
-            if rate[i] is not None:
-                clips[i] = average_fields_simple(clips[i], rate[i], weight, mode)
+            if curve[i] is not None:
+                clips[i] = average_fields_simple(clips[i], curve[i], weight, mode)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
@@ -575,7 +575,7 @@ def average_fields(clip: VideoNode, rate: int | list[int | None] | None = None, 
     return clip
 
 
-def average_fields_simple(clip: VideoNode, rate: int | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
+def average_fields_simple(clip: VideoNode, curve: int | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
     
     func_name = 'average_fields_simple'
     
@@ -594,24 +594,24 @@ def average_fields_simple(clip: VideoNode, rate: int | None = None, weight: floa
     else:
         raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
     
-    if rate is None:
+    if curve is None:
         return clip
-    elif rate == 0:
+    elif curve == 0:
         expr1 = expr0 + ' x.PlaneStatsAverage - x +'
         expr2 = expr0 + ' y.PlaneStatsAverage - y +'
-    elif abs(rate) == 1:
+    elif abs(curve) == 1:
         expr1 = expr0 + ' x.PlaneStatsAverage / x *'
         expr2 = expr0 + ' y.PlaneStatsAverage / y *'
-    elif abs(rate) == 2:
+    elif abs(curve) == 2:
         expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
         expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
-    elif abs(rate) == 3:
+    elif abs(curve) == 3:
         expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
         expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
     else:
-        raise ValueError(f'{func_name}: Please use -3...3 or "None" rate value')
+        raise ValueError(f'{func_name}: Please use -3...3 or "None" curve value')
     
-    if rate < 0:
+    if curve < 0:
         clip = core.std.Invert(clip)
     
     if mode == 0:
@@ -661,7 +661,7 @@ def average_fields_simple(clip: VideoNode, rate: int | None = None, weight: floa
     else:
         raise ValueError(f'{func_name}: Please use 0...2 mode value')
     
-    if rate < 0:
+    if curve < 0:
         clip = core.std.Invert(clip)
     
     clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
