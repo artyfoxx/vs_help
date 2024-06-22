@@ -29,6 +29,7 @@ from inspect import signature
 # diff_mask
 # apply_range
 # titles_mask
+# search_field_diffs
 
 # Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
 # It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
