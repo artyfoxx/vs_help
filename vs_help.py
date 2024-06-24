@@ -816,7 +816,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
 
 
 def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, fake_prewitt: bool = False,
-                    **deform_args: int) -> VideoNode:
+                    **deform_args: Any) -> VideoNode:
     
     func_name = 'tp7_deband_mask'
     
@@ -864,6 +864,9 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         clip = core.std.Expr([clip, clips[0]], 'x y max')
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
     
     clip = deform_mask(clip, **deform_args)
     
@@ -1240,7 +1243,8 @@ def edi3_aa(clip: VideoNode, mode: int = 1, order: bool = True, **edi3_args: Any
     return clip
 
 
-def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool = False, offset: float = 0.0) -> VideoNode:
+def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool = False, offset: float = 0.0,
+                **deform_args: Any) -> VideoNode:
     
     func_name = 'custom_mask'
     
@@ -1270,11 +1274,14 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
         step = clip.format.bits_per_sample - 8
         clip = core.std.Expr(clip, f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *')
     
+    if len(deform_args) > 0:
+        clip = deform_mask(clip, **deform_args)
+    
     return clip
 
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              flatten: int = 0, **deform_args: int) -> VideoNode:
+              flatten: int = 0, **deform_args: Any) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1322,6 +1329,9 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
+    
     clip = deform_mask(clip, **deform_args)
     
     if space_f == YUV:
@@ -1364,8 +1374,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
     return first
 
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, borders: list[int] | None = None,
-                **deform_args: int) -> VideoNode:
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, **deform_args: Any) -> VideoNode:
     
     func_name = 'titles_mask'
     
@@ -1373,6 +1382,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
+    step = clip.format.bits_per_sample - 8
     
     if space == GRAY:
         pass
@@ -1381,8 +1391,6 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
-    
-    step = clip.format.bits_per_sample - 8
     
     clip = core.std.BinarizeMask(clip, thr * (1 << step))
     
@@ -1396,7 +1404,41 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
     
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 1
+    
     clip = deform_mask(clip, **deform_args)
+    
+    if space_f == YUV:
+        clip = core.resize.Point(clip, format = format_id)
+    
+    return clip
+
+
+def deform_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | list[int] | None = None,
+                **deform_args: int) -> VideoNode:
+    
+    func_name = 'deform_mask'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    step = clip.format.bits_per_sample - 8
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    
+    sample = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
+    
+    for i in deform_args:
+        if i in sample:
+            for _ in range(deform_args[i]):
+                clip = eval(f'core.std.{sample[i]}(clip, planes = planes)')
+        else:
+            raise ValueError(f'{func_name}: Unsupported key {i} in deform_args')
     
     if borders is not None:
         if len(borders) == 4:
@@ -1407,34 +1449,13 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
-        clip = core.akarin.Expr(clip, f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 << step) - 1} 0 ? x min')
-    
-    if space_f == YUV:
-        clip = core.resize.Point(clip, format = format_id)
+        expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 << step) - 1} 0 ? x min'
+        clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
 
-def deform_mask(clip: VideoNode, **deform_args: int) -> VideoNode:
-    
-    func_name = 'deform_mask'
-    
-    sample = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
-    
-    if 'exp_n' not in deform_args:
-        deform_args['exp_n'] = 1
-    
-    for i in deform_args:
-        if i in sample:
-            for _ in range(deform_args[i]):
-                clip = eval(f'core.std.{sample[i]}(clip)')
-        else:
-            raise ValueError(f'{func_name}: Unsupported key {i} in deform_args')
-    
-    return clip
-
-
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field_diffs.txt') -> VideoNode:
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field_diffs.txt', plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
@@ -1453,7 +1474,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field
         
         return clip
     
-    temp = core.std.SeparateFields(clip, True).std.PlaneStats()
+    temp = core.std.SeparateFields(clip, True).std.PlaneStats(plane = plane)
     fields = [temp[::2], temp[1::2]]
     
     clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, output = output), prop_src = fields)
