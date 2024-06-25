@@ -349,8 +349,8 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
 # Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
 
 def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
-               gain: float = 0.75, expand_n: int = 2, inflate_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
-               b: float = 0, c: float = 0.5, taps: int = 3, frac: bool = True, down: bool = False, **down_args: Any) -> VideoNode:
+                gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
+                taps: int = 3, frac: bool = True, down: bool = False, **deform_args: Any) -> VideoNode:
     
     func_name = 'mask_detail'
     
@@ -402,11 +402,13 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     mask = rg_fix_simple(mask, rg)
     mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     
-    for _ in range(expand_n):
-        mask = core.std.Maximum(mask)
+    if 'exp_n' not in deform_args:
+        deform_args['exp_n'] = 2
     
-    for _ in range(inflate_n):
-        mask = core.std.Inflate(mask)
+    if 'inf_n' not in deform_args:
+        deform_args['inf_n'] = 1
+    
+    clip = deform_mask(clip, **deform_args)
     
     if down:
         if dx is None:
@@ -418,8 +420,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
         if space == YUV and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError(f'{func_name}: "dx" or "dy" does not match the chroma subsampling of the output clip')
         
-        kernel_down = down_args.pop('kernel', 'bilinear').capitalize()
-        mask = eval(f'core.resize.{kernel_down}(mask, dx, dy, **down_args)')
+        mask = eval(f'core.resize.{kernel.capitalize()}(mask, dx, dy)')
     
     if blur_more:
         mask = core.std.Convolution(mask, [1, 2, 1, 2, 4, 2, 1, 2, 1])
