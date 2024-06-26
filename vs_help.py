@@ -1456,32 +1456,19 @@ def deform_mask(clip: VideoNode, borders: list[int] | None = None, planes: int |
     return clip
 
 
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, mode: int = 0, output: str = 'field_diffs.txt', plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field_diffs.txt', plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
-    def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, mode: int, output: str) -> VideoNode:
+    def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, output: str) -> VideoNode:
         
         file = open(output, 'a')
         
-        top = (f[0].props['PlaneStatsAverage'], f[0].props['PlaneStatsMin'], f[0].props['PlaneStatsMax'])
-        bottom = (f[1].props['PlaneStatsAverage'], f[1].props['PlaneStatsMin'], f[1].props['PlaneStatsMax'])
+        top = f[0].props['PlaneStatsAverage']
+        bottom = f[1].props['PlaneStatsAverage']
         
-        if mode in {0, 1, 2}:
-            result = abs(top[mode] - bottom[mode])
-        elif mode == 3:
-            result = 0
-            for i in (0, 1, 2):
-                if (x:= abs(top[i] - bottom[i])) > result:
-                    result = x
-        elif mode == 4:
-            result = 1
-            for i in (0, 1, 2):
-                if (x:= abs(top[i] - bottom[i])) < result:
-                    result = x
-        else:
-            raise ValueError(f'{func_name}: Please use 0...4 mode value')
-        
+        result = abs(top - bottom)
+                
         if result >= thr:
             file.write(f'{n} {result}\n')
         
@@ -1492,6 +1479,6 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, mode: int = 0, outpu
     temp = core.std.SeparateFields(clip, True).std.PlaneStats(plane = plane)
     fields = [temp[::2], temp[1::2]]
     
-    clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, mode = mode, output = output), prop_src = fields)
+    clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, output = output), prop_src = fields)
     
     return clip
