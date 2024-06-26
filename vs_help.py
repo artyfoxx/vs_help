@@ -239,7 +239,7 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    limit <<= clip.format.bits_per_sample - 8
+    limit *= 1 << clip.format.bits_per_sample - 8
     w = clip.width
     
     if donor is None:
@@ -295,7 +295,7 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if clip.format.color_family != GRAY:
         raise ValueError(f'{func_name}: Only GRAY is supported')
     
-    limit <<= clip.format.bits_per_sample - 8
+    limit *= 1 << clip.format.bits_per_sample - 8
     h = clip.height
     
     if donor is None:
@@ -792,7 +792,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     step = clip.format.bits_per_sample - 8
     
-    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift << step} - 128 *')
+    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift * (1 << step)} - 128 *')
     mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
     
     for _ in range(iterations):
@@ -947,12 +947,12 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    thmi <<= step
-    thma <<= step
-    thlimi <<= step
-    thlima <<= step
-    full = (256 << step) - 1
+    factor = 1 << clip.format.bits_per_sample - 8
+    thmi *= factor
+    thma *= factor
+    thlimi *= factor
+    thlima *= factor
+    full = 256 * factor - 1
     
     if ry is None:
         ry = rx
