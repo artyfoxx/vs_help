@@ -1467,16 +1467,16 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, mode: int = 0, outpu
         top = (f[0].props['PlaneStatsAverage'], f[0].props['PlaneStatsMin'], f[0].props['PlaneStatsMax'])
         bottom = (f[1].props['PlaneStatsAverage'], f[1].props['PlaneStatsMin'], f[1].props['PlaneStatsMax'])
         
-        if mode in {0, 1, 2}
+        if mode in {0, 1, 2}:
             result = abs(top[mode] - bottom[mode])
         elif mode == 3:
             result = 0
-            for i in [0, 1, 2]:
+            for i in (0, 1, 2):
                 if (x:= abs(top[i] - bottom[i])) > result:
                     result = x
         elif mode == 4:
             result = 1
-            for i in [0, 1, 2]:
+            for i in (0, 1, 2):
                 if (x:= abs(top[i] - bottom[i])) < result:
                     result = x
         else:
