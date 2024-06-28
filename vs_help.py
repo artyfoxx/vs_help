@@ -1456,19 +1456,45 @@ def deform_mask(clip: VideoNode, borders: list[int] | None = None, planes: int |
     return clip
 
 
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field_diffs.txt', plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None = None, mode: int = 0,
+                       output: str = 'field_diffs.txt', plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
-    def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, output: str) -> VideoNode:
+    if align is None:
+        align = thr / 4
+    
+    def compare(n: int, f: VideoNode, clip: list[VideoNode], thr: float, align: float, mode: int, output: str) -> VideoNode:
         
         file = open(output, 'a')
         
-        top = f[0].props['PlaneStatsAverage']
-        bottom = f[1].props['PlaneStatsAverage']
+        diff = f[0].props['PlaneStatsDiff']
+        first = f[0].props['PlaneStatsAverage']
+        second = f[1].props['PlaneStatsAverage']
         
-        result = abs(top - bottom)
-                
+        diff_prev = f[2].props['PlaneStatsDiff']
+        first_prev = f[2].props['PlaneStatsAverage']
+        second_prev = f[3].props['PlaneStatsAverage']
+        
+        diff_next = f[4].props['PlaneStatsDiff']
+        first_next = f[4].props['PlaneStatsAverage']
+        second_next = f[5].props['PlaneStatsAverage']
+        
+        if mode == 0:
+            result = abs(first - second)
+        elif mode == 1:
+            result = diff
+        elif mode == 2:
+            result = abs(abs(first_prev - second_prev) - abs(first - second))
+        elif mode == 3:
+            result = abs(diff_prev - diff)
+        elif mode == 4:
+            result = abs(abs(first_prev - second_prev) - abs(first - second)) if abs(abs(first_prev - second_prev) - abs(first_next - second_next)) <= align else 0
+        elif mode == 5:
+            result = abs(diff_prev - diff) if abs(diff_prev - diff_next) <= align else 0
+        else:
+            raise ValueError(f'{func_name}: Please use 0...5 mode value')
+        
         if result >= thr:
             file.write(f'{n} {result}\n')
         
@@ -1476,9 +1502,14 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, output: str = 'field
         
         return clip
     
-    temp = core.std.SeparateFields(clip, True).std.PlaneStats(plane = plane)
-    fields = [temp[::2], temp[1::2]]
+    temp = core.std.SeparateFields(clip, True)
+    top = temp[::2]
+    bottom = temp[1::2]
+    top = core.std.PlaneStats(top, bottom, plane = plane)
+    bottom = core.std.PlaneStats(bottom, plane = plane)
     
-    clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, output = output), prop_src = fields)
+    fields = [top, bottom, top[0] + top[:-1], bottom[0] + bottom[:-1], top[1:] + top[-1], bottom[1:] + bottom[-1]]
+    
+    clip = core.std.FrameEval(clip, partial(compare, clip = clip, thr = thr, align = align, mode = mode, output = output), prop_src = fields)
     
     return clip
