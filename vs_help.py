@@ -1354,14 +1354,20 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
     for i in args:
         if isinstance(i, int):
             i = [i]
+        elif isinstance(i, list):
+            pass
+        else:
+            raise ValueError(f'{func_name}: *args must be list[int] or int')
         
         if len(i) == 2:
             if i[0] == 0:
                 first = second[:i[1] + 1] + first[i[1] + 1:]
             elif i[1] == first.num_frames - 1:
                 first = first[:i[0]] + second[i[0]:]
-            else:
+            elif i[0] < i[1]:
                 first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
+            else:
+                raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame] or int')
         elif len(i) == 1:
             if i[0] == 0:
                 first = second[i[0]] + first[i[0] + 1:]
@@ -1370,7 +1376,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
             else:
                 first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
         else:
-            raise ValueError(f'{func_name}: Args length must be 1, 2 or must be "int"')
+            raise ValueError(f'{func_name}: *args length must be 1, 2 or must be "int"')
     
     return first
 
