@@ -1470,7 +1470,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     if align is None:
         align = thr / 4
     
-    def compare(n: int, f: VideoNode, clip: list[VideoNode], thr: float, align: float, mode: int, output: str) -> VideoNode:
+    def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, align: float, mode: int, output: str) -> VideoNode:
         
         file = open(output, 'a')
         
@@ -1502,7 +1502,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
             raise ValueError(f'{func_name}: Please use 0...5 mode value')
         
         if result >= thr:
-            file.write(f'{n} {result}\n')
+            file.write(f'{n} {result}\r\n')
         
         file.close
         
