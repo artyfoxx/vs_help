@@ -1468,7 +1468,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     func_name = 'search_field_diffs'
     
     if align is None:
-        align = thr / 4
+        align = thr / 2
     
     def compare(n: int, f: list[VideoNode], clip: VideoNode, thr: float, align: float, mode: int, output: str) -> VideoNode:
         
