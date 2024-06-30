@@ -1502,7 +1502,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
             raise ValueError(f'{func_name}: Please use 0...5 mode value')
         
         if result >= thr:
-            file.write(f'{n} {result}\n')
+            file.write(f'{n} {result:.20f}\n')
         
         file.close
         
