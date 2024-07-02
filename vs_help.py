@@ -1452,7 +1452,6 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
-    step = clip.format.bits_per_sample - 8
     
     if planes is None:
         planes = [*range(num_p)]
@@ -1473,9 +1472,11 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
             pass
         elif len(borders) < 4:
             sample = [0, clip.width - 1, 0, clip.height - 1]
-            borders += sample_bord[len(borders):]
+            borders += sample[len(borders):]
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
+        
+        step = clip.format.bits_per_sample - 8
         
         expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 << step) - 1} 0 ? x min'
         clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
