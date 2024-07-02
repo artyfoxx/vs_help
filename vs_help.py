@@ -191,17 +191,17 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 
 # A simple functions for fix brightness artifacts at the borders of the frame.
 # All values are set as positional string arguments. The strings have the following format:
-# [axis, target, donor, limit, mode, plane]. Only axis is mandatory.
+# [axis, target, donor, limit, curve, plane]. Only axis is mandatory.
 # axis - can take the values "x" or "y" for columns and rows, respectively.
 # target - the target column/row, it is counted from the upper left edge of the screen, by default 0.
 # donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
 # limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
 # and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-# mode - target correction mode, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
+# curve - target correction curve, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
 # -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
+def fix_border(clip: VideoNode, *args: str | list[str | int | list[int] | None]) -> VideoNode:
     
     func_name = 'fix_border'
     
@@ -218,9 +218,22 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
+    sample = ['x', 0, None, 0, 1, 0]
+    
     for i in args:
-        plane = i.pop() if len(i) == 6 else 0
-        clips[plane] = eval(f'fix_border_{i[0]}_simple(clips[plane], *i[1:])')
+        if isinstance(i, str):
+            i = [i] + sample[1:]
+        elif isinstance(i, list):
+            if len(i) == 6:
+                pass
+            elif len(i) < 6:
+                i += sample[len(i):]
+            else:
+                raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
+        else:
+            raise ValueError(f'{func_name}: *args must be "list" or "str"')
+        
+        clips[i[5]] = eval(f'fix_border_{i[0]}_simple(clips[i[5]], *i[1:5])')
     
     if space == GRAY:
         clip = clips[0]
@@ -230,7 +243,8 @@ def fix_border(clip: VideoNode, *args: list[str | int | None]) -> VideoNode:
     return clip
 
 
-def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 1) -> VideoNode:
+def fix_border_x_simple(clip: VideoNode, target: int | list[int] = 0, donor: int | list[int] | None = None,
+                        limit: int = 0, curve: int = 1) -> VideoNode:
     
     func_name = 'fix_border_x_simple'
     
@@ -246,18 +260,18 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if donor is None:
         donor = target + 1 if target < w >> 1 else target - 1
     
-    if mode == 0:
+    if curve == 0:
         expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-    elif abs(mode) == 1:
+    elif abs(curve) == 1:
         expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-    elif abs(mode) == 2:
+    elif abs(curve) == 2:
         expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-    elif abs(mode) == 3:
+    elif abs(curve) == 3:
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
-        raise ValueError(f'{func_name}: Please use -3...3 mode value')
+        raise ValueError(f'{func_name}: Please use -3...3 curve value')
     
-    if mode < 0:
+    if curve < 0:
         target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.Invert().std.PlaneStats()
         donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.Invert().std.PlaneStats()
     else:
@@ -273,7 +287,7 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     
     fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
-    if mode < 0:
+    if curve < 0:
         fix_line = core.std.Invert(fix_line)
     
     if target == 0:
@@ -286,7 +300,8 @@ def fix_border_x_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     return clip
 
 
-def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = None, limit: int = 0, mode: int = 1) -> VideoNode:
+def fix_border_y_simple(clip: VideoNode, target: int | list[int] = 0, donor: int | list[int] | None = None,
+                        limit: int = 0, curve: int = 1) -> VideoNode:
     
     func_name = 'fix_border_y_simple'
     
@@ -302,18 +317,18 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     if donor is None:
         donor = target + 1 if target < h >> 1 else target - 1
     
-    if mode == 0:
+    if curve == 0:
         expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-    elif abs(mode) == 1:
+    elif abs(curve) == 1:
         expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-    elif abs(mode) == 2:
+    elif abs(curve) == 2:
         expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-    elif abs(mode) == 3:
+    elif abs(curve) == 3:
         expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
     else:
-        raise ValueError(f'{func_name}: Please use -3...3 mode value')
+        raise ValueError(f'{func_name}: Please use -3...3 curve value')
     
-    if mode < 0:
+    if curve < 0:
         target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.Invert().std.PlaneStats()
         donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.Invert().std.PlaneStats()
     else:
@@ -329,7 +344,7 @@ def fix_border_y_simple(clip: VideoNode, target: int = 0, donor: int | None = No
     
     fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
-    if mode < 0:
+    if curve < 0:
         fix_line = core.std.Invert(fix_line)
     
     if target == 0:
@@ -1487,7 +1502,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
-        field_diffs[n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage']) if mode in {0, 2, 4} else f[0].props['PlaneStatsDiff']
+        field_diffs[n] = f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
         
         if n == num_f - 1:
             with open(output, 'w', encoding = "UTF-8") as file:
