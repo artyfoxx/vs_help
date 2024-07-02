@@ -1473,12 +1473,8 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     
     func_name = 'search_field_diffs'
     
-    if mode == 0:
-        return clip
-    elif abs(mode) in {1, 2, 3}:
-        pass
-    else:
-        raise ValueError(f'{func_name}: Please use -3...3 mode value')
+    if mode < 0 or mode > 5:
+        raise ValueError(f'{func_name}: Please use 0...5 mode value')
     
     if align is None:
         align = thr / 2
@@ -1491,14 +1487,14 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
-        field_diffs[n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage']) if mode > 0 else f[0].props['PlaneStatsDiff']
+        field_diffs[n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage']) if mode in {0, 2, 4} else f[0].props['PlaneStatsDiff']
         
         if n == num_f - 1:
             with open(output, 'w', encoding = "UTF-8") as file:
                 for i in range(num_f):
-                    if abs(mode) == 1:
+                    if mode in {0, 1}:
                         result = field_diffs[i]
-                    elif abs(mode) == 2:
+                    elif mode in {2, 3}:
                         result = abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i])
                     else:
                         result = abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]) if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= align else 0
