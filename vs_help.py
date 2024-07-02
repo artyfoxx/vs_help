@@ -1459,12 +1459,12 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
     elif isinstance(planes, int):
         planes = [planes]
     
-    sample = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
+    comparison = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
     
     for i in after_args:
-        if i in sample:
+        if i in comparison:
             for _ in range(after_args[i]):
-                clip = eval(f'core.std.{sample[i]}(clip, planes = planes)')
+                clip = eval(f'core.std.{comparison[i]}(clip, planes = planes)')
         else:
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
@@ -1473,7 +1473,7 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
             pass
         elif len(borders) < 4:
             sample = [0, clip.width - 1, 0, clip.height - 1]
-            borders += sample[len(borders):]
+            borders += sample_bord[len(borders):]
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
