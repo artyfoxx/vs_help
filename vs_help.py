@@ -1494,7 +1494,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
         field_diffs[n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage']) if mode > 0 else f[0].props['PlaneStatsDiff']
         
         if n == num_f - 1:
-            with open(output, 'w') as file:
+            with open(output, 'w', encoding = "UTF-8") as file:
                 for i in range(num_f):
                     if abs(mode) == 1:
                         result = field_diffs[i]
