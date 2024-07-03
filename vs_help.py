@@ -201,7 +201,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
 # -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
 # plane - by default 0.
 
-def fix_border(clip: VideoNode, *args: str | list[str | int | list[int] | None]) -> VideoNode:
+def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNode:
     
     func_name = 'fix_border'
     
@@ -209,6 +209,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | list[int] | None])
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
+    factor = 1 << clip.format.bits_per_sample - 8
     
     if space == GRAY:
         clips = [clip]
@@ -217,6 +218,85 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | list[int] | None])
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
+    
+    def axis_x(clip: VideoNode, target: int, donor: int | None, limit: int, curve: int) -> VideoNode:
+        
+        w = clip.width
+        
+        if donor is None:
+            donor = target + 1 if target < w >> 1 else target - 1
+        
+        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0)
+        donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0)
+        
+        fix_line = correction(target_line, donor_line, limit, curve)
+        
+        if target == 0:
+            clip = core.std.StackHorizontal([fix_line, core.std.Crop(clip, 1, 0, 0, 0)])
+        elif target == w - 1:
+            clip = core.std.StackHorizontal([core.std.Crop(clip, 0, 1, 0, 0), fix_line])
+        else:
+            clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
+        
+        return clip
+    
+    def axis_y(clip: VideoNode, target: int, donor: int | None, limit: int, curve: int) -> VideoNode:
+        
+        h = clip.height
+        
+        if donor is None:
+            donor = target + 1 if target < h >> 1 else target - 1
+        
+        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1)
+        donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1)
+        
+        fix_line = correction(target_line, donor_line, limit, curve)
+        
+        if target == 0:
+            clip = core.std.StackVertical([fix_line, core.std.Crop(clip, 0, 0, 1, 0)])
+        elif target == h - 1:
+            clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, 1), fix_line])
+        else:
+            clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
+        
+        return clip
+    
+    def correction(target_line: VideoNode, donor_line: VideoNode, limit: int, curve: int) -> VideoNode:
+        
+        if curve == 0:
+            expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
+        elif abs(curve) == 1:
+            expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
+        elif abs(curve) == 2:
+            expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
+        elif abs(curve) == 3:
+            expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
+        else:
+            raise ValueError(f'{func_name}: Please use -3...3 curve value')
+        
+        if curve < 0:
+            target_line = core.std.Invert(target_line)
+            donor_line = core.std.Invert(donor_line)
+            limit *= -factor
+        else:
+            limit *= factor
+        
+        target_line = core.std.PlaneStats(target_line)
+        donor_line = core.std.PlaneStats(donor_line)
+        
+        fix_line = core.akarin.Expr([target_line, donor_line], expr)
+        
+        if limit > 0:
+            fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
+        elif limit < 0:
+            fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
+        
+        fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+        
+        if curve < 0:
+            fix_line = core.std.Invert(fix_line)
+        
+        return fix_line
     
     sample = ['x', 0, None, 0, 1, 0]
     
@@ -233,126 +313,12 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | list[int] | None])
         else:
             raise ValueError(f'{func_name}: *args must be "list" or "str"')
         
-        clips[i[5]] = eval(f'fix_border_{i[0]}_simple(clips[i[5]], *i[1:5])')
+        clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
     
     if space == GRAY:
         clip = clips[0]
     else:
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
-    
-    return clip
-
-
-def fix_border_x_simple(clip: VideoNode, target: int | list[int] = 0, donor: int | list[int] | None = None,
-                        limit: int = 0, curve: int = 1) -> VideoNode:
-    
-    func_name = 'fix_border_x_simple'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    if clip.format.color_family != GRAY:
-        raise ValueError(f'{func_name}: Only GRAY is supported')
-    
-    limit *= 1 << clip.format.bits_per_sample - 8
-    w = clip.width
-    
-    if donor is None:
-        donor = target + 1 if target < w >> 1 else target - 1
-    
-    if curve == 0:
-        expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-    elif abs(curve) == 1:
-        expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-    elif abs(curve) == 2:
-        expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-    elif abs(curve) == 3:
-        expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
-    else:
-        raise ValueError(f'{func_name}: Please use -3...3 curve value')
-    
-    if curve < 0:
-        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.Invert().std.PlaneStats()
-        donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.Invert().std.PlaneStats()
-    else:
-        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0).std.PlaneStats()
-        donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0).std.PlaneStats()
-    
-    fix_line = core.akarin.Expr([target_line, donor_line], expr)
-    
-    if limit > 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
-    elif limit < 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
-    
-    fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
-    
-    if curve < 0:
-        fix_line = core.std.Invert(fix_line)
-    
-    if target == 0:
-        clip = core.std.StackHorizontal([fix_line, core.std.Crop(clip, 1, 0, 0, 0)])
-    elif target == w - 1:
-        clip = core.std.StackHorizontal([core.std.Crop(clip, 0, 1, 0, 0), fix_line])
-    else:
-        clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
-    
-    return clip
-
-
-def fix_border_y_simple(clip: VideoNode, target: int | list[int] = 0, donor: int | list[int] | None = None,
-                        limit: int = 0, curve: int = 1) -> VideoNode:
-    
-    func_name = 'fix_border_y_simple'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    if clip.format.color_family != GRAY:
-        raise ValueError(f'{func_name}: Only GRAY is supported')
-    
-    limit *= 1 << clip.format.bits_per_sample - 8
-    h = clip.height
-    
-    if donor is None:
-        donor = target + 1 if target < h >> 1 else target - 1
-    
-    if curve == 0:
-        expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-    elif abs(curve) == 1:
-        expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-    elif abs(curve) == 2:
-        expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-    elif abs(curve) == 3:
-        expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
-    else:
-        raise ValueError(f'{func_name}: Please use -3...3 curve value')
-    
-    if curve < 0:
-        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.Invert().std.PlaneStats()
-        donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.Invert().std.PlaneStats()
-    else:
-        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1).std.PlaneStats()
-        donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1).std.PlaneStats()
-    
-    fix_line = core.akarin.Expr([target_line, donor_line], expr)
-    
-    if limit > 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
-    elif limit < 0:
-        fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
-    
-    fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
-    
-    if curve < 0:
-        fix_line = core.std.Invert(fix_line)
-    
-    if target == 0:
-        clip = core.std.StackVertical([fix_line, core.std.Crop(clip, 0, 0, 1, 0)])
-    elif target == h - 1:
-        clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, 1), fix_line])
-    else:
-        clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
     
     return clip
 
@@ -1410,7 +1376,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
-    step = clip.format.bits_per_sample - 8
+    factor = 1 << clip.format.bits_per_sample - 8
     
     if space == GRAY:
         pass
@@ -1420,7 +1386,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    clip = core.std.BinarizeMask(clip, thr * (1 << step))
+    clip = core.std.BinarizeMask(clip, thr * factor)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -1489,8 +1455,8 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
     
     func_name = 'search_field_diffs'
     
-    if mode < 0 or mode > 5:
-        raise ValueError(f'{func_name}: Please use 0...5 mode value')
+    if mode < 0 or mode > 7:
+        raise ValueError(f'{func_name}: Please use 0...7 mode value')
     
     if align is None:
         align = thr / 2
@@ -1512,8 +1478,16 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
                         result = field_diffs[i]
                     elif mode in {2, 3}:
                         result = abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i])
+                    elif mode in {4, 5}:
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= align:
+                            result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]), abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]))
+                        else:
+                            result = 0
                     else:
-                        result = abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]) if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= align else 0
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) <= align and abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= align:
+                            result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]), abs(field_diffs[i + 1 if i < num_f - 1 else num_f - 1] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]))
+                        else:
+                            result = 0
                     
                     if result >= thr:
                         file.write(f'{i} {result:.20f}\n')
