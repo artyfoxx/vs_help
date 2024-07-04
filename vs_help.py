@@ -381,7 +381,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
         resc = rescaler.upscale(resc, w, h)
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
-    mask = rg_fix_simple(mask, rg)
+    mask = rg_fix(mask, rg)
     mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
     
     if 'exp_n' not in after_args:
@@ -524,7 +524,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
 # Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
 # Apparently it depends on the source.
 
-def average_fields(clip: VideoNode, curve: int | list[int | None] | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
+def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, mode: int = 0) -> VideoNode:
     
     func_name = 'average_fields'
     
@@ -534,126 +534,100 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] | None = None,
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if curve is None:
+    def simple_average(clip: VideoNode, curve: int | None, weight: float, mode: int) -> VideoNode:
+        
+        if weight == 0:
+            expr0 = 'x.PlaneStatsAverage'
+        elif weight == 1:
+            expr0 = 'y.PlaneStatsAverage'
+        elif weight > 0 and weight < 1:
+            expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
+        else:
+            raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
+        
+        if curve is None:
+            return clip
+        elif curve == 0:
+            expr1 = expr0 + ' x.PlaneStatsAverage - x +'
+            expr2 = expr0 + ' y.PlaneStatsAverage - y +'
+        elif abs(curve) == 1:
+            expr1 = expr0 + ' x.PlaneStatsAverage / x *'
+            expr2 = expr0 + ' y.PlaneStatsAverage / y *'
+        elif abs(curve) == 2:
+            expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
+            expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
+        elif abs(curve) == 3:
+            expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
+            expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
+        else:
+            raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
+        
+        if curve < 0:
+            clip = core.std.Invert(clip)
+        
+        if mode == 0:
+            clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+            fields = [clip[::2], clip[1::2]]
+            
+            if weight == 0:
+                fields[1] = core.akarin.Expr(fields, expr2)
+            elif weight == 1:
+                fields[0] = core.akarin.Expr(fields, expr1)
+            else:
+                fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+            
+            clip = core.std.Interleave(fields)
+            clip = core.std.DoubleWeave(clip, True)[::2]
+            clip = core.std.SetFieldBased(clip, 0)
+        elif mode == 1:
+            h = clip.height
+            clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+            
+            if weight == 0:
+                for i in range(1, h, 2):
+                    clips[i] = core.akarin.Expr([clips[i - 1], clips[i]], expr2)
+            elif weight == 1:
+                for i in range(0, h - 1, 2):
+                    clips[i] = core.akarin.Expr([clips[i], clips[i + 1]], expr1)
+            else:
+                for i in range(0, h - 1, 2):
+                    clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
+                                             core.akarin.Expr([clips[i], clips[i + 1]], expr2)
+            
+            clip = core.std.StackVertical(clips)
+        else:
+            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
+        
+        if curve < 0:
+            clip = core.std.Invert(clip)
+        
+        clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+        
         return clip
-    elif isinstance(curve, int):
+    
+    if isinstance(curve, int):
         curve = [curve] * num_p
     elif isinstance(curve, list):
         if len(curve) == num_p:
             pass
         elif len(curve) < num_p:
-            curve += [None] * (num_p - len(curve))
+            curve += [curve[-1]] * (num_p - len(curve))
         else:
             raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
     else:
-        raise ValueError(f'{func_name}: "curve" must be int, list or "None"')
+        raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
     if space == GRAY:
-        clip = average_fields_simple(clip, curve[0], weight, mode)
+        clip = simple_average(clip, curve[0], weight, mode)
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
-            if curve[i] is not None:
-                clips[i] = average_fields_simple(clips[i], curve[i], weight, mode)
+            clips[i] = simple_average(clips[i], curve[i], weight, mode)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
-    
-    return clip
-
-
-def average_fields_simple(clip: VideoNode, curve: int | None = None, weight: float = 0.5, mode: int = 0) -> VideoNode:
-    
-    func_name = 'average_fields_simple'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    if clip.format.color_family != GRAY:
-        raise ValueError(f'{func_name}: Only GRAY is supported')
-    
-    if weight == 0:
-        expr0 = 'x.PlaneStatsAverage'
-    elif weight == 1:
-        expr0 = 'y.PlaneStatsAverage'
-    elif weight > 0 and weight < 1:
-        expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
-    else:
-        raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
-    
-    if curve is None:
-        return clip
-    elif curve == 0:
-        expr1 = expr0 + ' x.PlaneStatsAverage - x +'
-        expr2 = expr0 + ' y.PlaneStatsAverage - y +'
-    elif abs(curve) == 1:
-        expr1 = expr0 + ' x.PlaneStatsAverage / x *'
-        expr2 = expr0 + ' y.PlaneStatsAverage / y *'
-    elif abs(curve) == 2:
-        expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
-        expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
-    elif abs(curve) == 3:
-        expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
-        expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
-    else:
-        raise ValueError(f'{func_name}: Please use -3...3 or "None" curve value')
-    
-    if curve < 0:
-        clip = core.std.Invert(clip)
-    
-    if mode == 0:
-        clip = core.std.SeparateFields(clip, True).std.PlaneStats()
-        fields = [clip[::2], clip[1::2]]
-        
-        if weight == 0:
-            fields[1] = core.akarin.Expr(fields, expr2)
-        elif weight == 1:
-            fields[0] = core.akarin.Expr(fields, expr1)
-        else:
-            fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
-        
-        clip = core.std.Interleave(fields)
-        clip = core.std.DoubleWeave(clip, True)[::2]
-        clip = core.std.SetFieldBased(clip, 0)
-    elif mode == 1:
-        h = clip.height
-        clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
-        
-        if weight == 0:
-            for i in range(1, h, 2):
-                clips[i] = core.akarin.Expr([clips[i - 1], clips[i]], expr2)
-        elif weight == 1:
-            for i in range(0, h - 1, 2):
-                clips[i] = core.akarin.Expr([clips[i], clips[i + 1]], expr1)
-        else:
-            for i in range(0, h - 1, 2):
-                clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
-                                         core.akarin.Expr([clips[i], clips[i + 1]], expr2)
-        
-        clip = core.std.StackVertical(clips)
-    elif mode == 2:
-        clip = core.std.SeparateFields(clip, True)
-        fields = [clip[::2], clip[1::2]]
-        
-        if weight == 0:
-            fields[1] = fields[0]
-        elif weight == 1:
-            fields[0] = fields[1]
-        else:
-            fields[0] = fields[1] = core.std.Expr(fields, f'x {1 - weight} * y {weight} * +')
-        
-        clip = core.std.Interleave(fields)
-        clip = core.std.DoubleWeave(clip, True)[::2]
-        clip = core.std.SetFieldBased(clip, 0)
-    else:
-        raise ValueError(f'{func_name}: Please use 0...2 mode value')
-    
-    if curve < 0:
-        clip = core.std.Invert(clip)
-    
-    clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
     
     return clip
 
@@ -670,48 +644,46 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
+    def simple_fix(clip: VideoNode, mode: int) -> VideoNode:
+        
+        if mode == 0:
+            pass
+        elif mode == 4:
+            clip = core.std.Median(clip)
+        elif mode == 11 or mode == 12:
+            clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+        elif mode == 19:
+            clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
+        elif mode == 20:
+            clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
+        else:
+            clip = core.rgvs.RemoveGrain(clip, mode)
+        
+        return clip
+    
     if isinstance(mode, int):
         mode = [mode] * num_p
-    elif num_p == len(mode):
-        pass
-    elif num_p > len(mode):
-        mode += [mode[-1]] * (num_p - len(mode))
+    elif isinstance(mode, list):
+        if len(mode) == num_p:
+            pass
+        elif len(mode) < num_p:
+            mode += [mode[-1]] * (num_p - len(mode))
+        else:
+            raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
     else:
-        raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
+        raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
     
     if space == GRAY:
-        clip = rg_fix_simple(clip, mode[0])
+        clip = simple_fix(clip, mode[0])
     elif space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        
         for i in range(num_p):
-            if mode[i]:
-                clips[i] = rg_fix_simple(clips[i], mode[i])
+            clips[i] = simple_fix(clips[i], mode[i])
+        
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
-    
-    return clip
-
-
-def rg_fix_simple(clip: VideoNode, mode: int = 2) -> VideoNode:
-    
-    func_name = 'rg_fix_simple'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    if mode == 0:
-        pass
-    elif mode == 4:
-        clip = core.std.Median(clip)
-    elif mode == 11 or mode == 12:
-        clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-    elif mode == 19:
-        clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
-    elif mode == 20:
-        clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
-    else:
-        clip = core.rgvs.RemoveGrain(clip, mode)
     
     return clip
 
@@ -1161,9 +1133,9 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     h = clip.height
     
     if dx is None:
-        dx = w
+        dx = w << 1
     if dy is None:
-        dy = h
+        dy = h << 1
     if src_left is None:
         src_left = 0
     if src_top is None:
@@ -1176,6 +1148,40 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         src_height = h
     elif src_height <= 0:
         src_height += h - src_top
+    
+    if dx > w << 1 or dy > h << 1:
+        raise ValueError(f'{func_name}: upscale size is too big')
+    
+    def edi3_aa(clip: VideoNode, mode: int, order: bool, **edi3_args: Any) -> VideoNode:
+        
+        if order:
+            clip = core.std.Transpose(clip)
+        
+        if mode == 1:
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+            clip = core.std.Transpose(clip)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+        elif mode == 2:
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
+        elif mode == 3:
+            eedi3_args = {i:edi3_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in edi3_args}
+            znedi3_args = {i:edi3_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in edi3_args}
+            
+            if not all((x := i) in eedi3_args or x in znedi3_args for i in edi3_args):
+                raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
+            
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+            clip = core.std.Transpose(clip)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+        else:
+            raise ValueError(f'{func_name}: Please use 1...3 mode value')
+        
+        if not order:
+            clip = core.std.Transpose(clip)
+        
+        return clip
     
     if mode == 0:
         kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
@@ -1193,40 +1199,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     else:
         raise ValueError(f'{func_name}: Please use 0...3 mode value')
-    
-    return clip
-
-
-def edi3_aa(clip: VideoNode, mode: int = 1, order: bool = True, **edi3_args: Any) -> VideoNode:
-    
-    func_name = 'edi3_aa'
-    
-    if order:
-        clip = core.std.Transpose(clip)
-    
-    if mode == 1:
-        clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
-        clip = core.std.Transpose(clip)
-        clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
-    elif mode == 2:
-        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
-        clip = core.std.Transpose(clip)
-        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
-    elif mode == 3:
-        eedi3_args = {i:edi3_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in edi3_args}
-        znedi3_args = {i:edi3_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in edi3_args}
-        
-        if not all((x := i) in eedi3_args or x in znedi3_args for i in edi3_args):
-            raise ValueError(f'{func_name}: Unsupported key {x} in edi3_args')
-        
-        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-        clip = core.std.Transpose(clip)
-        clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-    else:
-        raise ValueError(f'{func_name}: Please use 1...3 mode value')
-    
-    if not order:
-        clip = core.std.Transpose(clip)
     
     return clip
 
