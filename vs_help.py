@@ -922,7 +922,13 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     dehaloed = dehalo_alpha(clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss)
     
     if contra > 0:
-        dehaloed = fine_dehalo_contrasharp(dehaloed, clip, contra)
+        half = 128 << dehaloed.format.bits_per_sample - 8
+        
+        bb = core.std.Convolution(dehaloed, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+        bb2 = core.rgvs.Repair(bb, core.rgvs.Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
+        xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {contra} * {half} +')
+        xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
+        dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
     if fake_prewitt:
         edges = custom_mask(clip, 1)
@@ -962,24 +968,6 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     return clip
 
 
-def fine_dehalo_contrasharp(dehaloed: VideoNode, clip: VideoNode, level: float) -> VideoNode:
-    
-    func_name = 'fine_dehalo_contrasharp'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    half = 128 << dehaloed.format.bits_per_sample - 8
-    
-    bb = core.std.Convolution(dehaloed, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-    bb2 = core.rgvs.Repair(bb, core.rgvs.Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
-    xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {level} * {half} +')
-    xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
-    clip = core.std.MergeDiff(dehaloed, xdd)
-    
-    return clip
-
-
 def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None, showmask: bool = False) -> VideoNode:
     
     func_name = 'fine_dehalo2'
@@ -1003,6 +991,23 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     if vconv is None:
         vconv = [-2, -1, 0, 0, 40, 0, 0, -1, -2]
     
+    def grow_mask(clip: VideoNode, mode: str) -> VideoNode:
+        
+        if mode == 'v':
+            coord = [0, 1, 0, 0, 0, 0, 1, 0]
+        elif mode == 'h':
+            coord = [0, 0, 0, 1, 1, 0, 0, 0]
+        else:
+            raise ValueError(f'{func_name}: {mode} is wrong mode')
+        
+        clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
+        mask_1 = core.std.Maximum(clip, coordinates = coord)
+        mask_2 = core.std.Maximum(mask_1, coordinates = coord).std.Maximum(coordinates = coord)
+        clip = core.std.Expr([mask_2, mask_1], 'x y -')
+        clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr('x 1.8 *')
+        
+        return clip
+    
     fix_h = core.std.Convolution(clip, vconv, mode = 'v')
     fix_v = core.std.Convolution(clip, hconv, mode = 'h')
     mask_h = core.std.Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], divisor = 4, saturate = False)
@@ -1010,8 +1015,8 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     temp_h = core.std.Expr([mask_h, mask_v], 'x 3 * y -')
     temp_v = core.std.Expr([mask_v, mask_h], 'x 3 * y -')
     
-    mask_h = fine_dehalo2_grow_mask(temp_h, 'v')
-    mask_v = fine_dehalo2_grow_mask(temp_v, 'h')
+    mask_h = grow_mask(temp_h, 'v')
+    mask_v = grow_mask(temp_v, 'h')
     
     clip = core.std.MaskedMerge(clip, fix_h, mask_h)
     clip = core.std.MaskedMerge(clip, fix_v, mask_v)
@@ -1023,29 +1028,6 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
         clip = core.std.Expr([mask_h, mask_v], 'x y max')
         if space == YUV:
             clip = core.resize.Point(clip, format = orig.format.id)
-    
-    return clip
-
-
-def fine_dehalo2_grow_mask(clip: VideoNode, mode: str) -> VideoNode:
-    
-    func_name = 'fine_dehalo2_grow_mask'
-    
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
-    
-    if mode == 'v':
-        coord = [0, 1, 0, 0, 0, 0, 1, 0]
-    elif mode == 'h':
-        coord = [0, 0, 0, 1, 1, 0, 0, 0]
-    else:
-        raise ValueError(f'{func_name}: {mode} is wrong mode')
-    
-    clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
-    mask_1 = core.std.Maximum(clip, coordinates = coord)
-    mask_2 = core.std.Maximum(mask_1, coordinates = coord).std.Maximum(coordinates = coord)
-    clip = core.std.Expr([mask_2, mask_1], 'x y -')
-    clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Expr('x 1.8 *')
     
     return clip
 
