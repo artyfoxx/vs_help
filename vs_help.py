@@ -1439,7 +1439,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
                         else:
                             result = 0
                     else:
-                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) <= align and abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) >= thr * 2:
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) <= align and abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) >= thr:
                             result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
                                          abs(field_diffs[i + 1 if i < num_f - 1 else num_f - 1] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]),
                                          abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]),
