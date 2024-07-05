@@ -1404,16 +1404,13 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
     return clip
 
 
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None = None, mode: int = 0,
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, mode: int = 0,
                        output: str | None = None, plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
     if mode < 0 or mode > 7:
         raise ValueError(f'{func_name}: Please use 0...7 mode value')
-    
-    if align is None:
-        align = thr / 2
     
     if output is None:
         output = f'field_diffs_mode_{mode}_thr_{thr:.0e}.txt'
@@ -1433,18 +1430,18 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, align: float | None 
                     elif mode in {2, 3}:
                         result = abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i])
                     elif mode in {4, 5}:
-                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= align:
-                            result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
-                                         abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]))
-                        else:
+                        result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
+                                     abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]))
+                        
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) > result / divisor:
                             result = 0
                     else:
-                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) <= align and abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) >= thr:
-                            result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
-                                         abs(field_diffs[i + 1 if i < num_f - 1 else num_f - 1] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]),
-                                         abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]),
-                                         abs(field_diffs[i] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]))
-                        else:
+                        result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
+                                     abs(field_diffs[i + 1 if i < num_f - 1 else num_f - 1] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]),
+                                     abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]),
+                                     abs(field_diffs[i] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]))
+                        
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) > result / divisor or abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= thr:
                             result = 0
                     
                     if result >= thr:
