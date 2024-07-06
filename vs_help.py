@@ -711,7 +711,6 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
     
     if planes is None:
         planes = list(range(num_p))
@@ -724,6 +723,8 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
     if clamp > 0:
+        factor = 1 << clip.format.bits_per_sample - 8
+        
         shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
                                   dbl, 0, clamp * factor, planes = planes), planes = planes)
     else:
