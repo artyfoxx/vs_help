@@ -1,3 +1,32 @@
+'''
+All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Floating point sample type is not supported.
+
+Functions:
+    autotap3
+    bion_dehalo
+    fix_border
+    mask_detail
+    degrain_n
+    destripe
+    daa
+    average_fields
+    rg_fix
+    znedi3aas
+    dehalo_mask
+    tp7_deband_mask
+    dehalo_alpha
+    fine_dehalo
+    fine_dehalo2
+    insane_aa
+    upscaler
+    custom_mask
+    diff_mask
+    apply_range
+    titles_mask
+    after_mask
+    search_field_diffs
+'''
+
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
 from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
 from typing import Any
@@ -5,37 +34,12 @@ from math import sqrt
 from functools import partial
 from inspect import signature
 
-# All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Floating point sample type is not supported.
-
-# Functions:
-# autotap3
-# bion_dehalo
-# fix_border
-# mask_detail
-# degrain_n
-# destripe
-# daa
-# average_fields
-# rg_fix
-# znedi3aas
-# dehalo_mask
-# tp7_deband_mask
-# dehalo_alpha
-# fine_dehalo
-# fine_dehalo2
-# insane_aa
-# upscaler
-# custom_mask
-# diff_mask
-# apply_range
-# titles_mask
-# after_mask
-# search_field_diffs
-
-# Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
-# It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
-
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
+    
+    '''
+    Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
+    It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
+    '''
     
     func_name = 'autotap3'
     
@@ -117,14 +121,15 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     return clip
 
-
-# Dehalo by bion, ported from AviSynth version with minor additions.
-# mode = 1, 5, 11 - the weakest, artifacts will not cause.
-# mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
-# mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
-# mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
-
 def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
+    
+    '''
+    Dehalo by bion, ported from AviSynth version with minor additions.
+    mode = 1, 5, 11 - the weakest, artifacts will not cause.
+    mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
+    mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
+    mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
+    '''
     
     func_name = 'bion_dehalo'
     
@@ -188,20 +193,21 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     return clip
 
-
-# A simple functions for fix brightness artifacts at the borders of the frame.
-# All values are set as positional string arguments. The strings have the following format:
-# [axis, target, donor, limit, curve, plane]. Only axis is mandatory.
-# axis - can take the values "x" or "y" for columns and rows, respectively.
-# target - the target column/row, it is counted from the upper left edge of the screen, by default 0.
-# donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
-# limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
-# and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-# curve - target correction curve, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
-# -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
-# plane - by default 0.
-
 def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNode:
+    
+    '''
+    A simple functions for fix brightness artifacts at the borders of the frame.
+    All values are set as positional string arguments. The strings have the following format:
+    [axis, target, donor, limit, curve, plane]. Only axis is mandatory.
+    axis - can take the values "x" or "y" for columns and rows, respectively.
+    target - the target column/row, it is counted from the upper left edge of the screen, by default 0.
+    donor - the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
+    limit - by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
+    and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
+    curve - target correction curve, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
+    -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
+    plane - by default 0.
+    '''
     
     func_name = 'fix_border'
     
@@ -322,17 +328,18 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     return clip
 
-
-# MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
-# Has nothing to do with the port by MonoS.
-# It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
-# and automatic width calculation based on the original aspect ratio.
-# "down = True" is added for backward compatibility and does not support fractional resolutions.
-# Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
-
 def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                 gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
                 taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> VideoNode:
+    
+    '''
+    MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
+    Has nothing to do with the port by MonoS.
+    It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
+    and automatic width calculation based on the original aspect ratio.
+    "down = True" is added for backward compatibility and does not support fractional resolutions.
+    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
+    '''
     
     func_name = 'mask_detail'
     
@@ -412,15 +419,16 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     return mask
 
-
-# Just an alias for mv.Degrain
-# The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
-# If you do not set anything, the default settings of MVTools itself apply.
-# Function dictionaries are set in order: Super, Analyze, Degrain, Recalculate.
-# Recalculate is optional, but you can specify several of them (as many as you want).
-# If you need to specify settings for only one function, the rest of the dictionaries are served empty.
-
 def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = True) -> VideoNode:
+    
+    '''
+    Just an alias for mv.Degrain
+    The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
+    If you do not set anything, the default settings of MVTools itself apply.
+    Function dictionaries are set in order: Super, Analyze, Degrain, Recalculate.
+    Recalculate is optional, but you can specify several of them (as many as you want).
+    If you need to specify settings for only one function, the rest of the dictionaries are served empty.
+    '''
     
     func_name = 'degrain_n'
     
@@ -453,12 +461,13 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     
     return clip
 
-
-# Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
-# The internal Descale functions are unloaded as usual.
-# The function values that differ for the upper and lower fields are indicated in the list.
-
 def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **descale_args: Any) -> VideoNode:
+    
+    '''
+    Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
+    The internal Descale functions are unloaded as usual.
+    The function values that differ for the upper and lower fields are indicated in the list.
+    '''
     
     func_name = 'destripe'
     
@@ -491,10 +500,11 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     
     return clip
 
-
-# daa by Didée, ported from AviSynth version with minor additions.
-
 def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+    
+    '''
+    daa by Didée, ported from AviSynth version with minor additions.
+    '''
     
     func_name = 'daa'
     
@@ -519,12 +529,13 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     
     return clip
 
-
-# Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
-# Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
-# Apparently it depends on the source.
-
 def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, mode: int = 0) -> VideoNode:
+    
+    '''
+    Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
+    Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
+    Apparently it depends on the source.
+    '''
     
     func_name = 'average_fields'
     
@@ -631,10 +642,11 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     
     return clip
 
-
-# Alias for RemoveGrain. For internal use.
-
 def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
+    
+    '''
+    Alias for RemoveGrain. For internal use.
+    '''
     
     func_name = 'rg_fix'
     
@@ -687,10 +699,11 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     return clip
 
-
-# nnedi2aas by Didée, ported from AviSynth version with minor additions.
-
 def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+    
+    '''
+    nnedi2aas by Didée, ported from AviSynth version with minor additions.
+    '''
     
     func_name = 'znedi3aas'
     
@@ -720,16 +733,17 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     return clip
 
-
-# Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
-# Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
-# :param src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
-# :param expand: Expansion of edge mask.
-# :param iterations: Protects parallel lines and corners that are usually damaged by YAHR.
-# :param brz: Adjusts the internal line thickness.
-# :param shift: Corrective shift for fine-tuning iterations
-
 def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: int = 255, shift: int = 8) -> VideoNode:
+    
+    '''
+    Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
+    Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
+    :param src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
+    :param expand: Expansion of edge mask.
+    :param iterations: Protects parallel lines and corners that are usually damaged by YAHR.
+    :param brz: Adjusts the internal line thickness.
+    :param shift: Corrective shift for fine-tuning iterations
+    '''
     
     func_name = 'dehalo_mask'
     
@@ -773,7 +787,6 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
         mask = core.resize.Point(mask, format = format_id)
     
     return mask
-
 
 def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, fake_prewitt: bool = False,
                     **after_args: Any) -> VideoNode:
@@ -835,7 +848,6 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     return clip
 
-
 def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: float = 1.0, brightstr: float = 1.0,
                  lowsens: float = 50, highsens: float = 50, ss: float = 1.5, showmask: bool = False) -> VideoNode:
     
@@ -885,7 +897,6 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
         clip = so if space == GRAY else core.resize.Point(so, format = orig.format.id)
     
     return clip
-
 
 def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
@@ -967,7 +978,6 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     
     return clip
 
-
 def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None, showmask: bool = False) -> VideoNode:
     
     func_name = 'fine_dehalo2'
@@ -1030,7 +1040,6 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
             clip = core.resize.Point(clip, format = orig.format.id)
     
     return clip
-
 
 def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order: int = 0, mode: int = 0,
               desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
@@ -1104,7 +1113,6 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     return clip
-
 
 def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
             src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
@@ -1184,7 +1192,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     
     return clip
 
-
 def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool = False, offset: float = 0.0,
                 **after_args: Any) -> VideoNode:
     
@@ -1220,7 +1227,6 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
         clip = after_mask(clip, **after_args)
     
     return clip
-
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
               flatten: int = 0, **after_args: Any) -> VideoNode:
@@ -1281,12 +1287,13 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     
     return clip
 
-
 def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> VideoNode:
     
     func_name = 'apply_range'
     
-    if first.num_frames != second.num_frames:
+    num_f = first.num_frames
+    
+    if num_f != second.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
     
     if first.format.name != second.format.name:
@@ -1301,18 +1308,25 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
             raise ValueError(f'{func_name}: *args must be list[int] or int')
         
         if len(i) == 2:
+            if i[0] >= num_f - 1 or i[0] < 0 or i[1] >= num_f or i[1] < 1:
+                raise ValueError(f'{func_name}: out of frame range')
+            
+            if i[0] >= i[1]:
+                raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame], list[frame] or "int"')
+            
             if i[0] == 0:
                 first = second[:i[1] + 1] + first[i[1] + 1:]
-            elif i[1] == first.num_frames - 1:
+            elif i[1] == num_f - 1:
                 first = first[:i[0]] + second[i[0]:]
-            elif i[0] < i[1]:
-                first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
             else:
-                raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame] or int')
+                first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
         elif len(i) == 1:
+            if i[0] >= num_f or i[0] < 0:
+                raise ValueError(f'{func_name}: out of frame range')
+            
             if i[0] == 0:
                 first = second[i[0]] + first[i[0] + 1:]
-            elif i[0] == first.num_frames - 1:
+            elif i[0] == num_f - 1:
                 first = first[:i[0]] + second[i[0]]
             else:
                 first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
@@ -1320,7 +1334,6 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
             raise ValueError(f'{func_name}: *args length must be 1, 2 or must be "int"')
     
     return first
-
 
 def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, **after_args: Any) -> VideoNode:
     
@@ -1362,7 +1375,6 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     
     return clip
 
-
 def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | list[int] | None = None,
                 **after_args: int) -> VideoNode:
     
@@ -1403,7 +1415,6 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
     
     return clip
 
-
 def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, mode: int = 0,
                        output: str | None = None, plane: int = 0) -> VideoNode:
     
@@ -1441,7 +1452,8 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
                                      abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]),
                                      abs(field_diffs[i] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]))
                         
-                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) > result / divisor or abs(field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= thr:
+                        if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) > result / divisor or abs(
+                               field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= thr:
                             result = 0
                     
                     if result >= thr:
