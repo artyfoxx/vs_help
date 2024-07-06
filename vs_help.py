@@ -50,9 +50,9 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     h = clip.height
     
     if dx is None:
-        dx = w << 1
+        dx = w * 2
     if dy is None:
-        dy = h << 1
+        dy = h * 2
     
     back_args = {}
     
@@ -66,12 +66,12 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
         if 'src_width' in crop_args:
             if crop_args['src_width'] <= 0:
                 crop_args['src_width'] += w - crop_args.get('src_left', 0)
-            back_args['src_width'] = (dx << 1) - crop_args['src_width'] * dx / w
+            back_args['src_width'] = dx * 2 - crop_args['src_width'] * dx / w
         
         if 'src_height' in crop_args:
             if crop_args['src_height'] <= 0:
                 crop_args['src_height'] += h - crop_args.get('src_top', 0)
-            back_args['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
+            back_args['src_height'] = dy * 2 - crop_args['src_height'] * dy / h
         
         if any((x := i) not in back_args for i in crop_args):
             raise ValueError(f'{func_name}: Unsupported key {x} in crop_args')
@@ -117,7 +117,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
     
     return clip
 
@@ -186,7 +186,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if m:
         clip = e3 if space == GRAY else core.resize.Point(e3, format = orig.format.id)
@@ -230,7 +230,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         w = clip.width
         
         if donor is None:
-            donor = target + 1 if target < w >> 1 else target - 1
+            donor = target + 1 if target < w // 2 else target - 1
         
         target_line = core.std.Crop(clip, target, w - target - 1, 0, 0)
         donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0)
@@ -251,7 +251,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         h = clip.height
         
         if donor is None:
-            donor = target + 1 if target < h >> 1 else target - 1
+            donor = target + 1 if target < h // 2 else target - 1
         
         target_line = core.std.Crop(clip, 0, 0, target, h - target - 1)
         donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1)
@@ -454,7 +454,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
         vectors.append(core.mv.Analyse(sup1, isb = False, delta = i, **args[1]))
     
     for i in args[3:]:
-        for j in range(tr << 1):
+        for j in range(tr * 2):
             vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
     
     clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *vectors, **args[2])')
@@ -474,7 +474,7 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
     if dx is None:
         dx = clip.width
     if dy is None:
-        dy = clip.height >> 1
+        dy = clip.height // 2
     
     second_args = {}
     
@@ -514,7 +514,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     num_p = clip.format.num_planes
     
     if planes is None:
-        planes = [*range(num_p)]
+        planes = list(range(num_p))
     elif isinstance(planes, int):
         planes = [planes]
     
@@ -713,7 +713,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     num_p = clip.format.num_planes
     
     if planes is None:
-        planes = [*range(num_p)]
+        planes = list(range(num_p))
     elif isinstance(planes, int):
         planes = [planes]
     
@@ -877,7 +877,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full << 1} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
@@ -891,7 +891,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if showmask:
         clip = so if space == GRAY else core.resize.Point(so, format = orig.format.id)
@@ -933,7 +933,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     dehaloed = dehalo_alpha(clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss)
     
     if contra > 0:
-        half = 128 << dehaloed.format.bits_per_sample - 8
+        half = 128 * factor
         
         bb = core.std.Convolution(dehaloed, [1, 2, 1, 2, 4, 2, 1, 2, 1])
         bb2 = core.rgvs.Repair(bb, core.rgvs.Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
@@ -962,7 +962,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     clip = core.std.MaskedMerge(clip, dehaloed, outside)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if showmask:
         if showmask == 1:
@@ -1030,7 +1030,7 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     clip = core.std.MaskedMerge(clip, fix_v, mask_v)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if showmask:
         clip = core.std.Expr([mask_h, mask_v], 'x y max')
@@ -1108,7 +1108,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         clip = core.std.MaskedMerge(orig_gray, clip, mask)
     
     if space == YUV:
-        clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
+        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     return clip
 
@@ -1121,9 +1121,9 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     h = clip.height
     
     if dx is None:
-        dx = w << 1
+        dx = w * 2
     if dy is None:
-        dy = h << 1
+        dy = h * 2
     if src_left is None:
         src_left = 0
     if src_top is None:
@@ -1137,7 +1137,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     elif src_height <= 0:
         src_height += h - src_top
     
-    if dx > w << 1 or dy > h << 1:
+    if dx > w * 2 or dy > h * 2:
         raise ValueError(f'{func_name}: upscale size is too big')
     
     def edi3_aa(clip: VideoNode, mode: int, order: bool, **upscaler_args: Any) -> VideoNode:
@@ -1364,7 +1364,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     num_p = clip.format.num_planes
     
     if planes is None:
-        planes = [*range(num_p)]
+        planes = list(range(num_p))
     elif isinstance(planes, int):
         planes = [planes]
     
