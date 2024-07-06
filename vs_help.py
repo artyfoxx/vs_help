@@ -559,17 +559,17 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
         if curve is None:
             return clip
         elif curve == 0:
-            expr1 = expr0 + ' x.PlaneStatsAverage - x +'
-            expr2 = expr0 + ' y.PlaneStatsAverage - y +'
+            expr1 = f'{expr0} x.PlaneStatsAverage - x +'
+            expr2 = f'{expr0} y.PlaneStatsAverage - y +'
         elif abs(curve) == 1:
-            expr1 = expr0 + ' x.PlaneStatsAverage / x *'
-            expr2 = expr0 + ' y.PlaneStatsAverage / y *'
+            expr1 = f'{expr0} x.PlaneStatsAverage / x *'
+            expr2 = f'{expr0} y.PlaneStatsAverage / y *'
         elif abs(curve) == 2:
-            expr1 = 'x ' + expr0 + ' log x.PlaneStatsAverage log / pow'
-            expr2 = 'y ' + expr0 + ' log y.PlaneStatsAverage log / pow'
+            expr1 = f'x {expr0} log x.PlaneStatsAverage log / pow'
+            expr2 = f'y {expr0} log y.PlaneStatsAverage log / pow'
         elif abs(curve) == 3:
-            expr1 = expr0 + ' 1 x.PlaneStatsAverage / pow x pow'
-            expr2 = expr0 + ' 1 y.PlaneStatsAverage / pow y pow'
+            expr1 = f'{expr0} 1 x.PlaneStatsAverage / pow x pow'
+            expr2 = f'{expr0} 1 y.PlaneStatsAverage / pow y pow'
         else:
             raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
         
