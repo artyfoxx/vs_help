@@ -1295,10 +1295,10 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
         else:
             raise ValueError(f'{func_name}: *args must be list[int] or int')
         
+        if (x := i[0]) < 0 or (x := i[-1]) >= num_f:
+            raise ValueError(f'{func_name}: {x} is out of frame range')
+        
         if len(i) == 2:
-            if (x := i[0]) >= num_f - 1 or x < 0 or (x := i[1]) >= num_f or x < 1:
-                raise ValueError(f'{func_name}: {x} is out of frame range')
-            
             if i[0] >= i[1]:
                 raise ValueError(f'{func_name}: {i[0]} must not be equal to or greater than {i[1]}')
             
@@ -1309,9 +1309,6 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
             else:
                 first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
         elif len(i) == 1:
-            if i[0] >= num_f or i[0] < 0:
-                raise ValueError(f'{func_name}: {i[0]} is out of frame range')
-            
             if i[0] == 0:
                 first = second[i[0]] + first[i[0] + 1:]
             elif i[0] == num_f - 1:
