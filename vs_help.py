@@ -146,16 +146,16 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    half = 128 << step
+    factor = 1 << clip.format.bits_per_sample - 8
+    half = 128 * factor
     
-    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 << step} - 4 *')
+    e1 = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], f'x y - {4 * factor} - 4 *')
     e2 = core.std.Maximum(e1).std.Maximum()
     e2 = core.std.Merge(e2, core.std.Maximum(e2)).std.Inflate()
     e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], 'x y 1.2 * -').std.Inflate()
     
     m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {1 << step} - 128 *').std.Maximum().std.Inflate()
+    m1 = core.std.Expr([clip, m0], f'x y - {1 * factor} - 128 *').std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
     m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
@@ -183,7 +183,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 << step)
+    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 * factor)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
@@ -358,8 +358,8 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    full = 256 << step
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor
     w = clip.width
     h = clip.height
     
@@ -389,7 +389,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
     mask = rg_fix(mask, rg)
-    mask = core.std.Expr(mask, f'x {cutoff << step} < 0 x {gain} {full} x + {full} / * * ?')
+    mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
     
     if 'exp_n' not in after_args:
         after_args['exp_n'] = 2
@@ -711,6 +711,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
     
     if planes is None:
         planes = list(range(num_p))
@@ -722,9 +723,9 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
-    if clamp:
+    if clamp > 0:
         shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
-                                  dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
+                                  dbl, 0, clamp * factor, planes = planes), planes = planes)
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes = planes)
     
@@ -763,9 +764,9 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
+    factor = 1 << clip.format.bits_per_sample - 8
     
-    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift * (1 << step)} - 128 *')
+    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift * factor} - 128 *')
     mask = core.tcanny.TCanny(clip, sigma = sqrt(expand * 2), mode = -1).std.Expr('x 16 *')
     
     for _ in range(iterations):
@@ -774,10 +775,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     for _ in range(iterations):
         clip = core.std.Minimum(clip)
     
-    clip = core.std.InvertMask(clip).std.BinarizeMask(80 << step)
+    clip = core.std.InvertMask(clip).std.BinarizeMask(80 * factor)
     
     if brz < 255:
-        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(brz << step)
+        clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(brz * factor)
     
     clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
     
@@ -869,9 +870,8 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    step = clip.format.bits_per_sample - 8
-    full = 256 << step
-    factor = 1 << step
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor
     m4 = lambda x: 16 if x < 16 else int(x / 4 + 0.5) * 4
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
@@ -1216,8 +1216,8 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
         raise ValueError(f'{func_name}: Please use 0...3 mask value')
     
     if boost:
-        step = clip.format.bits_per_sample - 8
-        clip = core.std.Expr(clip, f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *')
+        factor = 1 << clip.format.bits_per_sample - 8
+        clip = core.std.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {(256 * factor) - 1} *')
     
     if after_args:
         clip = after_mask(clip, **after_args)
@@ -1254,14 +1254,14 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
     if (bits := first.format.bits_per_sample) == second.format.bits_per_sample:
-        thr *= 1 << bits - 8
+        factor = 1 << bits - 8
     else:
         raise ValueError(f'{func_name}: Sample types of clips do not match')
     
     clip = core.std.Expr([first, second], f'x y - abs {scale} *')
     
     if thr:
-        clip = core.std.BinarizeMask(clip, thr)
+        clip = core.std.BinarizeMask(clip, thr * factor)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -1395,9 +1395,9 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
-        step = clip.format.bits_per_sample - 8
+        factor = 1 << clip.format.bits_per_sample - 8
         
-        expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 << step) - 1} 0 ? x min'
+        expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 * factor) - 1} 0 ? x min'
         clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
