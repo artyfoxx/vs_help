@@ -56,7 +56,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     back_args = {}
     
-    if len(crop_args) > 0:
+    if crop_args:
         if 'src_left' in crop_args:
             back_args['src_left'] = -crop_args['src_left'] * dx / w
         
@@ -722,7 +722,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
-    if clamp > 0:
+    if clamp:
         shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
                                   dbl, 0, clamp << clip.format.bits_per_sample - 8, planes = planes), planes = planes)
     else:
@@ -1005,10 +1005,8 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
         
         if mode == 'v':
             coord = [0, 1, 0, 0, 0, 0, 1, 0]
-        elif mode == 'h':
-            coord = [0, 0, 0, 1, 1, 0, 0, 0]
         else:
-            raise ValueError(f'{func_name}: {mode} is wrong mode')
+            coord = [0, 0, 0, 1, 1, 0, 0, 0]
         
         clip = core.std.Maximum(clip, coordinates = coord).std.Minimum(coordinates = coord)
         mask_1 = core.std.Maximum(clip, coordinates = coord)
@@ -1221,7 +1219,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
         step = clip.format.bits_per_sample - 8
         clip = core.std.Expr(clip, f'x {128 << step} / 0.86 {offset} + pow {(256 << step) - 1} *')
     
-    if len(after_args) > 0:
+    if after_args:
         clip = after_mask(clip, **after_args)
     
     return clip
@@ -1262,7 +1260,7 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     
     clip = core.std.Expr([first, second], f'x y - abs {scale} *')
     
-    if thr > 0:
+    if thr:
         clip = core.std.BinarizeMask(clip, thr)
     
     if rg:
@@ -1306,7 +1304,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
             raise ValueError(f'{func_name}: *args must be list[int] or int')
         
         if len(i) == 2:
-            if (x := i[0]) >= num_f - 1 or (x := i[0]) < 0 or (x := i[1]) >= num_f or (x := i[1]) < 1:
+            if (x := i[0]) >= num_f - 1 or x < 0 or (x := i[1]) >= num_f or x < 1:
                 raise ValueError(f'{func_name}: {x} is out of frame range')
             
             if i[0] >= i[1]:
