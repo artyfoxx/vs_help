@@ -73,7 +73,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
                 crop_args['src_height'] += h - crop_args.get('src_top', 0)
             back_args['src_height'] = (dy << 1) - crop_args['src_height'] * dy / h
         
-        if not all((x := i) in back_args for i in crop_args):
+        if any((x := i) not in back_args for i in crop_args):
             raise ValueError(f'{func_name}: Unsupported key {x} in crop_args')
     
     space = clip.format.color_family
@@ -1142,31 +1142,29 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     if dx > w << 1 or dy > h << 1:
         raise ValueError(f'{func_name}: upscale size is too big')
     
-    def edi3_aa(clip: VideoNode, mode: int, order: bool, **edi3_args: Any) -> VideoNode:
+    def edi3_aa(clip: VideoNode, mode: int, order: bool, **upscaler_args: Any) -> VideoNode:
         
         if order:
             clip = core.std.Transpose(clip)
         
         if mode == 1:
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **edi3_args)
+            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
         elif mode == 2:
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
             clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **edi3_args)
-        elif mode == 3:
-            eedi3_args = {i:edi3_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in edi3_args}
-            znedi3_args = {i:edi3_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in edi3_args}
+            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
+        else:
+            eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
+            znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
             
-            if not all((x := i) in eedi3_args or x in znedi3_args for i in edi3_args):
+            if any((x := i) not in eedi3_args or x not in znedi3_args for i in upscaler_args):
                 raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
             
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
             clip = core.std.Transpose(clip)
             clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-        else:
-            raise ValueError(f'{func_name}: Please use 1...3 mode value')
         
         if not order:
             clip = core.std.Transpose(clip)
@@ -1399,7 +1397,7 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
         else:
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
-    if borders is not None:
+    if borders:
         if len(borders) == 4:
             pass
         elif len(borders) < 4:
@@ -1427,7 +1425,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
         output = f'field_diffs_mode_{mode}_thr_{thr:.0e}.txt'
     
     num_f = clip.num_frames
-    field_diffs = [0] * num_f
+    field_diffs = [0.0] * num_f
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
