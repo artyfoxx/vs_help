@@ -1225,7 +1225,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     return clip
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              flatten: int = 0, **after_args: Any) -> VideoNode:
+              **after_args: Any) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1266,17 +1266,8 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
-    if flatten > 0:
-        for i in range(1, flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y max z max')
-    elif flatten < 0:
-        for i in range(1, -flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
-    
-    if 'exp_n' not in after_args:
-        after_args['exp_n'] = 1
-    
-    clip = after_mask(clip, **after_args)
+    if after_args:
+        clip = after_mask(clip, **after_args)
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
@@ -1331,7 +1322,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
     
     return first
 
-def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int = 0, **after_args: Any) -> VideoNode:
+def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args: Any) -> VideoNode:
     
     func_name = 'titles_mask'
     
@@ -1354,25 +1345,16 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, flatten: int
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
-    if flatten > 0:
-        for i in range(1, flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y max z max')
-    elif flatten < 0:
-        for i in range(1, -flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], 'x y min z min')
-    
-    if 'exp_n' not in after_args:
-        after_args['exp_n'] = 1
-    
-    clip = after_mask(clip, **after_args)
+    if after_args:
+        clip = after_mask(clip, **after_args)
     
     if space_f == YUV:
         clip = core.resize.Point(clip, format = format_id)
     
     return clip
 
-def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | list[int] | None = None,
-                **after_args: int) -> VideoNode:
+def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = None, planes: int | list[int] | None = None,
+               **after_args: int) -> VideoNode:
     
     func_name = 'after_mask'
     
@@ -1385,6 +1367,15 @@ def after_mask(clip: VideoNode, borders: list[int] | None = None, planes: int | 
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
+    
+    if flatten > 0:
+        expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
+        for i in range(1, flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
+    elif flatten < 0:
+        expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
+        for i in range(1, -flatten + 1):
+            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
     
     comparison = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
     
