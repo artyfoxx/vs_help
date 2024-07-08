@@ -301,16 +301,16 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         
         return fix_line
     
-    sample = ['x', 0, None, 0, 1, 0]
+    defaults = ['x', 0, None, 0, 1, 0]
     
     for i in args:
         if isinstance(i, str):
-            i = [i] + sample[1:]
+            i = [i] + defaults[1:]
         elif isinstance(i, list):
             if len(i) == 6:
                 pass
             elif len(i) < 6:
-                i += sample[len(i):]
+                i += defaults[len(i):]
             else:
                 raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
         else:
@@ -1364,12 +1364,12 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
     
-    comparison = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
+    matching = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
     
     for i in after_args:
-        if i in comparison:
+        if i in matching:
             for _ in range(after_args[i]):
-                clip = eval(f'core.std.{comparison[i]}(clip, planes = planes)')
+                clip = eval(f'core.std.{matching[i]}(clip, planes = planes)')
         else:
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
@@ -1377,8 +1377,8 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         if len(borders) == 4:
             pass
         elif len(borders) < 4:
-            sample = [0, clip.width - 1, 0, clip.height - 1]
-            borders += sample[len(borders):]
+            defaults = [0, clip.width - 1, 0, clip.height - 1]
+            borders += defaults[len(borders):]
         else:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
