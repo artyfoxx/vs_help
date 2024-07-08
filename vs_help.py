@@ -1394,6 +1394,9 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
     
     func_name = 'search_field_diffs'
     
+    if mode < 0 or mode > 7:
+        raise ValueError(f'{func_name}: Please use 0...7 mode value')
+    
     if output is None:
         output = f'field_diffs_mode_{mode}_thr_{thr:.0e}.txt'
     
@@ -1417,7 +1420,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
                         
                         if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) > result / divisor:
                             continue
-                    elif mode in {6, 7}:
+                    else:
                         result = max(abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i]),
                                      abs(field_diffs[i + 1 if i < num_f - 1 else num_f - 1] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]),
                                      abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]),
@@ -1426,8 +1429,6 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
                         if abs(field_diffs[i - 1 if i > 0 else 0] - field_diffs[i + 2 if i < num_f - 2 else num_f - 1]) > result / divisor or abs(
                                field_diffs[i] - field_diffs[i + 1 if i < num_f - 1 else num_f - 1]) <= result:
                             continue
-                    else:
-                        raise ValueError(f'{func_name}: Please use 0...7 mode value')
                     
                     if result >= thr:
                         file.write(f'{i} {result:.20f}\n')
