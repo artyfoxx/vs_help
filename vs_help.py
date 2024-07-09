@@ -482,13 +482,13 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
         else:
             second_args[i] = descale_args[i]
     
-    clip = core.std.SeparateFields(clip, True)
-    clip = core.std.SetFieldBased(clip, 0)
+    clip = core.std.SeparateFields(clip, True).std.SetFieldBased(0)
+    fields = [clip[::2], clip[1::2]]
     
-    clip_tf = core.descale.Descale(clip[::2], dx, dy, **descale_args)
-    clip_bf = core.descale.Descale(clip[1::2], dx, dy, **second_args)
+    fields[0] = core.descale.Descale(fields[0], dx, dy, **descale_args)
+    fields[1] = core.descale.Descale(fields[1], dx, dy, **second_args)
     
-    clip = core.std.Interleave([clip_tf, clip_bf])
+    clip = core.std.Interleave(fields)
     clip = core.std.DoubleWeave(clip, True)[::2]
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -1427,11 +1427,11 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
         return clip
     
     temp = core.std.SeparateFields(clip, True)
-    top = temp[::2]
-    bottom = temp[1::2]
-    top = core.std.PlaneStats(top, bottom, plane = plane)
-    bottom = core.std.PlaneStats(bottom, plane = plane)
+    fields = [temp[::2], temp[1::2]]
     
-    clip = core.std.FrameEval(clip, partial(dump_diffs, clip = clip), prop_src = [top, bottom])
+    fields[0] = core.std.PlaneStats(*fields, plane = plane)
+    fields[1] = core.std.PlaneStats(fields[1], plane = plane)
+    
+    clip = core.std.FrameEval(clip, partial(dump_diffs, clip = clip), prop_src = fields)
     
     return clip
