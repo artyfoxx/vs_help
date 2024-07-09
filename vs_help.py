@@ -445,8 +445,8 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     vectors = []
     
     for i in range(1, tr + 1):
-        vectors.append(core.mv.Analyse(sup1, isb = True, delta = i, **args[1]))
-        vectors.append(core.mv.Analyse(sup1, isb = False, delta = i, **args[1]))
+        vectors += [core.mv.Analyse(sup1, isb = True, delta = i, **args[1])]
+        vectors += [core.mv.Analyse(sup1, isb = False, delta = i, **args[1])]
     
     for i in args[3:]:
         for j in range(tr * 2):
