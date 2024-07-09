@@ -362,20 +362,12 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     if dy is None:
         dy = h // 2
     
-    if kernel == 'bilinear':
-        rescaler = rescale.Bilinear()
-    elif kernel == 'bicubic':
+    if kernel == 'bicubic':
         rescaler = rescale.Bicubic(b, c)
     elif kernel == 'lanczos':
         rescaler = rescale.Lanczos(taps)
-    elif kernel == 'spline16':
-        rescaler = rescale.Spline16()
-    elif kernel == 'spline36':
-        rescaler = rescale.Spline36()
-    elif kernel == 'spline64':
-        rescaler = rescale.Spline64()
     else:
-        raise ValueError(f'{func_name}: {kernel} is unsupported kernel')
+        rescaler = eval(f'rescale.{kernel.capitalize()}()')
     
     if dx is None:
         resc = rescaler.rescale(clip, dy, h if frac else None)
@@ -405,7 +397,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
         if space == YUV and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError(f'{func_name}: "dx" or "dy" does not match the chroma subsampling of the output clip')
         
-        mask = eval(f'core.resize.{kernel.capitalize()}(mask, dx, dy)')
+        mask = core.resize.Bilinear(mask, dx, dy)
     
     if blur_more:
         mask = core.std.Convolution(mask, [1, 2, 1, 2, 4, 2, 1, 2, 1])
@@ -1046,20 +1038,12 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         w = clip.width
         h = clip.height
         
-        if kernel == 'bilinear':
-            rescaler = rescale.Bilinear()
-        elif kernel == 'bicubic':
+        if kernel == 'bicubic':
             rescaler = rescale.Bicubic(b, c)
         elif kernel == 'lanczos':
             rescaler = rescale.Lanczos(taps)
-        elif kernel == 'spline16':
-            rescaler = rescale.Spline16()
-        elif kernel == 'spline36':
-            rescaler = rescale.Spline36()
-        elif kernel == 'spline64':
-            rescaler = rescale.Spline64()
         else:
-            raise ValueError(f'{func_name}: {kernel} is unsupported kernel')
+            rescaler = eval(f'rescale.{kernel.capitalize()}()')
         
         if dx is None:
             dx = w / h * dy
