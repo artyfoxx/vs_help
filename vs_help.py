@@ -360,7 +360,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     h = clip.height
     
     if dy is None:
-        dy = h // 2
+        dy = h * 2 // 3
     
     if kernel == 'bicubic':
         rescaler = rescale.Bicubic(b, c)
