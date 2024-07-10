@@ -444,7 +444,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     
     return clip
 
-def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **descale_args: Any) -> VideoNode:
+def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff: bool = True, **descale_args: Any) -> VideoNode:
     '''
     Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
     The internal Descale functions are unloaded as usual.
@@ -470,14 +470,14 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, **de
         else:
             second_args[i] = descale_args[i]
     
-    clip = core.std.SeparateFields(clip, True).std.SetFieldBased(0)
+    clip = core.std.SeparateFields(clip, tff).std.SetFieldBased(0)
     fields = [clip[::2], clip[1::2]]
     
     fields[0] = core.descale.Descale(fields[0], dx, dy, **descale_args)
     fields[1] = core.descale.Descale(fields[1], dx, dy, **second_args)
     
     clip = core.std.Interleave(fields)
-    clip = core.std.DoubleWeave(clip, True)[::2]
+    clip = core.std.DoubleWeave(clip, tff)[::2]
     clip = core.std.SetFieldBased(clip, 0)
     
     return clip
