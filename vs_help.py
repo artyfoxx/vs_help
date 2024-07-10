@@ -1389,17 +1389,17 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
         
         if n == num_f - 1:
             if mode in {0, 1}:
-                result = [f'{i} {x:.20f}\n' for i in range(num_f) if (x := field_diffs[i]) >= thr]
+                result = (f'{i} {x:.20f}\n' for i in range(num_f) if (x := field_diffs[i]) >= thr)
             elif mode in {2, 3}:
-                result = [f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr]
+                result = (f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr)
             elif mode in {4, 5}:
-                result = [f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                          abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / divisor]
+                result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
+                          abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / divisor)
             else:
-                result = [f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
+                result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
                           abs(field_diffs[i + 1] - field_diffs[i + 2]), abs(field_diffs[i - 1] - field_diffs[i + 1]),
                           abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / divisor
-                          and abs(field_diffs[i] - field_diffs[i + 1]) > x]
+                          and abs(field_diffs[i] - field_diffs[i + 1]) > x)
             
             with open(output, 'w') as file:
                 file.writelines(result)
