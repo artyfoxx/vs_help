@@ -18,3 +18,5 @@ and some dependencies on them.
 * [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
 * [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
 * [fmtconv](https://github.com/EleonoreMizo/fmtconv)
+* [vapoursynth-frfun7](https://github.com/dubhater/vapoursynth-frfun7)
+* [vapoursynth-awarpsharp2](https://github.com/dubhater/vapoursynth-awarpsharp2)
