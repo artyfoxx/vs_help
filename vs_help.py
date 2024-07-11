@@ -3,6 +3,7 @@ All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Fl
 
 Functions:
     autotap3
+    lanczos_plus
     bion_dehalo
     fix_border
     mask_detail
@@ -36,7 +37,7 @@ from inspect import signature
 
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
     '''
-    Lanczos-based resize by "*.mp4 guy", ported from AviSynth version with minor additions.
+    Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor additions.
     It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
     '''
     
@@ -117,6 +118,84 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], [*range(orig.format.num_planes)], space)
+    
+    return clip
+
+def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0, thresh2: int | None = None,
+                 athresh: int = 256, sharp1: float = 1, sharp2: float = 4, blur1: float = 0.33, blur2: float = 1.25,
+                 mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 3, ltaps: int = 3, preblur: bool = False, depth: int = 2,
+                 wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> VideoNode:
+    '''
+    A resize based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor additions.
+    It came with autotap3, ported just to complete. Currently obsolete.
+    '''
+    
+    func_name = 'lanczos_plus'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    w = clip.width
+    h = clip.height
+    
+    if dx is None:
+        dx = w * 2
+    if dy is None:
+        dy = h * 2
+    if thresh2 is None:
+        thresh2 = ((thresh + 1) ** 2) * 64 // (thresh + 1)
+    
+    space = clip.format.color_family
+    thresh *= 1 << clip.format.bits_per_sample - 8
+    
+    if space == GRAY:
+        pass
+    elif space == YUV:
+        orig = clip
+        clip = core.std.ShufflePlanes(clip, 0, GRAY)
+    else:
+        raise ValueError(f'{func_name}: Unsupported color family')
+    
+    fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = mtaps1)
+    fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a = mtaps1)
+    fre2 = autotap3(fre1, x if (x := w // 16 * 8) >= 144 else 144, y if (y := h // 16 * 8) >= 144 else 144, mtaps3, athresh)
+    fre2 = autotap3(fre2, w, h, mtaps3, athresh)
+    m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
+    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, 2.01, 256, 256), x, y, filter_param_a = ttaps), dx, dy, filter_param_a = ttaps)
+    
+    d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
+    d2 = autotap3(d, dx, dy, mtaps3, athresh)
+    d3 = autotap3(autotap3(d, w, h, mtaps3, athresh), dx, dy, mtaps3, athresh)
+    d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'), core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
+    d5 = autotap3(d4, w, h, mtaps3, athresh)
+    
+    e = autotap3(core.std.MaskedMerge(d5, clip, m1), dx, dy, mtaps3, athresh)
+    e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
+    e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
+    e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
+    e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
+    
+    fd12 = core.resize.Lanczos(e, dx // w * dx // 16 * 16, dy // h * dy // 16 * 16, filter_param_a = mtaps2)
+    fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a = mtaps2)
+    m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
+    m12 = core.resize.Lanczos(m12, dx // 16 * 8, dy // 16 * 8, filter_param_a = mtaps2).resize.Lanczos(dx, dy, filter_param_a = mtaps2)
+    
+    e2 = autotap3(autotap3(e, w, h, mtaps3, athresh), dx, dy, mtaps3, athresh)
+    e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
+    e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
+    e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
+    e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
+    
+    e3 = core.std.MaskedMerge(core.std.Expr([e, e2], f'y x - {blur2} * x +'), core.std.Expr([e, e2], f'x y - {sharp2} * x +'), m12)
+    e3 = core.warp.AWarpSharp2(e3, thresh = wthresh, blur = wblur, depth = depth)
+    e3 = core.warp.AWarpSharp2(e3, thresh = wthresh, blur = wblur, depth = depth)
+    e3 = core.warp.AWarpSharp2(e3, thresh = wthresh, blur = wblur, depth = depth)
+    e3 = core.warp.AWarpSharp2(e3, thresh = wthresh, blur = wblur, depth = depth)
+    
+    clip = core.std.MaskedMerge(d4, e3, m2)
+    
+    if space == YUV:
+        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy)], [*range(orig.format.num_planes)], space)
     
     return clip
 
