@@ -124,7 +124,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
 
 def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0, thresh2: int | None = None,
                  athresh: int = 256, sharp1: float = 1, sharp2: float = 4, blur1: float = 0.33, blur2: float = 1.25,
-                 mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 3, ltaps: int = 3, preblur: bool = False, depth: int = 2,
+                 mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1, ltaps: int = 1, preblur: bool = False, depth: int = 2,
                  wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> VideoNode:
     '''
     A resize based on Lanczos and AWarpSharp2 from "*.mp4 guy", ported from AviSynth version with minor additions.
