@@ -584,7 +584,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     elif isinstance(planes, list):
         pass
     else:
-        raise ValueError(f'{func_name}: planes must be "int" or "list[int]"')
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
@@ -781,6 +781,10 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
+    elif isinstance(planes, list):
+        pass
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
@@ -1421,6 +1425,10 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
+    elif isinstance(planes, list):
+        pass
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
     if flatten > 0:
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
