@@ -51,6 +51,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     if dx is None:
         dx = w * 2
+    
     if dy is None:
         dy = h * 2
     
@@ -126,8 +127,8 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
                  mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 3, ltaps: int = 3, preblur: bool = False, depth: int = 2,
                  wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> VideoNode:
     '''
-    A resize based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor additions.
-    It came with autotap3, ported just to complete. Currently obsolete.
+    A resize based on Lanczos and AWarpSharp2 from "*.mp4 guy", ported from AviSynth version with minor additions.
+    It comes with autotap3, ported just for completion.
     '''
     
     func_name = 'lanczos_plus'
@@ -140,10 +141,12 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     
     if dx is None:
         dx = w * 2
+    
     if dy is None:
         dy = h * 2
+    
     if thresh2 is None:
-        thresh2 = ((thresh + 1) ** 2) * 64 // (thresh + 1)
+        thresh2 = (thresh + 1) ** 2 * 64 // (thresh + 1)
     
     space = clip.format.color_family
     thresh *= 1 << clip.format.bits_per_sample - 8
@@ -165,7 +168,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
-    d3 = autotap3(autotap3(d, w, h, mtaps3, athresh), dx, dy, mtaps3, athresh)
+    d3 = core.resize.Lanczos(core.resize.Lanczos(d, w, h, filter_param_a = ttaps), dx, dy, filter_param_a = ttaps)
     d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'), core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
     
@@ -180,7 +183,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
     m12 = core.resize.Lanczos(m12, dx // 16 * 8, dy // 16 * 8, filter_param_a = mtaps2).resize.Lanczos(dx, dy, filter_param_a = mtaps2)
     
-    e2 = autotap3(autotap3(e, w, h, mtaps3, athresh), dx, dy, mtaps3, athresh)
+    e2 = core.resize.Lanczos(core.resize.Lanczos(e, w, h, filter_param_a = ltaps), dx, dy, filter_param_a = ltaps)
     e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
     e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
     e2 = core.warp.AWarpSharp2(e2, thresh = wthresh, blur = wblur, depth = depth)
@@ -534,6 +537,7 @@ def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
     
     if dx is None:
         dx = clip.width
+    
     if dy is None:
         dy = clip.height // 2
     
@@ -577,6 +581,10 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
+    elif isinstance(planes, list):
+        pass
+    else:
+        raise ValueError(f'{func_name}: planes must be "int" or "list[int]"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
@@ -703,7 +711,7 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
 
 def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     '''
-    Alias for RemoveGrain. For internal use.
+    Alias for RemoveGrain. Redirects obsolete modes to internal functions-analogues of VapourSynth.
     '''
     
     func_name = 'rg_fix'
@@ -810,7 +818,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     if brz > 255 or brz < 0:
         raise ValueError(f'{func_name}: brz must be between 0 and 255')
-
+    
     space = clip.format.color_family
     
     if space == GRAY:
@@ -1096,9 +1104,9 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     
     return clip
 
-def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, order: int = 0, mode: int = 0,
-              desc_str: float = 0.3, kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3,
-              dx: int = None, dy: int = 720, dehalo: bool = False, masked: bool = False, frac: bool = True, **upscaler_args: Any) -> VideoNode:
+def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, desc_str: float = 0.3, mode: int = 1,
+              kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3, dx: int = None, dy: int = 720,
+              dehalo: bool = False, masked: bool = False, frac: bool = True, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'insane_aa'
     
@@ -1128,33 +1136,28 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
             dx = w / h * dy
         
         clip = rescaler.descale(clip, dx, dy, h if frac else None)
-        
-        kwargs = rescaler.descale_args.copy()
-        clip_sp = core.resize.Spline36(clip, **kwargs)
-        
+        clip_sp = core.resize.Spline36(clip, **rescaler.descale_args)
         clip = core.std.Merge(clip_sp, clip, desc_str)
         
         if dehalo:
             clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
         
-        upscaler_mod = partial(upscaler, mode = mode, order = order, **upscaler_args)
+        upscaler_mod = partial(upscaler, **upscaler_args)
         clip = rescaler.upscale(clip, w, h, upscaler_mod)
+    elif ext_aa.format.color_family == GRAY:
+        clip = ext_aa
     else:
-        if ext_aa.format.color_family == GRAY:
-            clip = ext_aa
-        else:
-            raise ValueError(f'{func_name}: The external AA should be GRAY')
+        raise ValueError(f'{func_name}: The external AA should be GRAY')
     
     if masked:
         if ext_mask is None:
-            mask = core.std.Sobel(orig_gray, scale = 2).std.Maximum()
+            ext_mask = core.std.Sobel(orig_gray, scale = 2).std.Maximum()
+        elif ext_mask.format.color_family == GRAY:
+            pass
         else:
-            if ext_mask.format.color_family == GRAY:
-                mask = ext_mask
-            else:
-                raise ValueError(f'{func_name}: The external mask should be GRAY')
+            raise ValueError(f'{func_name}: The external mask should be GRAY')
         
-        clip = core.std.MaskedMerge(orig_gray, clip, mask)
+        clip = core.std.MaskedMerge(orig_gray, clip, ext_mask)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -1171,16 +1174,21 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     
     if dx is None:
         dx = w * 2
+    
     if dy is None:
         dy = h * 2
+    
     if src_left is None:
         src_left = 0
+    
     if src_top is None:
         src_top = 0
+    
     if src_width is None:
         src_width = w
     elif src_width <= 0:
         src_width += w - src_left
+    
     if src_height is None:
         src_height = h
     elif src_height <= 0:
