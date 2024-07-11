@@ -146,7 +146,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
         dy = h * 2
     
     if thresh2 is None:
-        thresh2 = (thresh + 1) ** 2 * 64 // (thresh + 1)
+        thresh2 = (thresh + 1) * 64
     
     space = clip.format.color_family
     thresh *= 1 << clip.format.bits_per_sample - 8
@@ -161,7 +161,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     
     fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = mtaps1)
     fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a = mtaps1)
-    fre2 = autotap3(fre1, x if (x := w // 16 * 8) >= 144 else 144, y if (y := h // 16 * 8) >= 144 else 144, mtaps3, athresh)
+    fre2 = autotap3(fre1, x if (x := w // 16 * 8) > 144 else 144, y if (y := h // 16 * 8) > 144 else 144, mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
     m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, 2.01, 256, 256), x, y, filter_param_a = ttaps), dx, dy, filter_param_a = ttaps)
