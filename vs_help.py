@@ -1484,18 +1484,21 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
     
     return clip
 
-def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, planes: int | list[int] = 0) -> VideoNode:
+def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, divisor: float = 256, planes: int | list[int] = 0) -> VideoNode:
     
     func_name = 'mt_comb_mask'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
-    if thr1 < 0 or thr2 < 0 or thr1 > 256 or thr2 > 256:
-        raise ValueError(f'{func_name}: Please use 0...256 thr1 and thr2 value')
+    if thr1 < 0 or thr2 < 0 or thr1 > 65535 or thr2 > 65535:
+        raise ValueError(f'{func_name}: Please use 0...65535 thr1 and thr2 value')
     
     if thr1 > thr2:
         raise ValueError(f'{func_name}: thr1 must not be greater than thr2')
+    
+    if divisor <= 0:
+        raise ValueError(f'{func_name}: divisor must be greater than zero')
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1511,7 +1514,7 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, planes: in
     else:
         raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
     
-    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} <= 0 var@ {thr2 * power} > {256 * factor - 1} var@ {factor} / ? ?'
+    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {divisor * factor} / ? ?'
     clip = core.akarin.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
     
     return clip
