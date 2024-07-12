@@ -37,8 +37,12 @@ from inspect import signature
 
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
     '''
-    Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor additions.
-    It is well suited for downsampling. Cropping parameters added in the form of **kwargs.
+    Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    In comparison with the original, processing accuracy has been doubled, support for 8-16 bit depth
+    and crop parameters has been added, and dead code has been removed.
+    
+    dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
+    Cropping options are added as **kwargs. The key names are the same as in VapourSynth-resize.
     '''
     
     func_name = 'autotap3'
@@ -127,8 +131,13 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
                  mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1, ltaps: int = 1, preblur: bool = False, depth: int = 2,
                  wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> VideoNode:
     '''
-    A resize based on Lanczos and AWarpSharp2 from "*.mp4 guy", ported from AviSynth version with minor additions.
+    An upscaler based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    In comparison with the original, the mathematics for non-multiple resolutions has been improved, support for 8-16 bit depth
+    has been added, dead code and unnecessary calculations have been removed.
+    All dependent parameters have been recalculated from AWarpSharp to AWarpSharp2.
     It comes with autotap3, ported just for completion.
+    
+    dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
     '''
     
     func_name = 'lanczos_plus'
@@ -178,7 +187,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
     e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
     
-    fd12 = core.resize.Lanczos(e, dx // w * dx // 16 * 16, dy // h * dy // 16 * 16, filter_param_a = mtaps2)
+    fd12 = core.resize.Lanczos(e, int(dx ** 2 / w) // 16 * 16, int(dy ** 2 / h) // 16 * 16, filter_param_a = mtaps2)
     fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a = mtaps2)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
     m12 = core.resize.Lanczos(m12, dx // 16 * 8, dy // 16 * 8, filter_param_a = mtaps2).resize.Lanczos(dx, dy, filter_param_a = mtaps2)
