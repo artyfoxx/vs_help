@@ -26,6 +26,7 @@ Functions:
     titles_mask
     after_mask
     search_field_diffs
+    mt_comb_mask
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -83,12 +84,10 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     t1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = 1, **crop_args)
@@ -160,12 +159,10 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     space = clip.format.color_family
     thresh *= 1 << clip.format.bits_per_sample - 8
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = mtaps1)
@@ -227,12 +224,10 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -278,7 +273,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if m:
-        clip = e3 if space == GRAY else core.resize.Point(e3, format = orig.format.id)
+        clip = core.resize.Point(e3, format = orig.format.id) if space == YUV else e3
     
     return clip
 
@@ -305,11 +300,11 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     space = clip.format.color_family
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space == GRAY:
-        clips = [clip]
-    elif space == YUV:
+    if space == YUV:
         num_p = clip.format.num_planes
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+    elif space == GRAY:
+        clips = [clip]
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
@@ -398,21 +393,19 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         if isinstance(i, str):
             i = [i] + defaults[1:]
         elif isinstance(i, list):
-            if len(i) == 6:
-                pass
-            elif len(i) < 6:
+            if len(i) < 6:
                 i += defaults[len(i):]
-            else:
+            elif len(i) != 6:
                 raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
         else:
             raise ValueError(f'{func_name}: *args must be "list" or "str"')
         
         clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
     
-    if space == GRAY:
-        clip = clips[0]
-    else:
+    if space == YUV:
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
+    else:
+        clip = clips[0]
     
     return clip
 
@@ -435,14 +428,12 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         format_id = clip.format.id
         sub_w = clip.format.subsampling_w
         sub_h = clip.format.subsampling_h
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -590,9 +581,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
-    elif isinstance(planes, list):
-        pass
-    else:
+    elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
@@ -695,24 +684,22 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     if isinstance(curve, int):
         curve = [curve] * num_p
     elif isinstance(curve, list):
-        if len(curve) == num_p:
-            pass
-        elif len(curve) < num_p:
+        if len(curve) < num_p:
             curve += [curve[-1]] * (num_p - len(curve))
-        else:
+        elif len(curve) != num_p:
             raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
     else:
         raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
-    if space == GRAY:
-        clip = simple_average(clip, curve[0], weight, mode)
-    elif space == YUV:
+    if space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
             clips[i] = simple_average(clips[i], curve[i], weight, mode)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
+    elif space == GRAY:
+        clip = simple_average(clip, curve[0], weight, mode)
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
@@ -751,24 +738,22 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     if isinstance(mode, int):
         mode = [mode] * num_p
     elif isinstance(mode, list):
-        if len(mode) == num_p:
-            pass
-        elif len(mode) < num_p:
+        if len(mode) < num_p:
             mode += [mode[-1]] * (num_p - len(mode))
-        else:
+        elif len(mode) != num_p:
             raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
     else:
         raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
     
-    if space == GRAY:
-        clip = simple_fix(clip, mode[0])
-    elif space == YUV:
+    if space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
         
         for i in range(num_p):
             clips[i] = simple_fix(clips[i], mode[i])
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
+    elif space == GRAY:
+        clip = simple_fix(clip, mode[0])
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
@@ -790,9 +775,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
         planes = [*range(num_p)]
     elif isinstance(planes, int):
         planes = [planes]
-    elif isinstance(planes, list):
-        pass
-    else:
+    elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
@@ -834,12 +817,10 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         format_id = clip.format.id
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -886,7 +867,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         clip = core.std.Prewitt(clip, scale = scale)
     
     if isinstance(thr, list):
-        if num_p < len(thr):
+        if len(thr) > num_p:
             raise ValueError(f'{func_name}: "thr" must be shorter or the same length to number of planes, or "thr" must be "float"')
         
         clip = core.std.BinarizeMask(clip, [i * factor for i in thr])
@@ -896,9 +877,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         format_id = clip.format.id
         sub_w = clip.format.subsampling_w
         sub_h = clip.format.subsampling_h
@@ -914,7 +893,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
                 clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if 'exp_n' not in after_args:
@@ -940,12 +919,10 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -972,7 +949,7 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
     
     if showmask:
-        clip = so if space == GRAY else core.resize.Point(so, format = orig.format.id)
+        clip = core.resize.Point(so, format = orig.format.id) if space == YUV else so
     
     return clip
 
@@ -987,12 +964,10 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1044,13 +1019,13 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     
     if showmask:
         if showmask == 1:
-            clip = outside if space == GRAY else core.resize.Point(outside, format = orig.format.id)
+            clip = core.resize.Point(outside, format = orig.format.id) if space == YUV else outside
         elif showmask == 2:
-            clip = shrink if space == GRAY else core.resize.Point(shrink, format = orig.format.id)
+            clip = core.resize.Point(shrink, format = orig.format.id) if space == YUV else shrink
         elif showmask == 3:
-            clip = edges if space == GRAY else core.resize.Point(edges, format = orig.format.id)
+            clip = core.resize.Point(edges, format = orig.format.id) if space == YUV else edges
         elif showmask == 4:
-            clip = strong if space == GRAY else core.resize.Point(strong, format = orig.format.id)
+            clip = core.resize.Point(strong, format = orig.format.id) if space == YUV else strong
         else:
             raise ValueError(f'{func_name}: Please use 0...4 showmask value')
     
@@ -1065,12 +1040,10 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if hconv is None:
@@ -1125,11 +1098,11 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
     
     space = clip.format.color_family
     
-    if space == GRAY:
-        orig_gray = clip
-    elif space == YUV:
+    if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
+        orig_gray = clip
+    elif space == GRAY:
         orig_gray = clip
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
@@ -1165,9 +1138,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
     if masked:
         if ext_mask is None:
             ext_mask = core.std.Sobel(orig_gray, scale = 2).std.Maximum()
-        elif ext_mask.format.color_family == GRAY:
-            pass
-        else:
+        elif ext_mask.format.color_family != GRAY:
             raise ValueError(f'{func_name}: The external mask should be GRAY')
         
         clip = core.std.MaskedMerge(orig_gray, clip, ext_mask)
@@ -1308,19 +1279,15 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     space_f = first.format.color_family
     space_s = second.format.color_family
     
-    if space_f == GRAY:
-        pass
-    elif space_f == YUV:
+    if space_f == YUV:
         format_id = first.format.id
         first = core.std.ShufflePlanes(first, 0, GRAY)
-    else:
+    elif space_f != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family in the first clip')
     
-    if space_s == GRAY:
-        pass
-    elif space_s == YUV:
+    if space_s == YUV:
         second = core.std.ShufflePlanes(second, 0, GRAY)
-    else:
+    elif space_s != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
     if (bits := first.format.bits_per_sample) == second.format.bits_per_sample:
@@ -1359,9 +1326,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
     for i in args:
         if isinstance(i, int):
             i = [i]
-        elif isinstance(i, list):
-            pass
-        else:
+        elif not isinstance(i, list):
             raise ValueError(f'{func_name}: *args must be list[int] or int')
         
         if (x := i[0]) < 0 or (x := i[-1]) >= num_f:
@@ -1399,12 +1364,10 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     space = clip.format.color_family
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space == GRAY:
-        pass
-    elif space == YUV:
+    if space == YUV:
         format_id = clip.format.id
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    else:
+    elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     clip = core.std.BinarizeMask(clip, thr * factor)
@@ -1435,7 +1398,10 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     elif isinstance(planes, int):
         planes = [planes]
     elif isinstance(planes, list):
-        pass
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     else:
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
@@ -1458,12 +1424,10 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
     if borders:
-        if len(borders) == 4:
-            pass
-        elif len(borders) < 4:
+        if len(borders) < 4:
             defaults = [0, clip.width - 1, 0, clip.height - 1]
             borders += defaults[len(borders):]
-        else:
+        elif len(borders) != 4:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
         factor = 1 << clip.format.bits_per_sample - 8
@@ -1517,5 +1481,37 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
     fields[1] = core.std.PlaneStats(fields[1], plane = plane)
     
     clip = core.std.FrameEval(clip, partial(dump_diffs, clip = clip), prop_src = fields)
+    
+    return clip
+
+def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, planes: int | list[int] = 0) -> VideoNode:
+    
+    func_name = 'mt_comb_mask'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    if thr1 < 0 or thr2 < 0 or thr1 > 256 or thr2 > 256:
+        raise ValueError(f'{func_name}: Please use 0...256 thr1 and thr2 value')
+    
+    if thr1 > thr2:
+        raise ValueError(f'{func_name}: thr1 must not be greater than thr2')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    power = factor ** 2
+    
+    if isinstance(planes, int):
+        planes = [planes]
+    elif isinstance(planes, list):
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    
+    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} <= 0 var@ {thr2 * power} > {256 * factor - 1} var@ {factor} / ? ?'
+    clip = core.akarin.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
     
     return clip
