@@ -27,6 +27,9 @@ Functions:
     after_mask
     search_field_diffs
     mt_comb_mask
+    mt_binarize
+    delcomb
+    vinverse
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -184,7 +187,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
     e = core.warp.AWarpSharp2(e, thresh = wthresh, blur = wblur, depth = depth)
     
-    fd12 = core.resize.Lanczos(e, int(dx ** 2 / w) // 16 * 16, int(dy ** 2 / h) // 16 * 16, filter_param_a = mtaps2)
+    fd12 = core.resize.Lanczos(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, filter_param_a = mtaps2)
     fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a = mtaps2)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
     m12 = core.resize.Lanczos(m12, dx // 16 * 8, dy // 16 * 8, filter_param_a = mtaps2).resize.Lanczos(dx, dy, filter_param_a = mtaps2)
@@ -759,7 +762,8 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     return clip
 
-def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None,
+              **znedi3_args: Any) -> VideoNode:
     '''
     nnedi2aas by Didée, ported from AviSynth version with minor additions.
     '''
@@ -1437,8 +1441,8 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     return clip
 
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, mode: int = 0,
-                       output: str | None = None, plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode: int = 0, output: str | None = None,
+                       plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
@@ -1447,6 +1451,9 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
     
     if output is None:
         output = f'field_diffs_mode_{mode}_thr_{thr:.0e}.txt'
+    
+    if div <= 0:
+        raise ValueError(f'{func_name}: div must be greater than zero')
     
     num_f = clip.num_frames
     field_diffs = [0.0] * num_f
@@ -1462,11 +1469,11 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
                 result = (f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr)
             elif mode in {4, 5}:
                 result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                          abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / divisor)
+                          abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / div)
             else:
                 result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
                           abs(field_diffs[i + 1] - field_diffs[i + 2]), abs(field_diffs[i - 1] - field_diffs[i + 1]),
-                          abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / divisor
+                          abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / div
                           and abs(field_diffs[i] - field_diffs[i + 1]) > x)
             
             with open(output, 'w') as file:
@@ -1484,7 +1491,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, divisor: float = 2, 
     
     return clip
 
-def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, divisor: float = 256, planes: int | list[int] = 0) -> VideoNode:
+def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] = 0) -> VideoNode:
     
     func_name = 'mt_comb_mask'
     
@@ -1497,8 +1504,8 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, divisor: f
     if thr1 > thr2:
         raise ValueError(f'{func_name}: thr1 must not be greater than thr2')
     
-    if divisor <= 0:
-        raise ValueError(f'{func_name}: divisor must be greater than zero')
+    if div <= 0:
+        raise ValueError(f'{func_name}: div must be greater than zero')
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1514,7 +1521,94 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, divisor: f
     else:
         raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
     
-    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {divisor * factor} / ? ?'
+    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {div * factor} / ? ?'
     clip = core.akarin.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
+    
+    return clip
+
+def mt_binarize(clip: VideoNode, thr: float = 128, upper: bool = False, planes: int | list[int] = 0) -> VideoNode:
+    
+    func_name = 'mt_comb_mask'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    if isinstance(planes, int):
+        planes = [planes]
+    elif isinstance(planes, list):
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    
+    expr = f'x {thr * factor} > 0 {256 * factor - 1} ?' if upper else f'x {thr * factor} > {256 * factor - 1} 0 ?'
+    clip = core.std.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
+    
+    return clip
+
+def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = False, planes: int | list[int] = 0) -> VideoNode:
+    
+    func_name = 'delcomb'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    if isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    mask = mt_comb_mask(clip, 7, 7, planes = planes).std.Deflate(planes = planes).std.Deflate(planes = planes)
+    mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = planes)
+    mask = mt_binarize(core.std.Maximum(mask, planes = planes), thr1, planes = planes).std.Maximum(planes = planes)
+    
+    filt = core.std.MaskedMerge(clip, vinverse(clip, 2.3, planes = planes), mask, planes = planes, first_plane = fp)
+    
+    clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 / 256} > 1 0 ?')
+    
+    return clip
+
+def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0.25, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'vinverse'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    half = 128 * factor
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    vblur = core.std.Convolution(clip, [50, 99, 50], mode = 'v', planes = planes)
+    vblurD = core.std.MakeDiff(clip, vblur, planes = planes)
+    
+    expr0 = f'x x y - {sstr} * +'
+    Vshrp = core.std.Convolution(vblur, [1, 4, 6, 4, 1], mode = 'v', planes = planes)
+    Vshrp = core.std.Expr([vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
+    VshrpD = core.std.MakeDiff(Vshrp, vblur, planes = planes)
+    
+    expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD = core.std.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
+    
+    result = core.std.MergeDiff(Vblur, VlimD, planes = planes)
+    
+    if amnt > 254:
+        clip = result
+    elif amnt != 0:
+        amnt *= factor
+        expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+        clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
     
     return clip
