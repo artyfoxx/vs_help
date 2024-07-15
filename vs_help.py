@@ -862,21 +862,13 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
-    bits = clip.format.bits_per_sample
-    factor = 1 << bits - 8
     
     if fake_prewitt:
         clip = custom_mask(clip, 1, scale)
     else:
         clip = core.std.Prewitt(clip, scale = scale)
     
-    if isinstance(thr, list):
-        if len(thr) > num_p:
-            raise ValueError(f'{func_name}: "thr" must be shorter or the same length to number of planes, or "thr" must be "float"')
-        
-        clip = core.std.BinarizeMask(clip, [i * factor for i in thr])
-    else:
-        clip = core.std.BinarizeMask(clip, thr * factor)
+    clip = mt_binarize(clip, thr, planes = [*range(num_p)])
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -892,6 +884,8 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w > 0 or sub_h > 0:
+            bits = clip.format.bits_per_sample
+            
             clip = core.fmtc.resample(clip, w, h, kernel = 'spline', taps = 6)
             if bits != 16:
                 clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
@@ -1504,8 +1498,8 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
     if thr1 > thr2:
         raise ValueError(f'{func_name}: thr1 must not be greater than thr2')
     
-    if div <= 0:
-        raise ValueError(f'{func_name}: div must be greater than zero')
+    if div == 0:
+        raise ValueError(f'{func_name}: div must not be equal to zero')
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1526,7 +1520,7 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
     
     return clip
 
-def mt_binarize(clip: VideoNode, thr: float = 128, upper: bool = False, planes: int | list[int] = 0) -> VideoNode:
+def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = False, planes: int | list[int] = 0) -> VideoNode:
     
     func_name = 'mt_comb_mask'
     
@@ -1546,12 +1540,26 @@ def mt_binarize(clip: VideoNode, thr: float = 128, upper: bool = False, planes: 
     else:
         raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
     
-    expr = f'x {thr * factor} > 0 {256 * factor - 1} ?' if upper else f'x {thr * factor} > {256 * factor - 1} 0 ?'
-    clip = core.std.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
+    if isinstance(thr, int | float):
+        thr = [thr] * num_p
+    elif isinstance(thr, list):
+        if len(thr) < num_p:
+            thr += thr[-1] * (num_p - len(thr))
+        elif len(thr) > num_p:
+            raise ValueError(f'{func_name}: "thr" length must not be greater than the number of planes"')
+    else:
+        raise ValueError(f'{func_name}: "thr" must be "float" or "list[float]"')
+    
+    if upper:
+        expr = [f'x {thr[i] * factor} > 0 {256 * factor - 1} ?' for i in range(num_p)]
+    else:
+        expr = [f'x {thr[i] * factor} > {256 * factor - 1} 0 ?' for i in range(num_p)]
+    
+    clip = core.std.Expr(clip, [expr[i] if i in planes else f'{128 * factor}' for i in range(num_p)])
     
     return clip
 
-def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = False, planes: int | list[int] = 0) -> VideoNode:
+def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = False, mode: int = 0, planes: int | list[int] = 0) -> VideoNode:
     
     func_name = 'delcomb'
     
@@ -1567,7 +1575,16 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = Fals
     mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = planes)
     mask = mt_binarize(core.std.Maximum(mask, planes = planes), thr1, planes = planes).std.Maximum(planes = planes)
     
-    filt = core.std.MaskedMerge(clip, vinverse(clip, 2.3, planes = planes), mask, planes = planes, first_plane = fp)
+    if mode == 0:
+        filt = vinverse(clip, 2.3, planes = planes)
+    elif mode == 1:
+        filt = vinverse2(clip, 2.3, planes = planes)
+    elif mode == 2:
+        filt = daa(clip, planes = planes, nns = 4, qual = 2, pscrn = 4, exp = 2)
+    else:
+        raise ValueError(f'{func_name}: Please use 0...2 mode value')
+    
+    filt = core.std.MaskedMerge(clip, filt, mask, planes = planes, first_plane = fp)
     
     clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 / 256} > 1 0 ?')
     
