@@ -1544,7 +1544,7 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
         thr = [thr] * num_p
     elif isinstance(thr, list):
         if len(thr) < num_p:
-            thr += thr[-1] * (num_p - len(thr))
+            thr += [thr[-1]] * (num_p - len(thr))
         elif len(thr) > num_p:
             raise ValueError(f'{func_name}: "thr" length must not be greater than the number of planes"')
     else:
