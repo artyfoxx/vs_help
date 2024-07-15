@@ -1274,6 +1274,9 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     if first.num_frames != second.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
     
+    if first.format.bits_per_sample != second.format.bits_per_sample:
+        raise ValueError(f'{func_name}: Sample types of clips do not match')
+    
     space_f = first.format.color_family
     space_s = second.format.color_family
     
@@ -1288,15 +1291,10 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     elif space_s != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
-    if (bits := first.format.bits_per_sample) == second.format.bits_per_sample:
-        factor = 1 << bits - 8
-    else:
-        raise ValueError(f'{func_name}: Sample types of clips do not match')
-    
     clip = core.std.Expr([first, second], f'x y - abs {scale} *')
     
     if thr:
-        clip = core.std.BinarizeMask(clip, thr * factor)
+        clip = mt_binarize(clip, thr)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -1360,7 +1358,6 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
-    factor = 1 << clip.format.bits_per_sample - 8
     
     if space == YUV:
         format_id = clip.format.id
@@ -1368,7 +1365,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     elif space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    clip = core.std.BinarizeMask(clip, thr * factor)
+    clip = mt_binarize(clip, thr)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -1522,7 +1519,7 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
 
 def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = False, planes: int | list[int] = 0) -> VideoNode:
     
-    func_name = 'mt_comb_mask'
+    func_name = 'mt_binarize'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
