@@ -1495,8 +1495,8 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
     if thr1 > thr2:
         raise ValueError(f'{func_name}: thr1 must not be greater than thr2')
     
-    if div == 0:
-        raise ValueError(f'{func_name}: div must not be equal to zero')
+    if div <= 0:
+        raise ValueError(f'{func_name}: div must be greater than zero')
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1675,8 +1675,7 @@ def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
-    half = 128 * factor
+    half = 128 << clip.format.bits_per_sample - 8
     
     if planes is None:
         planes = [*range(num_p)]
