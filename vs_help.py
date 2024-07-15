@@ -1153,7 +1153,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
     return clip
 
 def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-            src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
+             src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'upscaler'
     
@@ -1591,13 +1591,13 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
-    vblur = core.std.Convolution(clip, [50, 99, 50], mode = 'v', planes = planes)
-    vblurD = core.std.MakeDiff(clip, vblur, planes = planes)
+    Vblur = core.std.Convolution(clip, [50, 99, 50], mode = 'v', planes = planes)
+    VblurD = core.std.MakeDiff(clip, Vblur, planes = planes)
     
     expr0 = f'x x y - {sstr} * +'
-    Vshrp = core.std.Convolution(vblur, [1, 4, 6, 4, 1], mode = 'v', planes = planes)
-    Vshrp = core.std.Expr([vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
-    VshrpD = core.std.MakeDiff(Vshrp, vblur, planes = planes)
+    Vshrp = core.std.Convolution(Vblur, [1, 4, 6, 4, 1], mode = 'v', planes = planes)
+    Vshrp = core.std.Expr([Vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
+    VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes = planes)
     
     expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
     VlimD = core.std.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
@@ -1610,5 +1610,75 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
         amnt *= factor
         expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
         clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0.25, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'vinverse2'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    half = 128 * factor
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    Vblur = sbr_v(clip, planes = planes)
+    VblurD = core.std.MakeDiff(clip, Vblur, planes = planes)
+    
+    expr0 = f'x x y - {sstr} * +'
+    Vshrp = core.std.Convolution(Vblur, [1, 2, 1], mode = 'v', planes = planes)
+    Vshrp  = core.std.Expr([Vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
+    VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes = planes)
+    
+    expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD  = core.std.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
+    
+    result = core.std.MergeDiff(Vblur, VlimD, planes = planes)
+    
+    if amnt > 254:
+        clip = result
+    elif amnt != 0:
+        amnt *= factor
+        expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+        clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'sbr_v'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    half = 128 * factor
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    rg11 = core.std.Convolution(clip, [1, 2, 1], mode = 'v', planes = planes)
+    rg11D = core.std.MakeDiff(clip, rg11, planes = planes)
+    
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    rg11DD = core.std.Convolution(rg11D, [1, 2, 1], mode = 'v', planes = planes)
+    rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes = planes)
+    rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
+    
+    clip = core.std.MakeDiff(clip, rg11DD, planes = planes)
     
     return clip
