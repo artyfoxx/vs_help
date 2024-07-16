@@ -35,10 +35,11 @@ Functions:
     sbr_v
     avs_blur
     avs_sharpen
+    mt_clamp
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
-from muvsfunc import haf_Clamp, haf_MinBlur, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
+from muvsfunc import haf_MinBlur, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -253,7 +254,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], 'x y 1.2 * -').std.Inflate()
     
     m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {1 * factor} - 128 *').std.Maximum().std.Inflate()
+    m1 = core.std.Expr([clip, m0], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
     m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
@@ -281,7 +282,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
-    clip = haf_Clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20 * factor)
+    clip = mt_clamp(clip, core.rgvs.Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20)
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], [*range(orig.format.num_planes)], space)
@@ -799,10 +800,8 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     dblD = core.std.MakeDiff(clip, dbl, planes = planes)
     
     if clamp > 0:
-        factor = 1 << clip.format.bits_per_sample - 8
-        
-        shrpD = core.std.MakeDiff(dbl, haf_Clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
-                                  dbl, 0, clamp * factor, planes = planes), planes = planes)
+        shrpD = core.std.MakeDiff(dbl, mt_clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
+                                  dbl, 0, clamp, planes = planes), planes = planes)
     else:
         shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes = planes)
     
@@ -1798,5 +1797,39 @@ def avs_sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, p
         raise ValueError(f'{func_name}: the "amount" allowable range is from -1.58 to +1.0 ')
     
     clip = avs_blur(clip, -amountH, -amountV, planes)
+    
+    return clip
+
+def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, overshoot: float = 0, undershoot: float = 0,
+             planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'mt_clamp'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.id != bright_limit.format.id or clip.format.id != dark_limit.format.id:
+        raise ValueError(f'{func_name}: "clip", "bright_limit" and "dark_limit" must have the same format')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif isinstance(planes, list):
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    
+    overshoot *= factor
+    undershoot *= factor
+    
+    expr = f'x y {overshoot} + > y {overshoot} + x z {undershoot} - < z {undershoot} - x ? ?'
+    clip = core.std.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
     
     return clip
