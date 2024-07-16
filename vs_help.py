@@ -68,6 +68,9 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     if dy is None:
         dy = h * 2
     
+    if dx == w and dy == h:
+        return core.resize.Spline36(clip, **crop_args)
+    
     back_args = {}
     
     if crop_args:
@@ -160,6 +163,9 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     
     if dy is None:
         dy = h * 2
+    
+    if dx <= w or dy <= h:
+        raise ValueError(f'{func_name}: this is an upscaler, dx and dy must be larger than the width and height')
     
     if thresh2 is None:
         thresh2 = (thresh + 1) * 64
