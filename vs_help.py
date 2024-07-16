@@ -30,10 +30,15 @@ Functions:
     mt_binarize
     delcomb
     vinverse
+    vinverse2
+    sbr
+    sbr_v
+    avs_blur
+    avs_sharpen
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
-from muvsfunc import Blur, haf_Clamp, haf_MinBlur, sbr, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
+from muvsfunc import haf_Clamp, haf_MinBlur, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -111,7 +116,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     expr = f'x y - {thresh} *'
     
-    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(avs_blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
     cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
@@ -1667,6 +1672,35 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     
     return clip
 
+def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'sbr'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    half = 128 << clip.format.bits_per_sample - 8
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    rg11 = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+    rg11D = core.std.MakeDiff(clip, rg11, planes = planes)
+    
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    rg11DD = core.std.Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+    rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes = planes)
+    rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
+    
+    clip = core.std.MakeDiff(clip, rg11DD, planes = planes)
+    
+    return clip
+
 def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'sbr_v'
@@ -1693,5 +1727,59 @@ def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, rg11DD, planes = planes)
+    
+    return clip
+
+def avs_blur(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'avs_blur'
+    
+    num_p = clip.format.num_planes
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif isinstance(planes, list):
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    
+    if amountV is None:
+        amountV = amountH
+    
+    if amountH < -1 or amountV < -1 or amountH > 1.58 or amountV > 1.58:
+        raise ValueError(f'{func_name}: the "amount" allowable range is from -1.0 to +1.58 ')
+    
+    center_h = 1 / 2 ** amountH
+    side_h = (1 - 1 / 2 ** amountH) / 2
+    
+    center_v = 1 / 2 ** amountV
+    side_v = (1 - 1 / 2 ** amountV) / 2
+    
+    if amountH:
+        expr0 = f'x[-1,0] x[1,0] + {side_h} * x {center_h} * +'
+        clip = core.akarin.Expr(clip, [expr0 if i in planes else '' for i in range(num_p)])
+    
+    if amountV:
+        expr1 = f'x[0,-1] x[0,1] + {side_v} * x {center_v} * +'
+        clip = core.akarin.Expr(clip, [expr1 if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def avs_sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'avs_blur'
+    
+    if amountV is None:
+        amountV = amountH
+    
+    if amountH < -1.58 or amountV < -1.58 or amountH > 1 or amountV > 1:
+        raise ValueError(f'{func_name}: the "amount" allowable range is from -1.58 to +1.0 ')
+    
+    clip = avs_blur(clip, -amountH, -amountV, planes)
     
     return clip
