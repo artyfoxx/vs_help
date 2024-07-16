@@ -624,7 +624,7 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
             expr0 = 'x.PlaneStatsAverage'
         elif weight == 1:
             expr0 = 'y.PlaneStatsAverage'
-        elif weight > 0 and weight < 1:
+        elif 0 < weight < 1:
             expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
         else:
             raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
@@ -1487,7 +1487,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
     
     return clip
 
-def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] = 0) -> VideoNode:
+def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'mt_comb_mask'
     
@@ -1507,7 +1507,9 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
     factor = 1 << clip.format.bits_per_sample - 8
     power = factor ** 2
     
-    if isinstance(planes, int):
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
         planes = [planes]
     elif isinstance(planes, list):
         if len(planes) > num_p:
@@ -1522,7 +1524,7 @@ def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float
     
     return clip
 
-def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = False, planes: int | list[int] = 0) -> VideoNode:
+def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = False, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'mt_binarize'
     
@@ -1532,7 +1534,9 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if isinstance(planes, int):
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
         planes = [planes]
     elif isinstance(planes, list):
         if len(planes) > num_p:
@@ -1561,21 +1565,25 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     
     return clip
 
-def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = False, mode: int = 0, planes: int | list[int] = 0) -> VideoNode:
+def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'delcomb'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
-    if isinstance(planes, int):
+    num_p = clip.format.num_planes
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
         planes = [planes]
     elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
-    mask = mt_comb_mask(clip, 7, 7, planes = planes).std.Deflate(planes = planes).std.Deflate(planes = planes)
-    mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = planes)
-    mask = mt_binarize(core.std.Maximum(mask, planes = planes), thr1, planes = planes).std.Maximum(planes = planes)
+    mask = mt_comb_mask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
+    mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = 0)
+    mask = mt_binarize(core.std.Maximum(mask, planes = 0), thr1, planes = 0).std.Maximum(planes = 0)
     
     if mode == 0:
         filt = vinverse(clip, 2.3, planes = planes)
@@ -1586,7 +1594,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, fp: bool = Fals
     else:
         raise ValueError(f'{func_name}: Please use 0...2 mode value')
     
-    filt = core.std.MaskedMerge(clip, filt, mask, planes = planes, first_plane = fp)
+    filt = core.std.MaskedMerge(clip, filt, mask, planes = planes, first_plane = True)
     
     clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 / 256} > 1 0 ?')
     
@@ -1733,6 +1741,9 @@ def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
 def avs_blur(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'avs_blur'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
     
