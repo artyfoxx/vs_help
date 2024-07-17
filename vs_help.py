@@ -1829,7 +1829,7 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     overshoot *= factor
     undershoot *= factor
     
-    expr = f'x y {overshoot} + min z {undershoot} - max'
-    clip = core.std.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
+    expr = f'x z {undershoot} - y {overshoot} + clamp'
+    clip = core.akarin.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
     
     return clip
