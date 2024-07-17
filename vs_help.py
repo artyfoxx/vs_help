@@ -1905,7 +1905,7 @@ def dither_luma_rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     k = (s0 - 1) * c
     t = f'x {16 * factor} - {219 * factor} / 0 1 clamp'
     y = f'{k} {1 + c} {(1 + c) * c} {t} {c} + / - * {t} 1 {k} - * + {256 * factor} *'
-    uv = f'x {half} - {half} * {112 * factor} / {half} +'
+    uv = f'x {half} - 128 * 112 / {half} +'
     
     expr = [y] + [uv] * (num_p - 1)
     clip = core.akarin.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
