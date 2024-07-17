@@ -36,10 +36,11 @@ Functions:
     avs_blur
     avs_sharpen
     mt_clamp
+    min_blur
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
-from muvsfunc import haf_MinBlur, rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
+from muvsfunc import rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -269,7 +270,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     else:
         raise ValueError(f'{func_name}: Please use 1...4 mask value')
     
-    blurr = haf_MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
+    blurr = min_blur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
         dh1 = core.std.MaskedMerge(core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1), blurr, e3)
@@ -313,7 +314,6 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
-    factor = 1 << clip.format.bits_per_sample - 8
     
     if space == YUV:
         num_p = clip.format.num_planes
@@ -381,21 +381,18 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         if curve < 0:
             target_line = core.std.Invert(target_line)
             donor_line = core.std.Invert(donor_line)
-            limit *= -factor
-        else:
-            limit *= factor
+            limit = -limit
         
         target_line = core.std.PlaneStats(target_line)
         donor_line = core.std.PlaneStats(donor_line)
         
         fix_line = core.akarin.Expr([target_line, donor_line], expr)
+        fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
         
         if limit > 0:
-            fix_line = core.std.Expr([target_line, fix_line], f'x y > x y x - {limit} < y x {limit} + ? ?')
+            fix_line = mt_clamp(fix_line, target_line, target_line, limit, 0)
         elif limit < 0:
-            fix_line = core.std.Expr([target_line, fix_line], f'x y < x y x - {limit} > y x {limit} + ? ?')
-        
-        fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+            fix_line = mt_clamp(fix_line, target_line, target_line, 0, -limit)
         
         if curve < 0:
             fix_line = core.std.Invert(fix_line)
@@ -1831,5 +1828,51 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     
     expr = f'x z {undershoot} - y {overshoot} + clamp'
     clip = core.akarin.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def min_blur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'min_blur'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    half = 128 << clip.format.bits_per_sample - 8
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    if r == 1:
+        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+        
+        RG4D = core.std.Median(clip, planes = planes)
+        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+    elif r == 2:
+        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+        
+        RG4D = core.ctmf.CTMF(clip, 2, planes = planes)
+        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+    else:
+        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+        
+        RG4D = core.ctmf.CTMF(clip, 3, planes = planes)
+        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+    
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
+    
+    clip = core.std.MakeDiff(clip, DD, planes = planes)
     
     return clip
