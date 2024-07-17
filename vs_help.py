@@ -501,7 +501,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     return mask
 
-def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = True) -> VideoNode:
+def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, fine_dark: bool = False) -> VideoNode:
     '''
     Just an alias for mv.Degrain
     The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
@@ -522,7 +522,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
     if len(args) < 3:
         args += ({},) * (3 - len(args))
     
-    if dark:
+    if fine_dark:
         sup1 = haf_DitherLumaRebuild(clip, s0 = 1).mv.Super(**args[0])
         sup2 = core.mv.Super(clip, levels = 1, **args[0])
     else:
@@ -534,7 +534,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, dark: bool = 
         for j in range(tr * 2):
             vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if dark else sup1, *vectors, **args[2])')
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if fine_dark else sup1, *vectors, **args[2])')
     
     return clip
 
