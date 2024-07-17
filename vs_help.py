@@ -37,10 +37,11 @@ Functions:
     avs_sharpen
     mt_clamp
     min_blur
+    dither_luma_rebuild
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
-from muvsfunc import rescale, haf_DitherLumaRebuild, haf_mt_expand_multi, haf_mt_inpand_multi
+from muvsfunc import rescale, haf_mt_expand_multi, haf_mt_inpand_multi
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -501,7 +502,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     
     return mask
 
-def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, fine_dark: bool = False) -> VideoNode:
+def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> VideoNode:
     '''
     Just an alias for mv.Degrain
     The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
@@ -522,8 +523,8 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, fine_dark: bo
     if len(args) < 3:
         args += ({},) * (3 - len(args))
     
-    if fine_dark:
-        sup1 = haf_DitherLumaRebuild(clip, s0 = 1).mv.Super(**args[0])
+    if full_range:
+        sup1 = dither_luma_rebuild(clip, s0 = 1).mv.Super(rfilter = 4, **args[0])
         sup2 = core.mv.Super(clip, levels = 1, **args[0])
     else:
         sup1 = core.mv.Super(clip, **args[0])
@@ -534,7 +535,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, fine_dark: bo
         for j in range(tr * 2):
             vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if fine_dark else sup1, *vectors, **args[2])')
+    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if full_range else sup1, *vectors, **args[2])')
     
     return clip
 
@@ -1874,5 +1875,39 @@ def min_blur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> 
     DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, DD, planes = planes)
+    
+    return clip
+
+def dither_luma_rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'dither_luma_rebuild'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    half = 128 * factor
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif isinstance(planes, list):
+        if len(planes) > num_p:
+            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        elif any(not isinstance(i, int) for i in planes):
+            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    else:
+        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    
+    
+    k = (s0 - 1) * c
+    t = f'x {16 * factor} - {219 * factor} / 0 1 clamp'
+    y = f'{k} {1 + c} {(1 + c) * c} {t} {c} + / - * {t} 1 {k} - * + {256 * factor} *'
+    uv = f'x {half} - {half} * {112 * factor} / {half} +'
+    
+    expr = [y] + [uv] * (num_p - 1)
+    clip = core.akarin.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
