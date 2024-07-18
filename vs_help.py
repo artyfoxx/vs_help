@@ -3,22 +3,22 @@ All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Fl
 
 Functions:
     autotap3
-    lanczos_plus
+    Lanczosplus
     bion_dehalo
     fix_border
-    mask_detail
+    MaskDetail
     degrain_n
-    destripe
+    Destripe
     daa
     average_fields
     rg_fix
     znedi3aas
     dehalo_mask
     tp7_deband_mask
-    dehalo_alpha
-    fine_dehalo
-    fine_dehalo2
-    insane_aa
+    DeHalo_alpha
+    FineDehalo
+    FineDehalo2
+    InsaneAA
     upscaler
     custom_mask
     diff_mask
@@ -26,18 +26,20 @@ Functions:
     titles_mask
     after_mask
     search_field_diffs
-    mt_comb_mask
+    MTCombMask
     mt_binarize
     delcomb
     vinverse
     vinverse2
     sbr
-    sbr_v
-    avs_blur
-    avs_sharpen
+    sbrV
+    avs_Blur
+    avs_Sharpen
     mt_clamp
-    min_blur
-    dither_luma_rebuild
+    MinBlur
+    Dither_Luma_Rebuild
+    mt_expand_multi
+    mt_inpand_multi
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -122,7 +124,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     expr = f'x y - {thresh} *'
     
-    cp1 = core.std.MaskedMerge(avs_blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(avs_Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
     cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a = mtaps3, **crop_args))
     m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
@@ -139,7 +141,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     return clip
 
-def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0, thresh2: int | None = None,
+def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0, thresh2: int | None = None,
                  athresh: int = 256, sharp1: float = 1, sharp2: float = 4, blur1: float = 0.33, blur2: float = 1.25,
                  mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1, ltaps: int = 1, preblur: bool = False, depth: int = 2,
                  wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> VideoNode:
@@ -153,7 +155,7 @@ def lanczos_plus(clip: VideoNode, dx: int | None = None, dy: int | None = None, 
     dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
     '''
     
-    func_name = 'lanczos_plus'
+    func_name = 'Lanczosplus'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -271,7 +273,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     else:
         raise ValueError(f'{func_name}: Please use 1...4 mask value')
     
-    blurr = min_blur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
+    blurr = MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
     if rg:
         dh1 = core.std.MaskedMerge(core.rgvs.Repair(clip, core.rgvs.RemoveGrain(clip, 21), 1), blurr, e3)
@@ -422,7 +424,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     return clip
 
-def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
+def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                 gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
                 taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> VideoNode:
     '''
@@ -434,7 +436,7 @@ def mask_detail(clip: VideoNode, dx: float | None = None, dy: float | None = Non
     Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
     '''
     
-    func_name = 'mask_detail'
+    func_name = 'MaskDetail'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -524,7 +526,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, full_range: b
         args += ({},) * (3 - len(args))
     
     if full_range:
-        sup1 = dither_luma_rebuild(clip, s0 = 1).mv.Super(rfilter = 4, **args[0])
+        sup1 = Dither_Luma_Rebuild(clip, s0 = 1).mv.Super(rfilter = 4, **args[0])
         sup2 = core.mv.Super(clip, levels = 1, **args[0])
     else:
         sup1 = core.mv.Super(clip, **args[0])
@@ -539,14 +541,14 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, full_range: b
     
     return clip
 
-def destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff: bool = True, **descale_args: Any) -> VideoNode:
+def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff: bool = True, **descale_args: Any) -> VideoNode:
     '''
     Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
     The internal Descale functions are unloaded as usual.
     The function values that differ for the upper and lower fields are indicated in the list.
     '''
     
-    func_name = 'destripe'
+    func_name = 'Destripe'
     
     if dx is None:
         dx = clip.width
@@ -912,10 +914,10 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     return clip
 
-def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: float = 1.0, brightstr: float = 1.0,
+def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: float = 1.0, brightstr: float = 1.0,
                  lowsens: float = 50, highsens: float = 50, ss: float = 1.5, showmask: bool = False) -> VideoNode:
     
-    func_name = 'dehalo_alpha'
+    func_name = 'DeHalo_alpha'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -959,11 +961,11 @@ def dehalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     
     return clip
 
-def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
+def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
                 ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, fake_prewitt = False) -> VideoNode:
     
-    func_name = 'fine_dehalo'
+    func_name = 'FineDehalo'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -989,7 +991,7 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     rx_i = int(rx + 0.5)
     ry_i = int(ry + 0.5)
     
-    dehaloed = dehalo_alpha(clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss)
+    dehaloed = DeHalo_alpha(clip, rx, ry, darkstr, brightstr, lowsens, highsens, ss)
     
     if contra > 0:
         half = 128 * factor
@@ -1037,9 +1039,9 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
     
     return clip
 
-def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None, showmask: bool = False) -> VideoNode:
+def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None, showmask: bool = False) -> VideoNode:
     
-    func_name = 'fine_dehalo2'
+    func_name = 'FineDehalo2'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1096,11 +1098,11 @@ def fine_dehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[in
     
     return clip
 
-def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, desc_str: float = 0.3, mode: int = 1,
+def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = None, desc_str: float = 0.3, mode: int = 1,
               kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3, dx: int = None, dy: int = 720,
               dehalo: bool = False, masked: bool = False, frac: bool = True, **upscaler_args: Any) -> VideoNode:
     
-    func_name = 'insane_aa'
+    func_name = 'InsaneAA'
     
     space = clip.format.color_family
     
@@ -1132,7 +1134,7 @@ def insane_aa(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = N
         clip = core.std.Merge(clip_sp, clip, desc_str)
         
         if dehalo:
-            clip = fine_dehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
+            clip = FineDehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
         
         upscaler_mod = partial(upscaler, **upscaler_args)
         clip = rescaler.upscale(clip, w, h, upscaler_mod)
@@ -1490,9 +1492,9 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
     
     return clip
 
-def mt_comb_mask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
+def MTCombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'mt_comb_mask'
+    func_name = 'MTCombMask'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1584,7 +1586,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
-    mask = mt_comb_mask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
+    mask = MTCombMask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
     mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = 0)
     mask = mt_binarize(core.std.Maximum(mask, planes = 0), thr1, planes = 0).std.Maximum(planes = 0)
     
@@ -1661,7 +1663,7 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     elif not isinstance(planes, list):
         raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
     
-    Vblur = sbr_v(clip, planes = planes)
+    Vblur = sbrV(clip, planes = planes)
     VblurD = core.std.MakeDiff(clip, Vblur, planes = planes)
     
     expr0 = f'x x y - {sstr} * +'
@@ -1712,9 +1714,9 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     return clip
 
-def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'sbr_v'
+    func_name = 'sbrV'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1741,9 +1743,9 @@ def sbr_v(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     return clip
 
-def avs_blur(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def avs_Blur(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'avs_blur'
+    func_name = 'avs_Blur'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1784,9 +1786,9 @@ def avs_blur(clip: VideoNode, amountH: float, amountV: float | None = None, plan
     
     return clip
 
-def avs_sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def avs_Sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'avs_blur'
+    func_name = 'avs_Sharpen'
     
     if amountV is None:
         amountV = amountH
@@ -1794,7 +1796,7 @@ def avs_sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, p
     if amountH < -1.58 or amountV < -1.58 or amountH > 1 or amountV > 1:
         raise ValueError(f'{func_name}: the "amount" allowable range is from -1.58 to +1.0 ')
     
-    clip = avs_blur(clip, -amountH, -amountV, planes)
+    clip = avs_Blur(clip, -amountH, -amountV, planes)
     
     return clip
 
@@ -1832,9 +1834,9 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     
     return clip
 
-def min_blur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> VideoNode:
+def MinBlur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'min_blur'
+    func_name = 'MinBlur'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1878,9 +1880,9 @@ def min_blur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> 
     
     return clip
 
-def dither_luma_rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> VideoNode:
+def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'dither_luma_rebuild'
+    func_name = 'Dither_Luma_Rebuild'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
