@@ -41,7 +41,7 @@ Functions:
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
-from muvsfunc import rescale, haf_mt_expand_multi, haf_mt_inpand_multi
+from muvsfunc import rescale
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -1006,10 +1006,10 @@ def fine_dehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: i
         edges = core.std.Prewitt(clip)
     
     strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
-    large = haf_mt_expand_multi(strong, sw = rx_i, sh = ry_i)
+    large = mt_expand_multi(strong, sw = rx_i, sh = ry_i)
     light = core.std.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
-    shrink = haf_mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr('x 4 *')
-    shrink = haf_mt_inpand_multi(shrink, mode = 'ellipse', sw = rx_i, sh = ry_i)
+    shrink = mt_expand_multi(light, mode = 'ellipse', sw = rx_i, sh = ry_i).std.Expr('x 4 *')
+    shrink = mt_inpand_multi(shrink, mode = 'ellipse', sw = rx_i, sh = ry_i)
     shrink = core.std.Convolution(shrink, [1, 1, 1, 1, 1, 1, 1, 1, 1]).std.Convolution([1, 1, 1, 1, 1, 1, 1, 1, 1])
     outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], 'x y - 2 *')
     
@@ -1909,5 +1909,75 @@ def dither_luma_rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     
     expr = [y] + [uv] * (num_p - 1)
     clip = core.akarin.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1, planes: int | list[int] | None = None,
+                    **thr_arg: float) -> VideoNode:
+    
+    func_name = 'mt_expand_multi'
+    
+    num_p = clip.format.num_planes
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    if thr_arg and (len(thr_arg) > 1 or 'threshold' not in thr_arg):
+        raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
+    
+    if sw > 0 and sh > 0:
+        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1)
+            mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
+        else:
+            mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
+    elif sw > 0:
+        mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
+    elif sh > 0:
+        mode_m = [0, 1, 0, 0, 0, 0, 1, 0]
+    else:
+        mode_m = None
+    
+    if mode_m:
+        clip = core.std.Maximum(clip, planes = planes, coordinates = mode_m, **thr_arg)
+        clip = mt_expand_multi(clip, mode = mode, sw = sw - 1, sh = sh - 1, planes = planes, **thr_arg)
+    
+    return clip
+
+def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1, planes: int | list[int] | None = None,
+                    **thr_arg: float) -> VideoNode:
+    
+    func_name = 'mt_inpand_multi'
+    
+    num_p = clip.format.num_planes
+    
+    if planes is None:
+        planes = [*range(num_p)]
+    elif isinstance(planes, int):
+        planes = [planes]
+    elif not isinstance(planes, list):
+        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    
+    if thr_arg and (len(thr_arg) > 1 or 'threshold' not in thr_arg):
+        raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
+    
+    if sw > 0 and sh > 0:
+        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1)
+            mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
+        else:
+            mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
+    elif sw > 0:
+        mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
+    elif sh > 0:
+        mode_m = [0, 1, 0, 0, 0, 0, 1, 0]
+    else:
+        mode_m = None
+    
+    if mode_m:
+        clip = core.std.Minimum(clip, planes = planes, coordinates = mode_m, **thr_arg)
+        clip = mt_inpand_multi(clip, mode = mode, sw = sw - 1, sh = sh - 1, planes = planes, **thr_arg)
     
     return clip
