@@ -1932,7 +1932,7 @@ def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
     
     if sw > 0 and sh > 0:
-        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1)
+        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1):
             mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
         else:
             mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
@@ -1967,7 +1967,7 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
     
     if sw > 0 and sh > 0:
-        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1)
+        if mode == 'losange' or (mode == 'ellipse' and (sw % 3) != 1):
             mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
         else:
             mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
