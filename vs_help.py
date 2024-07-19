@@ -103,7 +103,9 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     t1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = 1, **crop_args)
@@ -181,12 +183,14 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a = mtaps1)
     fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a = mtaps1)
-    fre2 = autotap3(fre1, x if (x := w // 16 * 8) > 144 else 144, y if (y := h // 16 * 8) > 144 else 144, mtaps3, athresh)
+    fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
     m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, 2.01, 256, 256), x, y, filter_param_a = ttaps), dx, dy, filter_param_a = ttaps)
@@ -246,7 +250,9 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -262,16 +268,17 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     m2 = core.std.Maximum(m1).std.Maximum()
     m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
-    if mask == 1:
-        pass
-    elif mask == 2:
-        e3 = m3
-    elif mask == 3:
-        e3 = core.std.Expr([e3, m3], 'x y min')
-    elif mask == 4:
-        e3 = core.std.Expr([e3, m3], 'x y max')
-    else:
-        raise ValueError(f'{func_name}: Please use 1...4 mask value')
+    match mask:
+        case 1:
+            pass
+        case 2:
+            e3 = m3
+        case 3:
+            e3 = core.std.Expr([e3, m3], 'x y min')
+        case 4:
+            e3 = core.std.Expr([e3, m3], 'x y max')
+        case _:
+            raise ValueError(f'{func_name}: Please use 1...4 mask value')
     
     blurr = MinBlur(clip, 1).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1]).std.Convolution([1, 2, 1, 2, 4, 2, 1, 2, 1])
     
@@ -370,16 +377,17 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     def correction(target_line: VideoNode, donor_line: VideoNode, limit: int, curve: int) -> VideoNode:
         
-        if curve == 0:
-            expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-        elif abs(curve) == 1:
-            expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-        elif abs(curve) == 2:
-            expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-        elif abs(curve) == 3:
-            expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
-        else:
-            raise ValueError(f'{func_name}: Please use -3...3 curve value')
+        match abs(curve):
+            case 0:
+                expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
+            case 1:
+                expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
+            case 2:
+                expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
+            case 3:
+                expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
+            case _:
+                raise ValueError(f'{func_name}: Please use -3...3 curve value')
         
         if curve < 0:
             target_line = core.std.Invert(target_line)
@@ -405,15 +413,16 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     defaults = ['x', 0, None, 0, 1, 0]
     
     for i in args:
-        if isinstance(i, str):
-            i = [i] + defaults[1:]
-        elif isinstance(i, list):
-            if len(i) < 6:
-                i += defaults[len(i):]
-            elif len(i) != 6:
-                raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
-        else:
-            raise ValueError(f'{func_name}: *args must be "list" or "str"')
+        match i:
+            case str():
+                i = [i] + defaults[1:]
+            case list():
+                if len(i) < 6:
+                    i += defaults[len(i):]
+                elif len(i) > 6:
+                    raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
+            case _:
+                raise ValueError(f'{func_name}: *args must be "list" or "str"')
         
         clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
     
@@ -448,7 +457,9 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         sub_w = clip.format.subsampling_w
         sub_h = clip.format.subsampling_h
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -459,12 +470,13 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     if dy is None:
         dy = h * 2 // 3
     
-    if kernel == 'bicubic':
-        rescaler = rescale.Bicubic(b, c)
-    elif kernel == 'lanczos':
-        rescaler = rescale.Lanczos(taps)
-    else:
-        rescaler = eval(f'rescale.{kernel.capitalize()}()')
+    match kernel:
+        case 'bicubic':
+            rescaler = rescale.Bicubic(b, c)
+        case 'lanczos':
+            rescaler = rescale.Lanczos(taps)
+        case _:
+            rescaler = eval(f'rescale.{kernel.capitalize()}()')
     
     if dx is None:
         resc = rescaler.rescale(clip, dy, h if frac else None)
@@ -592,12 +604,18 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
@@ -627,6 +645,9 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     
     def simple_average(clip: VideoNode, curve: int | None, weight: float, mode: int) -> VideoNode:
         
+        if curve is None:
+            return clip
+        
         if weight == 0:
             expr0 = 'x.PlaneStatsAverage'
         elif weight == 1:
@@ -636,58 +657,60 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
         else:
             raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
         
-        if curve is None:
-            return clip
-        elif curve == 0:
-            expr1 = f'{expr0} x.PlaneStatsAverage - x +'
-            expr2 = f'{expr0} y.PlaneStatsAverage - y +'
-        elif abs(curve) == 1:
-            expr1 = f'{expr0} x.PlaneStatsAverage / x *'
-            expr2 = f'{expr0} y.PlaneStatsAverage / y *'
-        elif abs(curve) == 2:
-            expr1 = f'x {expr0} log x.PlaneStatsAverage log / pow'
-            expr2 = f'y {expr0} log y.PlaneStatsAverage log / pow'
-        elif abs(curve) == 3:
-            expr1 = f'{expr0} 1 x.PlaneStatsAverage / pow x pow'
-            expr2 = f'{expr0} 1 y.PlaneStatsAverage / pow y pow'
-        else:
-            raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
+        match abs(curve):
+            case 0:
+                expr1 = f'{expr0} x.PlaneStatsAverage - x +'
+                expr2 = f'{expr0} y.PlaneStatsAverage - y +'
+            case 1:
+                expr1 = f'{expr0} x.PlaneStatsAverage / x *'
+                expr2 = f'{expr0} y.PlaneStatsAverage / y *'
+            case 2:
+                expr1 = f'x {expr0} log x.PlaneStatsAverage log / pow'
+                expr2 = f'y {expr0} log y.PlaneStatsAverage log / pow'
+            case 3:
+                expr1 = f'{expr0} 1 x.PlaneStatsAverage / pow x pow'
+                expr2 = f'{expr0} 1 y.PlaneStatsAverage / pow y pow'
+            case _:
+                raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
         
         if curve < 0:
             clip = core.std.Invert(clip)
         
-        if mode == 0:
-            clip = core.std.SeparateFields(clip, True).std.PlaneStats()
-            fields = [clip[::2], clip[1::2]]
-            
-            if weight == 0:
-                fields[1] = core.akarin.Expr(fields, expr2)
-            elif weight == 1:
-                fields[0] = core.akarin.Expr(fields, expr1)
-            else:
-                fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
-            
-            clip = core.std.Interleave(fields)
-            clip = core.std.DoubleWeave(clip, True)[::2]
-            clip = core.std.SetFieldBased(clip, 0)
-        elif mode == 1:
-            h = clip.height
-            clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
-            
-            if weight == 0:
-                for i in range(1, h, 2):
-                    clips[i] = core.akarin.Expr([clips[i - 1], clips[i]], expr2)
-            elif weight == 1:
-                for i in range(0, h - 1, 2):
-                    clips[i] = core.akarin.Expr([clips[i], clips[i + 1]], expr1)
-            else:
-                for i in range(0, h - 1, 2):
-                    clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
-                                             core.akarin.Expr([clips[i], clips[i + 1]], expr2)
-            
-            clip = core.std.StackVertical(clips)
-        else:
-            raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
+        match mode:
+            case 0:
+                clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+                fields = [clip[::2], clip[1::2]]
+                
+                match weight:
+                    case 0:
+                        fields[1] = core.akarin.Expr(fields, expr2)
+                    case 1:
+                        fields[0] = core.akarin.Expr(fields, expr1)
+                    case _:
+                        fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+                
+                clip = core.std.Interleave(fields)
+                clip = core.std.DoubleWeave(clip, True)[::2]
+                clip = core.std.SetFieldBased(clip, 0)
+            case 1:
+                h = clip.height
+                clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+                
+                match weight:
+                    case 0:
+                        for i in range(1, h, 2):
+                            clips[i] = core.akarin.Expr([clips[i - 1], clips[i]], expr2)
+                    case 1:
+                        for i in range(0, h - 1, 2):
+                            clips[i] = core.akarin.Expr([clips[i], clips[i + 1]], expr1)
+                    case _:
+                        for i in range(0, h - 1, 2):
+                            clips[i], clips[i + 1] = core.akarin.Expr([clips[i], clips[i + 1]], expr1), \
+                                                     core.akarin.Expr([clips[i], clips[i + 1]], expr2)
+                
+                clip = core.std.StackVertical(clips)
+            case _:
+                raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         if curve < 0:
             clip = core.std.Invert(clip)
@@ -696,15 +719,16 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
         
         return clip
     
-    if isinstance(curve, int):
-        curve = [curve] * num_p
-    elif isinstance(curve, list):
-        if len(curve) < num_p:
-            curve += [curve[-1]] * (num_p - len(curve))
-        elif len(curve) != num_p:
-            raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
-    else:
-        raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
+    match curve:
+        case int():
+            curve = [curve] * num_p
+        case list():
+            if len(curve) < num_p:
+                curve += [curve[-1]] * (num_p - len(curve))
+            elif len(curve) > num_p:
+                raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
+        case _:
+            raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
     if space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
@@ -735,30 +759,34 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     def simple_fix(clip: VideoNode, mode: int) -> VideoNode:
         
-        if mode == 0:
-            pass
-        elif mode == 4:
-            clip = core.std.Median(clip)
-        elif mode == 11 or mode == 12:
-            clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-        elif mode == 19:
-            clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
-        elif mode == 20:
-            clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
-        else:
-            clip = core.rgvs.RemoveGrain(clip, mode)
+        match mode:
+            case 0:
+                pass
+            case 4:
+                clip = core.std.Median(clip)
+            case 11:
+                clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+            case 12:
+                clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
+            case 19:
+                clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
+            case 20:
+                clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
+            case _:
+                clip = core.rgvs.RemoveGrain(clip, mode)
         
         return clip
     
-    if isinstance(mode, int):
-        mode = [mode] * num_p
-    elif isinstance(mode, list):
-        if len(mode) < num_p:
-            mode += [mode[-1]] * (num_p - len(mode))
-        elif len(mode) != num_p:
-            raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
-    else:
-        raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
+    match mode:
+        case int():
+            mode = [mode] * num_p
+        case list():
+            if len(mode) < num_p:
+                mode += [mode[-1]] * (num_p - len(mode))
+            elif len(mode) > num_p:
+                raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
+        case _:
+            raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
     
     if space == YUV:
         clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
@@ -787,12 +815,18 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     nn = core.znedi3.nnedi3(clip, field = 3, planes = planes, **znedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
@@ -826,7 +860,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
-    if brz > 255 or brz < 0:
+    if brz < 0 or brz > 255:
         raise ValueError(f'{func_name}: brz must be between 0 and 255')
     
     space = clip.format.color_family
@@ -834,7 +868,9 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     if space == YUV:
         format_id = clip.format.id
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -862,7 +898,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     return mask
 
-def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, fake_prewitt: bool = False,
+def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, mt_prewitt: bool = False,
                     **after_args: Any) -> VideoNode:
     
     func_name = 'tp7_deband_mask'
@@ -873,7 +909,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if fake_prewitt:
+    if mt_prewitt:
         clip = custom_mask(clip, 1, scale)
     else:
         clip = core.std.Prewitt(clip, scale = scale)
@@ -901,7 +937,9 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
                 clip = core.fmtc.bitdepth(clip, bits = bits, dmode = 1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if 'exp_n' not in after_args:
@@ -930,25 +968,29 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor
-    m4 = lambda x: 16 if x < 16 else int(x / 4 + 0.5) * 4
+    m4 = lambda var: max(int(var / 4 + 0.5) * 4, 16)
     
-    halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3).resize.Bicubic(w, h, filter_param_a = 1, filter_param_b = 0)
+    halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1 / 3, filter_param_b = 1 / 3)
+    halos = core.resize.Bicubic(halos, w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+    # so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], f'y x - y 0.001 + / 255 * {lowsens} - y 256 + 512 / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
         remove = core.rgvs.Repair(clip, lets, 1)
     else:
-        remove = core.resize.Lanczos(clip, m4(w * ss), m4(h * ss), filter_param_a = 3)
-        remove = core.std.Expr([remove, core.std.Maximum(lets).resize.Bicubic(m4(w * ss), m4(h * ss), filter_param_a = 1/3, filter_param_b = 1/3)], 'x y min')
-        remove = core.std.Expr([remove, core.std.Minimum(lets).resize.Bicubic(m4(w * ss), m4(h * ss), filter_param_a = 1/3, filter_param_b = 1/3)], 'x y max')
+        remove = core.resize.Lanczos(clip, x := m4(w * ss), y := m4(h * ss), filter_param_a = 3)
+        remove = core.std.Expr([remove, core.std.Maximum(lets).resize.Bicubic(x, y, filter_param_a = 1/3, filter_param_b = 1/3)], 'x y min')
+        remove = core.std.Expr([remove, core.std.Minimum(lets).resize.Bicubic(x, y, filter_param_a = 1/3, filter_param_b = 1/3)], 'x y max')
         remove = core.resize.Lanczos(remove, w, h, filter_param_a = 3)
     
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
@@ -963,7 +1005,7 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
 
 def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, fake_prewitt = False) -> VideoNode:
+                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, mt_prewitt = False) -> VideoNode:
     
     func_name = 'FineDehalo'
     
@@ -975,7 +1017,9 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
@@ -1002,7 +1046,7 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
         xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
         dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
-    if fake_prewitt:
+    if mt_prewitt:
         edges = custom_mask(clip, 1)
     else:
         edges = core.std.Prewitt(clip)
@@ -1051,7 +1095,9 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
     if space == YUV:
         orig = clip
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if hconv is None:
@@ -1134,7 +1180,7 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
         clip = core.std.Merge(clip_sp, clip, desc_str)
         
         if dehalo:
-            clip = FineDehalo(clip, thmi = 45, thlimi = 60, thlima = 120, fake_prewitt = True)
+            clip = FineDehalo(clip, thmi = 45, thlimi = 60, thlima = 120, mt_prewitt = True)
         
         upscaler_mod = partial(upscaler, **upscaler_args)
         clip = rescaler.upscale(clip, w, h, upscaler_mod)
@@ -1146,7 +1192,9 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     if masked:
         if ext_mask is None:
             ext_mask = core.std.Sobel(orig_gray, scale = 2).std.Maximum()
-        elif ext_mask.format.color_family != GRAY:
+        elif ext_mask.format.color_family == GRAY:
+            pass
+        else:
             raise ValueError(f'{func_name}: The external mask should be GRAY')
         
         clip = core.std.MaskedMerge(orig_gray, clip, ext_mask)
@@ -1194,24 +1242,25 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
         if order:
             clip = core.std.Transpose(clip)
         
-        if mode == 1:
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
-        elif mode == 2:
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-        else:
-            eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
-            znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
-            
-            if any((x := i) not in eedi3_args and x not in znedi3_args for i in upscaler_args):
-                raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
-            
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
-            clip = core.std.Transpose(clip)
-            clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+        match mode:
+            case 1:
+                clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
+                clip = core.std.Transpose(clip)
+                clip = core.znedi3.nnedi3(clip, field = 1, dh = True, **upscaler_args)
+            case 2:
+                clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
+                clip = core.std.Transpose(clip)
+                clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
+            case _:
+                eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
+                znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
+                
+                if any((x := i) not in eedi3_args and x not in znedi3_args for i in upscaler_args):
+                    raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
+                
+                clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+                clip = core.std.Transpose(clip)
+                clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
         
         if not order:
             clip = core.std.Transpose(clip)
@@ -1245,24 +1294,25 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
-    if mask == 0:
-        pass
-    elif mask == 1:
-        clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
-                              core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
-                              f'x y max z a max max {scale} *')
-    elif mask == 2:
-        clip = core.std.Expr([core.std.Convolution(clip, [5, 10, 5, 0, 0, 0, -5, -10, -5], divisor = 4, saturate = False),
-                              core.std.Convolution(clip, [5, 0, -5, 10, 0, -10, 5, 0, -5], divisor = 4, saturate = False)],
-                              f'x y max {scale} *')
-    elif mask == 3:
-        clip = core.std.Expr([core.std.Convolution(clip, [8, 16, 8, 0, 0, 0, -8, -16, -8], divisor = 8, saturate = False),
-                              core.std.Convolution(clip, [8, 0, -8, 16, 0, -16, 8, 0, -8], divisor = 8, saturate = False)],
-                              f'x y max {scale} *')
-    else:
-        raise ValueError(f'{func_name}: Please use 0...3 mask value')
+    match mask:
+        case 0:
+            pass
+        case 1:
+            clip = core.std.Expr([core.std.Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], divisor = 1, saturate = False),
+                                  core.std.Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], divisor = 1, saturate = False),
+                                  core.std.Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], divisor = 1, saturate = False),
+                                  core.std.Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], divisor = 1, saturate = False)],
+                                  f'x y max z a max max {scale} *')
+        case 2:
+            clip = core.std.Expr([core.std.Convolution(clip, [5, 10, 5, 0, 0, 0, -5, -10, -5], divisor = 4, saturate = False),
+                                  core.std.Convolution(clip, [5, 0, -5, 10, 0, -10, 5, 0, -5], divisor = 4, saturate = False)],
+                                  f'x y max {scale} *')
+        case 3:
+            clip = core.std.Expr([core.std.Convolution(clip, [8, 16, 8, 0, 0, 0, -8, -16, -8], divisor = 8, saturate = False),
+                                  core.std.Convolution(clip, [8, 0, -8, 16, 0, -16, 8, 0, -8], divisor = 8, saturate = False)],
+                                  f'x y max {scale} *')
+        case _:
+            raise ValueError(f'{func_name}: Please use 0...3 mask value')
     
     if boost:
         factor = 1 << clip.format.bits_per_sample - 8
@@ -1293,12 +1343,16 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     if space_f == YUV:
         format_id = first.format.id
         first = core.std.ShufflePlanes(first, 0, GRAY)
-    elif space_f != GRAY:
+    elif space_f == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family in the first clip')
     
     if space_s == YUV:
         second = core.std.ShufflePlanes(second, 0, GRAY)
-    elif space_s != GRAY:
+    elif space_s == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
     clip = core.std.Expr([first, second], f'x y - abs {scale} *')
@@ -1330,33 +1384,37 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
         raise ValueError(f'{func_name}: The clip formats do not match')
     
     for i in args:
-        if isinstance(i, int):
-            i = [i]
-        elif not isinstance(i, list):
-            raise ValueError(f'{func_name}: *args must be list[int] or int')
+        match i:
+            case int():
+                i = [i]
+            case list():
+                pass
+            case _:
+                raise ValueError(f'{func_name}: *args must be list[int] or int')
         
         if (x := i[0]) < 0 or (x := i[-1]) >= num_f:
             raise ValueError(f'{func_name}: {x} is out of frame range')
         
-        if len(i) == 2:
-            if i[0] >= i[1]:
-                raise ValueError(f'{func_name}: {i[0]} must not be equal to or greater than {i[1]}')
-            
-            if i[0] == 0:
-                first = second[:i[1] + 1] + first[i[1] + 1:]
-            elif i[1] == num_f - 1:
-                first = first[:i[0]] + second[i[0]:]
-            else:
-                first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
-        elif len(i) == 1:
-            if i[0] == 0:
-                first = second[i[0]] + first[i[0] + 1:]
-            elif i[0] == num_f - 1:
-                first = first[:i[0]] + second[i[0]]
-            else:
-                first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
-        else:
-            raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame], list[frame] or "int"')
+        match len(i):
+            case 2:
+                if i[0] >= i[1]:
+                    raise ValueError(f'{func_name}: {i[0]} must not be equal to or greater than {i[1]}')
+                
+                if i[0] == 0:
+                    first = second[:i[1] + 1] + first[i[1] + 1:]
+                elif i[1] == num_f - 1:
+                    first = first[:i[0]] + second[i[0]:]
+                else:
+                    first = first[:i[0]] + second[i[0]:i[1] + 1] + first[i[1] + 1:]
+            case 1:
+                if i[0] == 0:
+                    first = second[i[0]] + first[i[0] + 1:]
+                elif i[0] == num_f - 1:
+                    first = first[:i[0]] + second[i[0]]
+                else:
+                    first = first[:i[0]] + second[i[0]] + first[i[0] + 1:]
+            case _:
+                raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame], list[frame] or "int"')
     
     return first
 
@@ -1372,7 +1430,9 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     if space == YUV:
         format_id = clip.format.id
         clip = core.std.ShufflePlanes(clip, 0, GRAY)
-    elif space != GRAY:
+    elif space == GRAY:
+        pass
+    else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     clip = mt_binarize(clip, thr)
@@ -1398,33 +1458,36 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     if flatten > 0:
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
+        
         for i in range(1, flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
     elif flatten < 0:
         expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
+        
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
     
-    matching = dict(exp_n = 'Maximum', inp_n = 'Minimum', def_n = 'Deflate', inf_n = 'Inflate')
+    mapping = {'exp_n': 'Maximum', 'inp_n': 'Minimum', 'def_n': 'Deflate', 'inf_n': 'Inflate'}
     
     for i in after_args:
-        if i in matching:
+        if i in mapping:
             for _ in range(after_args[i]):
-                clip = eval(f'core.std.{matching[i]}(clip, planes = planes)')
+                clip = eval(f'core.std.{mapping[i]}(clip, planes = planes)')
         else:
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
@@ -1432,7 +1495,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         if len(borders) < 4:
             defaults = [0, clip.width - 1, 0, clip.height - 1]
             borders += defaults[len(borders):]
-        elif len(borders) != 4:
+        elif len(borders) > 4:
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
         factor = 1 << clip.format.bits_per_sample - 8
@@ -1464,18 +1527,19 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
         field_diffs[n] = f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
         
         if n == num_f - 1:
-            if mode in {0, 1}:
-                result = (f'{i} {x:.20f}\n' for i in range(num_f) if (x := field_diffs[i]) >= thr)
-            elif mode in {2, 3}:
-                result = (f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr)
-            elif mode in {4, 5}:
-                result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                          abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / div)
-            else:
-                result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                          abs(field_diffs[i + 1] - field_diffs[i + 2]), abs(field_diffs[i - 1] - field_diffs[i + 1]),
-                          abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / div
-                          and abs(field_diffs[i] - field_diffs[i + 1]) > x)
+            match mode // 2:
+                case 0:
+                    result = (f'{i} {x:.20f}\n' for i in range(num_f) if (x := field_diffs[i]) >= thr)
+                case 1:
+                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr)
+                case 2:
+                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
+                              abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / div)
+                case _:
+                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
+                              abs(field_diffs[i + 1] - field_diffs[i + 2]), abs(field_diffs[i - 1] - field_diffs[i + 1]),
+                              abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / div
+                              and abs(field_diffs[i] - field_diffs[i + 1]) > x)
             
             with open(output, 'w') as file:
                 file.writelines(result)
@@ -1512,17 +1576,18 @@ def MTCombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float =
     factor = 1 << clip.format.bits_per_sample - 8
     power = factor ** 2
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {div * factor} / ? ?'
     clip = core.akarin.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
@@ -1539,27 +1604,31 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
-    if isinstance(thr, int | float):
-        thr = [thr] * num_p
-    elif isinstance(thr, list):
-        if len(thr) < num_p:
-            thr += [thr[-1]] * (num_p - len(thr))
-        elif len(thr) > num_p:
-            raise ValueError(f'{func_name}: "thr" length must not be greater than the number of planes"')
-    else:
-        raise ValueError(f'{func_name}: "thr" must be "float" or "list[float]"')
+    match thr:
+        case int():
+            thr = [thr] * num_p
+        case float():
+            thr = [thr] * num_p
+        case list():
+            if len(thr) < num_p:
+                thr += [thr[-1]] * (num_p - len(thr))
+            elif len(thr) > num_p:
+                raise ValueError(f'{func_name}: "thr" length must not be greater than the number of planes"')
+        case _:
+            raise ValueError(f'{func_name}: "thr" must be "float" or "list[float]"')
     
     if upper:
         expr = [f'x {thr[i] * factor} > 0 {256 * factor - 1} ?' for i in range(num_p)]
@@ -1579,25 +1648,32 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     mask = MTCombMask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
     mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = 0)
     mask = mt_binarize(core.std.Maximum(mask, planes = 0), thr1, planes = 0).std.Maximum(planes = 0)
     
-    if mode == 0:
-        filt = vinverse(clip, 2.3, planes = planes)
-    elif mode == 1:
-        filt = vinverse2(clip, 2.3, planes = planes)
-    elif mode == 2:
-        filt = daa(clip, planes = planes, nns = 4, qual = 2, pscrn = 4, exp = 2)
-    else:
-        raise ValueError(f'{func_name}: Please use 0...2 mode value')
+    match mode:
+        case 0:
+            filt = vinverse(clip, 2.3, planes = planes)
+        case 1:
+            filt = vinverse2(clip, 2.3, planes = planes)
+        case 2:
+            filt = daa(clip, planes = planes, nns = 4, qual = 2, pscrn = 4, exp = 2)
+        case _:
+            raise ValueError(f'{func_name}: Please use 0...2 "mode" value')
     
     filt = core.std.MaskedMerge(clip, filt, mask, planes = planes, first_plane = True)
     
@@ -1616,12 +1692,18 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     Vblur = core.std.Convolution(clip, [50, 99, 50], mode = 'v', planes = planes)
     VblurD = core.std.MakeDiff(clip, Vblur, planes = planes)
@@ -1638,7 +1720,9 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     
     if amnt > 254:
         clip = result
-    elif amnt != 0:
+    elif amnt == 0:
+        pass
+    else:
         amnt *= factor
         expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
         clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
@@ -1656,12 +1740,18 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     Vblur = sbrV(clip, planes = planes)
     VblurD = core.std.MakeDiff(clip, Vblur, planes = planes)
@@ -1678,7 +1768,9 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     
     if amnt > 254:
         clip = result
-    elif amnt != 0:
+    elif amnt == 0:
+        pass
+    else:
         amnt *= factor
         expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
         clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
@@ -1695,12 +1787,18 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     rg11 = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes = planes)
@@ -1724,12 +1822,18 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     rg11 = core.std.Convolution(clip, [1, 2, 1], mode = 'v', planes = planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes = planes)
@@ -1752,17 +1856,18 @@ def avs_Blur(clip: VideoNode, amountH: float, amountV: float | None = None, plan
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     if amountV is None:
         amountV = amountH
@@ -1814,17 +1919,18 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     overshoot *= factor
     undershoot *= factor
@@ -1834,7 +1940,7 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     
     return clip
 
-def MinBlur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> VideoNode:
+def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'MinBlur'
     
@@ -1844,34 +1950,43 @@ def MinBlur(clip: VideoNode, r: int, planes: int | list[int] | None = None) -> V
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
-    if r == 1:
-        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
-        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
-        
-        RG4D = core.std.Median(clip, planes = planes)
-        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
-    elif r == 2:
-        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
-        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
-        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
-        
-        RG4D = core.ctmf.CTMF(clip, 2, planes = planes)
-        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
-    else:
-        RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
-        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
-        RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
-        RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
-        
-        RG4D = core.ctmf.CTMF(clip, 3, planes = planes)
-        RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+    match r:
+        case 1:
+            RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+            RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+            
+            RG4D = core.std.Median(clip, planes = planes)
+            RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+        case 2:
+            RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+            RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+            RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+            
+            RG4D = core.ctmf.CTMF(clip, 2, planes = planes)
+            RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+        case 3:
+            RG11D = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes = planes)
+            RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+            RG11D = core.std.Convolution(RG11D, [1, 1, 1, 1, 1, 1, 1, 1, 1], planes = planes)
+            RG11D = core.std.MakeDiff(clip, RG11D, planes = planes)
+            
+            RG4D = core.ctmf.CTMF(clip, 3, planes = planes)
+            RG4D = core.std.MakeDiff(clip, RG4D, planes = planes)
+        case _:
+            raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
     expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
     DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
@@ -1891,18 +2006,18 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif isinstance(planes, list):
-        if len(planes) > num_p:
-            raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-        elif any(not isinstance(i, int) for i in planes):
-            raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    else:
-        raise ValueError(f'{func_name}: "planes" must be "int" or "list[int]"')
-    
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     k = (s0 - 1) * c
     t = f'x {16 * factor} - {219 * factor} / 0 1 clamp'
@@ -1921,12 +2036,18 @@ def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     if thr_arg and (len(thr_arg) > 1 or 'threshold' not in thr_arg):
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
@@ -1956,12 +2077,18 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
     
     num_p = clip.format.num_planes
     
-    if planes is None:
-        planes = [*range(num_p)]
-    elif isinstance(planes, int):
-        planes = [planes]
-    elif not isinstance(planes, list):
-        raise ValueError(f'{func_name}: "planes" must be "None", "int" or "list[int]"')
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list():
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+            elif any(not isinstance(i, int) for i in planes):
+                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     if thr_arg and (len(thr_arg) > 1 or 'threshold' not in thr_arg):
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold" = float')
