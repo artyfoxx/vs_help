@@ -586,8 +586,9 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
         else:
             second_args[i] = descale_args[i]
     
-    clip = core.std.RemoveFrameProps(clip, ['_FieldBased', '_Field'])
-    clip = core.std.SeparateFields(clip, tff).std.SetFieldBased(0)
+    clip = core.std.SetFieldBased(clip, 0)
+    clip = core.std.SeparateFields(clip, tff)
+    clip = core.std.SetFieldBased(clip, 0)
     fields = [clip[::2], clip[1::2]]
     
     fields[0] = core.descale.Descale(fields[0], dx, dy, **descale_args)
