@@ -1260,7 +1260,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
                 clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
                 clip = core.std.Transpose(clip)
                 clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, **upscaler_args)
-            case _:
+            case 3:
                 eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
                 znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
                 
@@ -1270,28 +1270,29 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
                 clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
                 clip = core.std.Transpose(clip)
                 clip = core.eedi3m.EEDI3(clip, field = 1, dh = True, sclip = core.znedi3.nnedi3(clip, field = 1, dh = True, **znedi3_args), **eedi3_args)
+            case _:
+                raise ValueError(f'{func_name}: Please use 0...3 mode value')
         
         if not order:
             clip = core.std.Transpose(clip)
         
         return clip
     
-    if mode == 0:
-        kernel = upscaler_args.pop('kernel', 'bicubic').capitalize()
-        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
-    elif mode in {1, 2, 3}:
-        if order == 0:
-            clip = edi3_aa(clip, mode, True, **upscaler_args)
-        elif order == 1:
-            clip = edi3_aa(clip, mode, False, **upscaler_args)
-        elif order == 2:
-            clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
-        else:
-            raise ValueError(f'{func_name}: Please use 0...2 order value')
+    if mode:
+        match order:
+            case 0:
+                clip = edi3_aa(clip, mode, True, **upscaler_args)
+            case 1:
+                clip = edi3_aa(clip, mode, False, **upscaler_args)
+            case 2:
+                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
+            case _:
+                raise ValueError(f'{func_name}: Please use 0...2 order value')
         
         clip = autotap3(clip, dx, dy, src_left = src_left * 2 - 0.5, src_top = src_top * 2 - 0.5, src_width = src_width * 2, src_height = src_height * 2)
     else:
-        raise ValueError(f'{func_name}: Please use 0...3 mode value')
+        kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
+        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left = src_left, src_top = src_top, src_width = src_width, src_height = src_height, **upscaler_args)')
     
     return clip
 
