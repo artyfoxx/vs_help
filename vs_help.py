@@ -764,9 +764,7 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
                 pass
             case 4:
                 clip = core.std.Median(clip)
-            case 11:
-                clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-            case 12:
+            case 11 | 12:
                 clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
             case 19:
                 clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
@@ -1161,16 +1159,17 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     else:
         raise ValueError(f'{func_name}: Unsupported color family')
     
-    if external_aa is None:
+    if ext_aa is None:
         w = clip.width
         h = clip.height
         
-        if kernel == 'bicubic':
-            rescaler = rescale.Bicubic(b, c)
-        elif kernel == 'lanczos':
-            rescaler = rescale.Lanczos(taps)
-        else:
-            rescaler = eval(f'rescale.{kernel.capitalize()}()')
+        match kernel:
+            case 'bicubic':
+                rescaler = rescale.Bicubic(b, c)
+            case 'lanczos':
+                rescaler = rescale.Lanczos(taps)
+            case _:
+                rescaler = eval(f'rescale.{kernel.capitalize()}()')
         
         if dx is None:
             dx = w / h * dy
@@ -1482,12 +1481,12 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
     
-    mapping = {'exp_n': 'Maximum', 'inp_n': 'Minimum', 'def_n': 'Deflate', 'inf_n': 'Inflate'}
+    after_dict = {'exp_n': 'Maximum', 'inp_n': 'Minimum', 'def_n': 'Deflate', 'inf_n': 'Inflate'}
     
     for i in after_args:
-        if i in mapping:
+        if i in after_dict:
             for _ in range(after_args[i]):
-                clip = eval(f'core.std.{mapping[i]}(clip, planes = planes)')
+                clip = eval(f'core.std.{after_dict[i]}(clip, planes = planes)')
         else:
             raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
     
@@ -1618,9 +1617,7 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     match thr:
-        case int():
-            thr = [thr] * num_p
-        case float():
+        case int() | float():
             thr = [thr] * num_p
         case list():
             if len(thr) < num_p:
