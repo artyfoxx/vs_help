@@ -616,11 +616,9 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -825,11 +823,9 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1476,11 +1472,9 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1594,11 +1588,9 @@ def MTCombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float =
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1622,11 +1614,9 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1664,11 +1654,9 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1708,11 +1696,9 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1756,11 +1742,9 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1803,11 +1787,9 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1838,11 +1820,9 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1858,7 +1838,7 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     return clip
 
-def avs_Blur(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'avs_Blur'
     
@@ -1872,11 +1852,9 @@ def avs_Blur(clip: VideoNode, amountH: float, amountV: float | None = None, plan
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1902,7 +1880,7 @@ def avs_Blur(clip: VideoNode, amountH: float, amountV: float | None = None, plan
     
     return clip
 
-def avs_Sharpen(clip: VideoNode, amountH: float, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def avs_Sharpen(clip: VideoNode, amountH: float = 0, amountV: float | None = None, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'avs_Sharpen'
     
@@ -1935,11 +1913,9 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -1966,11 +1942,9 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -2022,11 +1996,9 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -2052,11 +2024,9 @@ def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
@@ -2093,11 +2063,9 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list():
+        case list() if all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
-            elif any(not isinstance(i, int) for i in planes):
-                raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
