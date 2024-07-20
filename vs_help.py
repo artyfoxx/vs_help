@@ -64,6 +64,8 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    clip = core.std.SetFieldBased(clip, 0)
+    
     w = clip.width
     h = clip.height
     
@@ -161,6 +163,8 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    clip = core.std.SetFieldBased(clip, 0)
     
     w = clip.width
     h = clip.height
@@ -450,6 +454,8 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    clip = core.std.SetFieldBased(clip, 0)
+    
     space = clip.format.color_family
     
     if space == YUV:
@@ -580,6 +586,7 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
         else:
             second_args[i] = descale_args[i]
     
+    clip = core.std.RemoveFrameProps(clip, ['_FieldBased', '_Field'])
     clip = core.std.SeparateFields(clip, tff).std.SetFieldBased(0)
     fields = [clip[::2], clip[1::2]]
     
@@ -904,6 +911,8 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    clip = core.std.SetFieldBased(clip, 0)
+    
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
@@ -958,6 +967,8 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    clip = core.std.SetFieldBased(clip, 0)
+    
     w = clip.width
     h = clip.height
     
@@ -975,7 +986,7 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     full = 256 * factor
     m4 = lambda var: max(int(var / 4 + 0.5) * 4, 16)
     
-    halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1 / 3, filter_param_b = 1 / 3)
+    halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry), filter_param_a = 1/3, filter_param_b = 1/3)
     halos = core.resize.Bicubic(halos, w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
@@ -1147,6 +1158,8 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     
     func_name = 'InsaneAA'
     
+    clip = core.std.SetFieldBased(clip, 0)
+    
     space = clip.format.color_family
     
     if space == YUV:
@@ -1206,6 +1219,8 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
              src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'upscaler'
+    
+    clip = core.std.SetFieldBased(clip, 0)
     
     w = clip.width
     h = clip.height
