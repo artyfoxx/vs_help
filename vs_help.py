@@ -1189,8 +1189,7 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
         if dehalo:
             clip = FineDehalo(clip, thmi = 45, thlimi = 60, thlima = 120, mt_prewitt = True)
         
-        upscaler_mod = partial(upscaler, **upscaler_args)
-        clip = rescaler.upscale(clip, w, h, upscaler_mod)
+        clip = rescaler.upscale(clip, w, h, partial(upscaler, **upscaler_args))
     elif ext_aa.format.color_family == GRAY:
         clip = ext_aa
     else:
