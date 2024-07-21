@@ -586,9 +586,7 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
         else:
             second_args[i] = descale_args[i]
     
-    clip = core.std.SetFieldBased(clip, 0)
-    clip = core.std.SeparateFields(clip, tff)
-    clip = core.std.SetFieldBased(clip, 0)
+    clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(tff).std.SetFieldBased(0)
     fields = [clip[::2], clip[1::2]]
     
     fields[0] = core.descale.Descale(fields[0], dx, dy, **descale_args)
@@ -918,7 +916,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     else:
         clip = core.std.Prewitt(clip, scale = scale)
     
-    clip = mt_binarize(clip, thr, planes = [*range(num_p)])
+    clip = mt_binarize(clip, thr)
     
     if rg:
         clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
@@ -1528,11 +1526,12 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
         raise ValueError(f'{func_name}: div must be greater than zero')
     
     num_f = clip.num_frames
-    field_diffs = [0.0] * num_f
+    field_diffs = []
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
-        field_diffs[n] = f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
+        nonlocal field_diffs
+        field_diffs += [f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])]
         
         if n == num_f - 1:
             match mode // 2:
@@ -1554,7 +1553,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
         
         return clip
     
-    temp = core.std.SeparateFields(clip, True)
+    temp = core.std.SetFieldBased(clip, 0).std.SeparateFields(True)
     fields = [temp[::2], temp[1::2]]
     
     fields[0] = core.std.PlaneStats(*fields, plane = plane)
