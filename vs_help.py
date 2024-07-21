@@ -1526,12 +1526,12 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
         raise ValueError(f'{func_name}: div must be greater than zero')
     
     num_f = clip.num_frames
-    field_diffs = []
+    field_diffs = [0] * num_f
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
         nonlocal field_diffs
-        field_diffs += [f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])]
+        field_diffs[n] = f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
         
         if n == num_f - 1:
             match mode // 2:
