@@ -1577,7 +1577,7 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
     
     return clip
 
-def mt_CombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
+def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'mt_CombMask'
     
@@ -1613,7 +1613,8 @@ def mt_CombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float 
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {div * factor} / ? ?'
-    clip = core.akarin.Expr(clip, [expr if i in planes else f'{128 * factor}' for i in range(num_p)])
+    defaults = ['0'] + [f'{128 * factor}'] * num_p
+    clip = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
     
     return clip
 
