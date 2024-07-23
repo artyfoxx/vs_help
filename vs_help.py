@@ -26,7 +26,7 @@ Functions:
     titles_mask
     after_mask
     search_field_diffs
-    MTCombMask
+    mt_CombMask
     mt_binarize
     delcomb
     vinverse
@@ -42,6 +42,7 @@ Functions:
     mt_inpand_multi
     avs_ComplementParity
     avs_TemporalSoften
+    UnsharpMask
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -269,8 +270,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     e2 = core.std.Merge(e2, core.std.Maximum(e2)).std.Inflate()
     e3 = core.std.Expr([core.std.Merge(e2, core.std.Maximum(e2)), core.std.Deflate(e1)], 'x y 1.2 * -').std.Inflate()
     
-    m0 = core.std.Expr([clip, core.std.BoxBlur(clip, hradius = 2, vradius = 2)], 'x y - abs 0 > x y - 0.3125 * x + x ?')
-    m1 = core.std.Expr([clip, m0], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
+    m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0)], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
     m2 = core.std.Maximum(m1).std.Maximum()
     m3 = core.std.Expr([m1, m2], 'y x -').rgvs.RemoveGrain(21).std.Maximum()
     
@@ -610,7 +610,11 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -817,7 +821,11 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1326,7 +1334,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     
     if boost:
         factor = 1 << clip.format.bits_per_sample - 8
-        clip = core.std.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {(256 * factor) - 1} *')
+        clip = core.std.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {256 * factor - 1} *')
     
     if after_args:
         clip = after_mask(clip, **after_args)
@@ -1466,7 +1474,11 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1508,7 +1520,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         
         factor = 1 << clip.format.bits_per_sample - 8
         
-        expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {(256 * factor) - 1} 0 ? x min'
+        expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {256 * factor - 1} 0 ? x min'
         clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
@@ -1565,9 +1577,9 @@ def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode
     
     return clip
 
-def MTCombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
+def mt_CombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'MTCombMask'
+    func_name = 'mt_CombMask'
     
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
@@ -1581,9 +1593,13 @@ def MTCombMask(clip: VideoNode, thr1: float = 30, thr2: float = 30, div: float =
     if div <= 0:
         raise ValueError(f'{func_name}: div must be greater than zero')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     power = factor ** 2
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1608,8 +1624,12 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1649,8 +1669,12 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1690,9 +1714,13 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1736,9 +1764,13 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1782,8 +1814,12 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1815,8 +1851,12 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1848,7 +1888,11 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1908,8 +1952,12 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     if clip.format.id != bright_limit.format.id or clip.format.id != dark_limit.format.id:
         raise ValueError(f'{func_name}: "clip", "bright_limit" and "dark_limit" must have the same format')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1937,8 +1985,12 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1990,9 +2042,13 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
+    space = clip.format.color_family
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2163,5 +2219,26 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None
     
     if radius:
         clip = core.std.AverageFrames(clip, weights = [1] * (radius * 2 + 1), scenechange = bool(scenechange), planes = planes)
+    
+    return clip
+
+def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8) -> VideoNode:
+    
+    func_name = 'UnsharpMask'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
+    
+    blurclip = clip.std.BoxBlur(vradius = radius, hradius = radius, planes = 0)
+    
+    expr = f'x y - abs {threshold * factor} > x y - {strength / 128} * x + x ?'
+    clip = core.std.Expr([clip, blurclip], [expr if i == 0 else f'{128 * factor}' for i in range(num_p)])
     
     return clip
