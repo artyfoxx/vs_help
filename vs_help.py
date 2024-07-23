@@ -986,7 +986,7 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     halos = core.resize.Bicubic(halos, w, h, filter_param_a = 1, filter_param_b = 0)
     are = core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], 'x y -')
     ugly = core.std.Expr([core.std.Maximum(halos), core.std.Minimum(halos)], 'x y -')
-    so = core.std.Expr([ugly, are], f'y x - y {0.001 * factor} + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
