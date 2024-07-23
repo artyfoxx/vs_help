@@ -40,7 +40,8 @@ Functions:
     Dither_Luma_Rebuild
     mt_expand_multi
     mt_inpand_multi
-    ComplementParity
+    avs_ComplementParity
+    avs_TemporalSoften
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -1649,6 +1650,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
     num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
     
     match planes:
         case None:
@@ -1677,7 +1679,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     
     filt = core.std.MaskedMerge(clip, filt, mask, planes = planes, first_plane = True)
     
-    clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 / 256} > 1 0 ?')
+    clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 * factor / (256 * factor - 1)} > 1 0 ?')
     
     return clip
 
@@ -2091,9 +2093,9 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
     
     return clip
 
-def ComplementParity(clip: VideoNode) -> VideoNode:
+def avs_ComplementParity(clip: VideoNode) -> VideoNode:
     
-    func_name = 'ComplementParity'
+    func_name = 'avs_ComplementParity'
     
     def invert_parity(n: int, f: VideoFrame) -> VideoFrame:
         
@@ -2125,5 +2127,40 @@ def ComplementParity(clip: VideoNode) -> VideoNode:
         return fout
     
     clip = core.std.ModifyFrame(clip = clip, clips = clip, selector = invert_parity)
+    
+    return clip
+
+def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None = None, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'avs_TemporalSoften'
+    
+    if clip.format.sample_type != INTEGER:
+        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    
+    if space != YUV or space != GRAY:
+        raise ValueError(f'{func_name}: Unsupported color family')
+    
+    if radius < 0 or radius > 7:
+        raise ValueError(f'{func_name}: Please use 0...7 "radius" value')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    match planes:
+        case None:
+            planes = [*range(num_p)]
+        case int():
+            planes = [planes]
+        case list() if all(isinstance(i, int) for i in planes):
+            if len(planes) > num_p:
+                raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
+        case _:
+            raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
+    
+    if scenechange:
+        clip = core.misc.SCDetect(clip, scenechange * factor / (256 * factor - 1))
+    
+    if radius:
+        clip = core.std.AverageFrames(clip, weights = [1] * (radius * 2 + 1), scenechange = bool(scenechange), planes = planes)
     
     return clip
