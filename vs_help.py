@@ -1688,7 +1688,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
         case _:
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
-    mask = MTCombMask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
+    mask = mt_CombMask(clip, 7, 7, planes = 0).std.Deflate(planes = 0).std.Deflate(planes = 0)
     mask = core.std.Minimum(mask, coordinates = [0, 0, 0, 1, 1, 0, 0, 0], planes = 0)
     mask = mt_binarize(core.std.Maximum(mask, planes = 0), thr1, planes = 0).std.Maximum(planes = 0)
     
