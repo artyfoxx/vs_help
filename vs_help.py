@@ -2137,14 +2137,15 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None
     if clip.format.sample_type != INTEGER:
         raise ValueError(f'{func_name}: floating point sample type is not supported')
     
-    if space != YUV or space != GRAY:
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    if space != YUV and space != GRAY:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if radius < 0 or radius > 7:
         raise ValueError(f'{func_name}: Please use 0...7 "radius" value')
-    
-    num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
     
     match planes:
         case None:
