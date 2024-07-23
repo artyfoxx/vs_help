@@ -2241,5 +2241,6 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     expr = f'x y - abs {threshold * factor} > x y - {strength / 128} * x + x ?'
     clip = core.std.Expr([clip, blurclip], [expr if i == 0 else f'{128 * factor}' for i in range(num_p)])
+    clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
     
     return clip
