@@ -20,4 +20,3 @@ and some dependencies on them.
 * [fmtconv](https://github.com/EleonoreMizo/fmtconv)
 * [vapoursynth-frfun7](https://github.com/dubhater/vapoursynth-frfun7)
 * [vapoursynth-awarpsharp2](https://github.com/dubhater/vapoursynth-awarpsharp2)
-* [vs-miscfilters-obsolete](https://github.com/vapoursynth/vs-miscfilters-obsolete)
