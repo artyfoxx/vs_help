@@ -2216,7 +2216,10 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None
             raise ValueError(f'{func_name}: "planes" must be "int", "list[int]" or "None"')
     
     if scenechange:
-        clip = core.misc.SCDetect(clip, scenechange * factor / (256 * factor - 1))
+        clip = core.std.PlaneStats(clip, clip[1:] + clip[-1])
+        clip = core.akarin.PropExpr(clip, lambda: dict(_SceneChangeNext = f'x.PlaneStatsDiff {scenechange * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage', 'PlaneStatsDiff'])
+        clip = core.akarin.PropExpr([clip, clip[0] + clip[:-1]], lambda: dict(_SceneChangePrev = 'y._SceneChangeNext'))
     
     if radius:
         clip = core.std.AverageFrames(clip, weights = [1] * (radius * 2 + 1), scenechange = bool(scenechange), planes = planes)
