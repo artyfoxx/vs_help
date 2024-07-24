@@ -2221,6 +2221,8 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None
     if radius:
         clip = core.std.AverageFrames(clip, weights = [1] * (radius * 2 + 1), scenechange = bool(scenechange), planes = planes)
     
+    clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
+    
     return clip
 
 def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8) -> VideoNode:
@@ -2241,6 +2243,5 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     expr = f'x y - abs {threshold * factor} > x y - {strength / 128} * x + x ?'
     clip = core.std.Expr([clip, blurclip], [expr] + [f'{128 * factor}'] * (num_p - 1))
-    clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
     
     return clip
