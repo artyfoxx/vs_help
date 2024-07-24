@@ -2187,7 +2187,7 @@ def avs_ComplementParity(clip: VideoNode) -> VideoNode:
     
     return clip
 
-def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'avs_TemporalSoften'
     
