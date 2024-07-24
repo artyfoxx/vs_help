@@ -2224,7 +2224,8 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
     if radius:
         clip = core.std.AverageFrames(clip, weights = [1] * (radius * 2 + 1), scenechange = bool(scenechange), planes = planes)
     
-    clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
+    if scenechange:
+        clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
     
     return clip
 
