@@ -40,7 +40,6 @@ Functions:
     Dither_Luma_Rebuild
     mt_expand_multi
     mt_inpand_multi
-    avs_ComplementParity
     avs_TemporalSoften
     UnsharpMask
 '''
@@ -2147,43 +2146,6 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
     if mode_m:
         clip = core.std.Minimum(clip, planes = planes, coordinates = mode_m, **thr_arg)
         clip = mt_inpand_multi(clip, mode = mode, sw = sw - 1, sh = sh - 1, planes = planes, **thr_arg)
-    
-    return clip
-
-def avs_ComplementParity(clip: VideoNode) -> VideoNode:
-    
-    func_name = 'avs_ComplementParity'
-    
-    def invert_parity(n: int, f: VideoFrame) -> VideoFrame:
-        
-        fout = f.copy()
-        
-        frame_var = f.props.get('_FieldBased')
-        field_var = f.props.get('_Field')
-        
-        if frame_var is None:
-            if field_var is None:
-                raise KeyError(f'{func_name}: "_FieldBased" and "_Field" are missing, there are no keys to change')
-            elif field_var == 0:
-                fout.props['_Field'] = 1
-            elif field_var == 1:
-                fout.props['_Field'] = 0
-            else:
-                raise KeyError(f'{func_name}: the value of the key "_Field" is out of range')
-        elif field_var is not None:
-            raise KeyError(f'{func_name}: the keys "_FieldBased" and "_Field" cannot be present in the clip at the same time')
-        elif frame_var == 0:
-            raise KeyError(f'{func_name}: "_FieldBased" = 0, it is impossible to change the parity of a progressive clip')
-        elif frame_var == 1:
-            fout.props['_FieldBased'] = 2
-        elif frame_var == 2:
-            fout.props['_FieldBased'] = 1
-        else:
-            raise KeyError(f'{func_name}: the value of the key "_FieldBased" is out of range')
-        
-        return fout
-    
-    clip = core.std.ModifyFrame(clip = clip, clips = clip, selector = invert_parity)
     
     return clip
 
