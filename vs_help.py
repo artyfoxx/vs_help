@@ -1524,45 +1524,79 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     return clip
 
-def search_field_diffs(clip: VideoNode, thr: float = 0.001, div: float = 2, mode: int = 0, output: str | None = None,
-                       plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2,
+                       output: str | None = None, plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
-    if mode < 0 or mode > 7:
-        raise ValueError(f'{func_name}: Please use 0...7 mode value')
+    match mode:
+        case int() if mode in set(range(8)):
+            mode = [mode]
+        case list() if set(mode) <= set(range(8)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: Please use 0...7 mode value or list[mode]')
+    
+    match thr:
+        case float():
+            thr = [thr] * len(mode)
+        case list() if all(isinstance(i, float) for i in thr):
+            if len(thr) < len(mode):
+                thr += [thr[-1]] * (len(mode) - len(thr))
+            elif len(thr) > len(mode):
+                raise ValueError(f'{func_name}: len(thr) > len(mode)')
+        case _:
+            raise TypeError(f'{func_name}: "thr" must be float or list[float]')
+    
+    match div:
+        case int() | float() if div > 1:
+            div = [div] * len(mode)
+        case list() if all(isinstance(i, int | float) and i > 1 for i in thr):
+            if len(div) < len(mode):
+                div += [div[-1]] * (len(mode) - len(div))
+            elif len(div) > len(mode):
+                raise ValueError(f'{func_name}: len(div) > len(mode)')
+        case _:
+            raise TypeError(f'{func_name}: "div" must be int, float or list[int | float] and "div" > 1')
     
     if output is None:
-        output = f'field_diffs_mode_{mode}_thr_{thr:.0e}.txt'
-    
-    if div <= 0:
-        raise ValueError(f'{func_name}: div must be greater than zero')
+        output = 'field_diffs.txt'
     
     num_f = clip.num_frames
-    field_diffs = [0] * num_f
+    diffs = [[0] * num_f, [0] * num_f]
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
         
-        nonlocal field_diffs
-        field_diffs[n] = f[0].props['PlaneStatsDiff'] if mode & 1 else abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
+        nonlocal diffs
+        
+        diffs[0][n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
+        diffs[1][n] = f[0].props['PlaneStatsDiff']
         
         if n == num_f - 1:
-            match mode // 2:
-                case 0:
-                    result = (f'{i} {x:.20f}\n' for i in range(num_f) if (x := field_diffs[i]) >= thr)
-                case 1:
-                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f) if (x := abs(field_diffs[i - 1] - field_diffs[i])) >= thr)
-                case 2:
-                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 1) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                              abs(field_diffs[i] - field_diffs[i + 1]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 1]) <= x / div)
-                case 3:
-                    result = (f'{i} {x:.20f}\n' for i in range(1, num_f - 2) if (x := max(abs(field_diffs[i - 1] - field_diffs[i]),
-                              abs(field_diffs[i + 1] - field_diffs[i + 2]), abs(field_diffs[i - 1] - field_diffs[i + 1]),
-                              abs(field_diffs[i] - field_diffs[i + 2]))) >= thr and abs(field_diffs[i - 1] - field_diffs[i + 2]) <= x / div
-                              and abs(field_diffs[i] - field_diffs[i + 1]) > x)
+            res = []
+            d = max(len(str(num_f)), 5)
+            t = max(len(str(i)) for i in thr)
+            
+            for i, j in enumerate(mode):
+                p = j & 1
+                
+                match j // 2:
+                    case 0:
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in range(num_f) if (x := diffs[p][k]) >= thr[i]]
+                    case 1:
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in range(1, num_f) if (x := abs(diffs[p][k - 1] - diffs[p][k])) >= thr[i]]
+                    case 2:
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in range(1, num_f - 1) if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
+                                abs(diffs[p][k] - diffs[p][k + 1]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 1]) <= x / div[i]]
+                    case 3:
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in range(1, num_f - 2) if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
+                                abs(diffs[p][k + 1] - diffs[p][k + 2]), abs(diffs[p][k - 1] - diffs[p][k + 1]),
+                                abs(diffs[p][k] - diffs[p][k + 2]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 2]) <= x / div[i]
+                                and abs(diffs[p][k] - diffs[p][k + 1]) > x]
             
             with open(output, 'w') as file:
-                file.writelines(result)
+                file.write(f'{'frame':>{d}} mode {'diff':<22} {'thr':<{t}} div\n')
+                file.writelines(sorted(res))
         
         return clip
     
@@ -1744,16 +1778,16 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
     VlimD = core.std.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
     
-    result = core.std.MergeDiff(Vblur, VlimD, planes = planes)
+    res = core.std.MergeDiff(Vblur, VlimD, planes = planes)
     
     if amnt > 254:
-        clip = result
+        clip = res
     elif amnt == 0:
         pass
     else:
         amnt *= factor
         expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
-        clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
+        clip = core.std.Expr([clip, res], [expr2 if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -1794,16 +1828,16 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
     VlimD  = core.std.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
     
-    result = core.std.MergeDiff(Vblur, VlimD, planes = planes)
+    res = core.std.MergeDiff(Vblur, VlimD, planes = planes)
     
     if amnt > 254:
-        clip = result
+        clip = res
     elif amnt == 0:
         pass
     else:
         amnt *= factor
         expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
-        clip = core.std.Expr([clip, result], [expr2 if i in planes else '' for i in range(num_p)])
+        clip = core.std.Expr([clip, res], [expr2 if i in planes else '' for i in range(num_p)])
     
     return clip
 
