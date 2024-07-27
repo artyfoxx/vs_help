@@ -1525,17 +1525,17 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     return clip
 
 def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2,
-                       output: str | None = None, plane: int = 0) -> VideoNode:
+                       norm: bool = False, output: str | None = None, plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
     match mode:
-        case int() if mode in set(range(8)):
+        case int() if mode in set(range(16)):
             mode = [mode]
-        case list() if set(mode) <= set(range(8)):
+        case list() if set(mode) <= set(range(16)):
             pass
         case _:
-            raise ValueError(f'{func_name}: Please use 0...7 mode value or list[mode]')
+            raise ValueError(f'{func_name}: Please use 0...15 mode value or list[mode]')
     
     match thr:
         case float():
@@ -1574,11 +1574,19 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
         
         if n == num_f - 1:
             res = []
+            
             d = max(len(str(num_f)), 5)
             t = max(len(str(i)) for i in thr)
             
+            if norm:
+                min_diffs_0, max_diffs_0 = min(diffs[0]), max(diffs[0])
+                min_diffs_1, max_diffs_1 = min(diffs[1]), max(diffs[1])
+                
+                diffs[0] = [(i - min_diffs_0) / (max_diffs_0 - min_diffs_0) for i in diffs[0]]
+                diffs[1] = [(i - min_diffs_1) / (max_diffs_1 - min_diffs_1) for i in diffs[1]]
+            
             for i, j in enumerate(mode):
-                p = j & 1
+                p = j % 2
                 
                 match j // 2:
                     case 0:
