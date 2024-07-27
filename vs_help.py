@@ -1594,9 +1594,12 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
                                 abs(diffs[p][k] - diffs[p][k + 2]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 2]) <= x / div[i]
                                 and abs(diffs[p][k] - diffs[p][k + 1]) > x]
             
-            with open(output, 'w') as file:
-                file.write(f'{'frame':>{d}} mode {'diff':<22} {'thr':<{t}} div\n')
-                file.writelines(sorted(res))
+            if res:
+                with open(output, 'w') as file:
+                    file.write(f'{'frame':>{d}} mode {'diff':<22} {'thr':<{t}} div\n')
+                    file.writelines(sorted(res))
+            else:
+                raise ValueError(f'{func_name}: there is no result, check the settings')
         
         return clip
     
