@@ -1530,12 +1530,12 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     func_name = 'search_field_diffs'
     
     match mode:
-        case int() if mode in set(range(16)):
+        case int() if mode in set(range(8)):
             mode = [mode]
-        case list() if set(mode) <= set(range(16)):
+        case list() if set(mode) <= set(range(8)):
             pass
         case _:
-            raise ValueError(f'{func_name}: Please use 0...15 mode value or list[mode]')
+            raise ValueError(f'{func_name}: Please use 0...7 mode value or list[mode]')
     
     match thr:
         case float():
