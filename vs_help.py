@@ -419,15 +419,15 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     for i in args:
         match i:
-            case str():
+            case str() if i in {'x', 'y'}:
                 i = [i] + defaults[1:]
-            case list():
+            case list() if i:
                 if len(i) < 6:
                     i += defaults[len(i):]
                 elif len(i) > 6:
                     raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
             case _:
-                raise ValueError(f'{func_name}: *args must be "list" or "str"')
+                raise ValueError(f'{func_name}: *args must be "list" or "x|y"')
         
         clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
     
@@ -620,7 +620,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -731,7 +731,7 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     match curve:
         case int():
             curve = [curve] * num_p
-        case list():
+        case list() if curve:
             if len(curve) < num_p:
                 curve += [curve[-1]] * (num_p - len(curve))
             elif len(curve) > num_p:
@@ -787,7 +787,7 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     match mode:
         case int():
             mode = [mode] * num_p
-        case list():
+        case list() if mode:
             if len(mode) < num_p:
                 mode += [mode[-1]] * (num_p - len(mode))
             elif len(mode) > num_p:
@@ -831,7 +831,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1484,7 +1484,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1532,7 +1532,7 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     match mode:
         case int() if mode in set(range(8)):
             mode = [mode]
-        case list() if set(mode) <= set(range(8)):
+        case list() if mode and set(mode) <= set(range(8)):
             pass
         case _:
             raise ValueError(f'{func_name}: Please use 0...7 mode value or list[mode]')
@@ -1540,7 +1540,7 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     match thr:
         case float():
             thr = [thr] * len(mode)
-        case list() if all(isinstance(i, float) for i in thr):
+        case list() if thr and all(isinstance(i, float) for i in thr):
             if len(thr) < len(mode):
                 thr += [thr[-1]] * (len(mode) - len(thr))
             elif len(thr) > len(mode):
@@ -1551,7 +1551,7 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     match div:
         case int() | float() if div > 1:
             div = [div] * len(mode)
-        case list() if all(isinstance(i, int | float) and i > 1 for i in thr):
+        case list() if div and all(isinstance(i, int | float) and i > 1 for i in thr):
             if len(div) < len(mode):
                 div += [div[-1]] * (len(mode) - len(div))
             elif len(div) > len(mode):
@@ -1650,7 +1650,7 @@ def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1681,7 +1681,7 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1690,7 +1690,7 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     match thr:
         case int() | float():
             thr = [thr] * num_p
-        case list():
+        case list() if thr:
             if len(thr) < num_p:
                 thr += [thr[-1]] * (num_p - len(thr))
             elif len(thr) > num_p:
@@ -1726,7 +1726,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1772,7 +1772,7 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1822,7 +1822,7 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1871,7 +1871,7 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1908,7 +1908,7 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -1944,7 +1944,7 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2009,7 +2009,7 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2042,7 +2042,7 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2100,7 +2100,7 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2128,7 +2128,7 @@ def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2167,7 +2167,7 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
@@ -2216,7 +2216,7 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
             planes = [*range(num_p)]
         case int():
             planes = [planes]
-        case list() if all(isinstance(i, int) for i in planes):
+        case list() if planes and all(isinstance(i, int) for i in planes):
             if len(planes) > num_p:
                 raise ValueError(f'{func_name}: "planes" length must not be greater than the number of planes"')
         case _:
