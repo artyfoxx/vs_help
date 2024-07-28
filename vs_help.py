@@ -1563,11 +1563,11 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     
     match frames:
         case None:
-            frames = [*range(1, num_f - 2)]
-        case list() if frames and all(isinstance(i, int) and 1 <= i < num_f - 2 for i in frames):
+            frames = [*range(num_f)]
+        case list() if frames and all(isinstance(i, int) and 0 <= i < num_f for i in frames):
             pass
         case _:
-            raise TypeError(f'{func_name}: "frames" must be None or list[1 <= int < num_frames - 2]')
+            raise TypeError(f'{func_name}: "frames" must be None or list[0 <= int < num_frames]')
     
     if output is None:
         output = 'field_diffs.txt'
@@ -1604,22 +1604,22 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
                     case 0:
                         res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := diffs[p][k]) >= thr[i]]
                     case 1:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := abs(diffs[p][k - 1] - diffs[p][k])) >= thr[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := abs(diffs[p][max(k - 1, 0)] - diffs[p][k])) >= thr[i]]
                     case 2:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
-                                abs(diffs[p][k] - diffs[p][k + 1]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 1]) <= x / div[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))) >= thr[i] and abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]) <= x / div[i]]
                     case 3:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
-                                abs(diffs[p][k + 1] - diffs[p][k + 2]), abs(diffs[p][k - 1] - diffs[p][k + 1]),
-                                abs(diffs[p][k] - diffs[p][k + 2]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 2]) <= x / div[i]
-                                and abs(diffs[p][k] - diffs[p][k + 1]) > x]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]), abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]),
+                                abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))) >= thr[i] and abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]) <= x / div[i]
+                                and abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]) > x]
                     case 4:
-                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][k - 1] - diffs[p][k]), abs(diffs[p][k] - diffs[p][k + 1]))):.20f} '
-                                f'{x / max(abs(diffs[p][k - 1] - diffs[p][k + 1]), epsilon):8.2f}\n' for k in frames]
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]), abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))):.20f} '
+                                f'{x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]), epsilon):8.2f}\n' for k in frames]
                     case 5:
-                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][k - 1] - diffs[p][k]), abs(diffs[p][k + 1] - diffs[p][k + 2]),
-                                abs(diffs[p][k - 1] - diffs[p][k + 1]), abs(diffs[p][k] - diffs[p][k + 2]))):.20f} '
-                                f'{x / max(abs(diffs[p][k - 1] - diffs[p][k + 2]), epsilon):8.2f} {abs(diffs[p][k] - diffs[p][k + 1]):.20f}\n' for k in frames]
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]), abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]),
+                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]), abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))):.20f} '
+                                f'{x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]), epsilon):8.2f} {abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]):.20f}\n' for k in frames]
             
             if res:
                 with open(output, 'w') as file:
