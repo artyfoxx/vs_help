@@ -1524,18 +1524,18 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     return clip
 
-def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2,
-                       norm: bool = False, output: str | None = None, plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2, norm: bool = False, 
+                       frames: list[int] | None = None, output: str | None = None, plane: int = 0) -> VideoNode:
     
     func_name = 'search_field_diffs'
     
     match mode:
-        case int() if mode in set(range(8)):
+        case int() if mode in set(range(8)) or mode in set(range(8, 12)):
             mode = [mode]
-        case list() if mode and set(mode) <= set(range(8)):
+        case list() if mode and (set(mode) <= set(range(8)) or set(mode) <= set(range(8, 12))):
             pass
         case _:
-            raise ValueError(f'{func_name}: Please use 0...7 mode value or list[mode]')
+            raise ValueError(f'{func_name}: Please use 0...7 or 8...11 mode value or list[mode]')
     
     match thr:
         case float():
@@ -1559,10 +1559,19 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
         case _:
             raise TypeError(f'{func_name}: "div" must be int, float or list[int | float] and "div" > 1')
     
+    num_f = clip.num_frames
+    
+    match frames:
+        case None:
+            frames = [*range(1, num_f - 2)]
+        case list() if frames and all(isinstance(i, int) and 1 <= i < num_f - 2 for i in frames):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: "frames" must be None or list[1 <= int < num_frames - 2]')
+    
     if output is None:
         output = 'field_diffs.txt'
     
-    num_f = clip.num_frames
     diffs = [[0] * num_f, [0] * num_f]
     
     def dump_diffs(n: int, f: list[VideoFrame], clip: VideoNode) -> VideoNode:
@@ -1579,33 +1588,47 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
             t = max(len(str(i)) for i in thr)
             
             if norm:
+                epsilon = 1e-7
                 min_diffs_0, max_diffs_0 = min(diffs[0]), max(diffs[0])
                 min_diffs_1, max_diffs_1 = min(diffs[1]), max(diffs[1])
                 
                 diffs[0] = [(i - min_diffs_0) / (max_diffs_0 - min_diffs_0) for i in diffs[0]]
                 diffs[1] = [(i - min_diffs_1) / (max_diffs_1 - min_diffs_1) for i in diffs[1]]
+            else:
+                epsilon = 1e-8
             
             for i, j in enumerate(mode):
                 p = j % 2
                 
                 match j // 2:
                     case 0:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in range(num_f) if (x := diffs[p][k]) >= thr[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := diffs[p][k]) >= thr[i]]
                     case 1:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in range(1, num_f) if (x := abs(diffs[p][k - 1] - diffs[p][k])) >= thr[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := abs(diffs[p][k - 1] - diffs[p][k])) >= thr[i]]
                     case 2:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in range(1, num_f - 1) if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
                                 abs(diffs[p][k] - diffs[p][k + 1]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 1]) <= x / div[i]]
                     case 3:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in range(1, num_f - 2) if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][k - 1] - diffs[p][k]),
                                 abs(diffs[p][k + 1] - diffs[p][k + 2]), abs(diffs[p][k - 1] - diffs[p][k + 1]),
                                 abs(diffs[p][k] - diffs[p][k + 2]))) >= thr[i] and abs(diffs[p][k - 1] - diffs[p][k + 2]) <= x / div[i]
                                 and abs(diffs[p][k] - diffs[p][k + 1]) > x]
+                    case 4:
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][k - 1] - diffs[p][k]), abs(diffs[p][k] - diffs[p][k + 1]))):.20f} '
+                                f'{x / max(abs(diffs[p][k - 1] - diffs[p][k + 1]), epsilon):8.2f}\n' for k in frames]
+                    case 5:
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][k - 1] - diffs[p][k]), abs(diffs[p][k + 1] - diffs[p][k + 2]),
+                                abs(diffs[p][k - 1] - diffs[p][k + 1]), abs(diffs[p][k] - diffs[p][k + 2]))):.20f} '
+                                f'{x / max(abs(diffs[p][k - 1] - diffs[p][k + 2]), epsilon):8.2f} {abs(diffs[p][k] - diffs[p][k + 1]):.20f}\n' for k in frames]
             
             if res:
                 with open(output, 'w') as file:
-                    file.write(f'{'frame':>{d}} mode {'diff':<22} {'thr':<{t}} div\n')
-                    file.writelines(sorted(res))
+                    if set(mode) <= set(range(8, 12)):
+                        file.write(f'{'frame':<{d}} mode {'diff':<22} {'thr':<22} {'div':<8} thr2\n')
+                    else:
+                        file.write(f'{'frame':<{d}} mode {'diff':<22} {'thr':<{t}} div\n')
+                    
+                    file.writelines(res) if len(mode) == 1 else file.writelines(sorted(res))
             else:
                 raise ValueError(f'{func_name}: there is no result, check the settings')
         
