@@ -1524,23 +1524,29 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     return clip
 
-def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2.0, norm: bool = False, 
-                       frames: list[int] | None = None, output: str | None = None, plane: int = 0) -> VideoNode:
+def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2.0,
+                       norm: bool = False, frames: list[int] | None = None, output: str | None = None, plane: int = 0) -> VideoNode:
     '''
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
-    The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference is calculated for them using two different algorithms.
-    Even modes - the average normalized value is calculated for each field, and then their absolute difference. It is well suited for searching combo frames and interlaced fades.
-    Odd modes - a classic algorithm, fields are subtracted from each other pixel by modulus, and the average normalized value is calculated for the resulting clip.
+    The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference is calculated
+    for them using two different algorithms.
+    Even modes - the average normalized value is calculated for each field, and then their absolute difference.
+    It is well suited for searching combo frames and interlaced fades.
+    Odd modes - a classic algorithm, fields are subtracted from each other pixel by modulus,
+    and the average normalized value is calculated for the resulting clip.
     It is well suited for detecting temporal anomalies.
     mode 0 and 1 - search for frames with absolute normalized difference above the specified threshold.
     mode 2 and 3 - search for the absolute normalized difference change above the specified threshold.
-    mode 4 and 5 - search for single anomalies of absolute normalized difference changes above the specified threshold (n/p frame is skipped).
-    Of the two possible values, the larger is compared with the threshold. The minimum ratio between the anomaly value and the change in adjacent,
-    non-abnormal frames is specified by the div parameter.
-    mode 6 and 7 - search for double anomalies of absolute normalized difference changes above the specified threshold (both n/p frames are skipped).
-    Of the four possible values, the largest is compared with the threshold. The minimum ratio between the anomaly value and the change in adjacent,
-    non-abnormal frames is specified by the div parameter. In this case, the spread of the values of two abnormal frames must be strictly greater than the abnormal value.
+    mode 4 and 5 - search for single anomalies of absolute normalized difference changes above the specified threshold
+    (n/p frame is skipped).
+    Of the two possible values, the larger is compared with the threshold. The minimum ratio between the anomaly value
+    and the change in adjacent, non-abnormal frames is specified by the div parameter.
+    mode 6 and 7 - search for double anomalies of absolute normalized difference changes above the specified threshold
+    (both n/p frames are skipped).
+    Of the four possible values, the largest is compared with the threshold. The minimum ratio between the anomaly value
+    and the change in adjacent, non-abnormal frames is specified by the div parameter.
+    In this case, the spread of the values of two abnormal frames must be strictly greater than the abnormal value.
     mode 8 and 9 - debug mode for mode 4 and 5.
     mode 10 and 11 - debug mode for mode 6 and 7.
     You can specify several modes as a list, in which case the result will be sorted by frame number, and within one frame by mode.
@@ -1548,13 +1554,15 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     thr - the threshold for triggering the mode, it does not work for debug modes.
     You can specify several as a list, they will positionally correspond to the modes.
     If the thr list is less than the list of modes, the last thr value will work for all remaining modes. The default is "0.001".
-    div - sets the minimum ratio between the anomaly value and the change in neighboring, non-abnormal frames. It is relevant for modes 4...7.
+    div - sets the minimum ratio between the anomaly value and the change in neighboring, non-abnormal frames.
+    It is relevant for modes 4...7.
     You can specify several as a list, they will positionally correspond to the modes.
     If the div list is less than the list of modes, the last div value will work for all remaining modes. The default is "2.0".
     norm - normalization of absolute normalized difference values between 0 and 1. The default is "False".
     frames - a list of frames to check. The default is "all frames".
     output - path and name of the output file.
-    By default, the file is created in the same directory where the application used for the analysis pass is located, the file name is "field_diffs.txt".
+    By default, the file is created in the same directory where the application used for the analysis pass is located,
+    the file name is "field_diffs.txt".
     plane - the position of the planar for calculating the absolute normalized difference. The default is "0" (luminance planar).
     '''
     
@@ -1630,24 +1638,36 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
                 
                 match j // 2:
                     case 0:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := diffs[p][k]) >= thr[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames
+                                if (x := diffs[p][k]) >= thr[i]]
                     case 1:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames if (x := abs(diffs[p][max(k - 1, 0)] - diffs[p][k])) >= thr[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}}\n' for k in frames
+                                if (x := abs(diffs[p][max(k - 1, 0)] - diffs[p][k])) >= thr[i]]
                     case 2:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
-                                abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))) >= thr[i] and abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]) <= x / div[i]]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames
+                                if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))) >= thr[i] and
+                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]) <= x / div[i]]
                     case 3:
-                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
-                                abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]), abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]),
-                                abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))) >= thr[i] and abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]) <= x / div[i]
+                        res += [f'{k:>{d}} {j:>4} {x:.20f} {thr[i]:<{t}} {div[i]}\n' for k in frames
+                                if (x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]),
+                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]),
+                                abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))) >= thr[i] and
+                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]) <= x / div[i]
                                 and abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]) > x]
                     case 4:
-                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]), abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))):.20f} '
-                                f'{min(x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]), 1e-20), 99999.99):8.2f}\n' for k in frames]
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]))):.20f} '
+                                f'{min(x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]), 1e-20), 99999.99):8.2f}\n'
+                                for k in frames]
                     case 5:
-                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]), abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]),
-                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]), abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))):.20f} '
-                                f'{min(x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]), 1e-20), 99999.99):8.2f} {abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]):.20f}\n'
+                        res += [f'{k:>{d}} {j:>4} {diffs[p][k]:.20f} {(x := max(abs(diffs[p][max(k - 1, 0)] - diffs[p][k]),
+                                abs(diffs[p][min(k + 1, num_f - 1)] - diffs[p][min(k + 2, num_f - 1)]),
+                                abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 1, num_f - 1)]),
+                                abs(diffs[p][k] - diffs[p][min(k + 2, num_f - 1)]))):.20f} '
+                                f'{min(x / max(abs(diffs[p][max(k - 1, 0)] - diffs[p][min(k + 2, num_f - 1)]), 1e-20), 99999.99):8.2f} '
+                                f'{abs(diffs[p][k] - diffs[p][min(k + 1, num_f - 1)]):.20f}\n'
                                 for k in frames]
             
             if res:
@@ -2014,7 +2034,8 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
     center_v = 1 / 2 ** amountV
     side_v = (1 - 1 / 2 ** amountV) / 2
     
-    expr = f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +'
+    expr = f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + ' \
+           f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +'
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
