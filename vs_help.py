@@ -2014,13 +2014,8 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
     center_v = 1 / 2 ** amountV
     side_v = (1 - 1 / 2 ** amountV) / 2
     
-    if amountH:
-        expr0 = f'x[-1,0] x[1,0] + {side_h} * x {center_h} * +'
-        clip = core.akarin.Expr(clip, [expr0 if i in planes else '' for i in range(num_p)])
-    
-    if amountV:
-        expr1 = f'x[0,-1] x[0,1] + {side_v} * x {center_v} * +'
-        clip = core.akarin.Expr(clip, [expr1 if i in planes else '' for i in range(num_p)])
+    expr = f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +'
+    clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
