@@ -612,7 +612,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -823,7 +823,7 @@ def znedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1476,7 +1476,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1694,7 +1694,7 @@ def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float 
     factor = 1 << clip.format.bits_per_sample - 8
     power = factor ** 2
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1725,7 +1725,7 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1770,7 +1770,7 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1816,7 +1816,7 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1866,7 +1866,7 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1915,7 +1915,7 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1952,7 +1952,7 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -1988,7 +1988,7 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -2048,7 +2048,7 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -2081,7 +2081,7 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -2139,7 +2139,7 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
@@ -2252,7 +2252,7 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     if radius < 0 or radius > 7:
@@ -2294,7 +2294,7 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if space != YUV and space != GRAY:
+    if space not in {YUV, GRAY}:
         raise ValueError(f'{func_name}: Unsupported color family')
     
     blurclip = clip.std.BoxBlur(vradius = radius, hradius = radius, planes = 0)
