@@ -240,10 +240,20 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
 def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> VideoNode:
     '''
     Dehalo by bion, ported from AviSynth version with minor additions.
-    mode = 1, 5, 11 - the weakest, artifacts will not cause.
-    mode = 2, 3, 4 - bad modes, eat innocent parts, can't be used.
-    mode = 10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
-    mode = 14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
+    
+    Args:
+        mode: rgvs.Repair mode from dehaloed clip.
+            1, 5, 11 - the weakest, artifacts will not cause.
+            2, 3, 4 - bad modes, eat innocent parts, can't be used.
+            10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
+            14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
+        rep: use rgvs.Repair to clamp result clip or not.
+        rg: use rgvs.RemoveGrain and rgvs.Repair to merge with blurred clip or not.
+        mask: the mask to merge clip and blurred clip.
+            3 - the most accurate.
+            4 - the roughest.
+            1 and 2 - somewhere in the middle.
+        m: show the mask instead of the clip or not.
     '''
     
     func_name = 'bion_dehalo'
@@ -857,11 +867,13 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     '''
     Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
     Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
-    :param src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
-    :param expand: Expansion of edge mask.
-    :param iterations: Protects parallel lines and corners that are usually damaged by YAHR.
-    :param brz: Adjusts the internal line thickness.
-    :param shift: Corrective shift for fine-tuning iterations
+    
+    Args:
+        src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
+        expand: Expansion of edge mask.
+        iterations: Protects parallel lines and corners that are usually damaged by YAHR.
+        brz: Adjusts the internal line thickness.
+        shift: Corrective shift for fine-tuning iterations
     '''
     
     func_name = 'dehalo_mask'
