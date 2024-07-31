@@ -334,6 +334,9 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
         curve: target correction curve, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
             -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
         plane: by default 0.
+    
+    Example:
+        clip = fix_border(clip, ['x', 0, 1, 50], ['x', 1919, 1918, 50], ['y', 0, 1, 50], ['y', 1079, 1078, 50])
     '''
     
     func_name = 'fix_border'
