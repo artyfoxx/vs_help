@@ -63,8 +63,11 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     
     func_name = 'autotap3'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -100,7 +103,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
             back_args['src_height'] = dy * 2 - crop_args['src_height'] * dy / h
         
         if any((x := i) not in back_args for i in crop_args):
-            raise ValueError(f'{func_name}: Unsupported key {x} in crop_args')
+            raise KeyError(f'{func_name}: Unsupported key {x} in crop_args')
     
     space = clip.format.color_family
     
@@ -110,7 +113,7 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     t1 = core.resize.Lanczos(clip, dx, dy, filter_param_a=1, **crop_args)
     t2 = core.resize.Lanczos(clip, dx, dy, filter_param_a=2, **crop_args)
@@ -163,8 +166,11 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     
     func_name = 'Lanczosplus'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -192,7 +198,7 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a=mtaps1)
     fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a=mtaps1)
@@ -258,8 +264,11 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     func_name = 'bion_dehalo'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -269,7 +278,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
@@ -341,8 +350,11 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     func_name = 'fix_border'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -352,7 +364,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     elif space == GRAY:
         clips = [clip]
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     def axis_x(clip: VideoNode, target: int, donor: int | None, limit: int, curve: int) -> VideoNode:
         
@@ -468,8 +480,11 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     
     func_name = 'MaskDetail'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -483,7 +498,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor
@@ -551,8 +566,11 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, full_range: b
     
     func_name = 'degrain_n'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if tr > 6 or tr < 1:
         raise ValueError(f'{func_name}: 1 <= "tr" <= 6')
@@ -584,6 +602,9 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
     '''
     
     func_name = 'Destripe'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
     if dx is None:
         dx = clip.width
@@ -622,14 +643,16 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     
     func_name = 'daa'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -662,8 +685,11 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     
     func_name = 'average_fields'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
@@ -765,7 +791,7 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     elif space == GRAY:
         clip = simple_average(clip, curve[0], weight, mode)
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     return clip
 
@@ -776,8 +802,11 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     func_name = 'rg_fix'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
@@ -821,7 +850,7 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     elif space == GRAY:
         clip = simple_fix(clip, mode[0])
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     return clip
 
@@ -833,14 +862,16 @@ def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     func_name = 'nnedi3aas'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -884,8 +915,11 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     func_name = 'dehalo_mask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if brz < 0 or brz > 255:
         raise ValueError(f'{func_name}: brz must be between 0 and 255')
@@ -898,7 +932,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     
@@ -930,8 +964,11 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     
     func_name = 'tp7_deband_mask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -969,7 +1006,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     if 'exp_n' not in after_args:
         after_args['exp_n'] = 1
@@ -986,8 +1023,11 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     
     func_name = 'DeHalo_alpha'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -1002,7 +1042,7 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor
@@ -1039,8 +1079,11 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
     
     func_name = 'FineDehalo'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -1050,7 +1093,7 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     factor = 1 << clip.format.bits_per_sample - 8
     thmi *= factor
@@ -1117,8 +1160,11 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
     
     func_name = 'FineDehalo2'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -1128,7 +1174,7 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     if hconv is None:
         hconv = [-1, -2, 0, 0, 40, 0, 0, -2, -1]
@@ -1181,6 +1227,9 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     
     func_name = 'InsaneAA'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     clip = core.std.SetFieldBased(clip, 0)
     
     space = clip.format.color_family
@@ -1192,7 +1241,7 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     elif space == GRAY:
         orig_gray = clip
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     if ext_aa is None:
         w = clip.width
@@ -1217,7 +1266,7 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
             clip = FineDehalo(clip, thmi=45, thlimi=60, thlima=120, mt_prewitt=True)
         
         clip = rescaler.upscale(clip, w, h, partial(upscaler, **upscaler_args))
-    elif ext_aa.format.color_family == GRAY:
+    elif isinstance(ext_aa, VideoNode) and ext_aa.format.color_family == GRAY:
         clip = ext_aa
     else:
         raise ValueError(f'{func_name}: The external AA should be GRAY')
@@ -1225,7 +1274,7 @@ def InsaneAA(clip: VideoNode, ext_aa: VideoNode = None, ext_mask: VideoNode = No
     if masked:
         if ext_mask is None:
             ext_mask = core.std.Sobel(orig_gray, scale=2).std.Maximum()
-        elif ext_mask.format.color_family == GRAY:
+        elif isinstance(ext_mask, VideoNode) and ext_mask.format.color_family == GRAY:
             pass
         else:
             raise ValueError(f'{func_name}: The external mask should be GRAY')
@@ -1241,6 +1290,9 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
              src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> VideoNode:
     
     func_name = 'upscaler'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -1291,7 +1343,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
                 znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
                 
                 if any((x := i) not in eedi3_args and x not in znedi3_args for i in upscaler_args):
-                    raise ValueError(f'{func_name}: Unsupported key {x} in upscaler_args')
+                    raise KeyError(f'{func_name}: Unsupported key {x} in upscaler_args')
                 
                 clip = core.eedi3m.EEDI3(clip, field=1, dh=True, sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
                 clip = core.std.Transpose(clip)
@@ -1327,8 +1379,11 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     
     func_name = 'custom_mask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     match mask:
         case 0:
@@ -1364,8 +1419,11 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     
     func_name = 'diff_mask'
     
+    if any(not isinstance(i, VideoNode) for i in (first, second)):
+        raise TypeError(f'{func_name} both clips must be of the VideoNode type')
+    
     if first.format.sample_type != INTEGER or second.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if first.num_frames != second.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
@@ -1410,6 +1468,9 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
 def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> VideoNode:
     
     func_name = 'apply_range'
+    
+    if any(not isinstance(i, VideoNode) for i in (first, second)):
+        raise TypeError(f'{func_name} both clips must be of the VideoNode type')
     
     num_f = first.num_frames
     
@@ -1458,8 +1519,11 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     
     func_name = 'titles_mask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
     
@@ -1469,7 +1533,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     elif space == GRAY:
         pass
     else:
-        raise ValueError(f'{func_name}: Unsupported color family')
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     clip = mt_binarize(clip, thr)
     
@@ -1489,14 +1553,16 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
     
     func_name = 'after_mask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1527,7 +1593,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             for _ in range(after_args[i]):
                 clip = eval(f'core.std.{after_dict[i]}(clip, planes=planes)')
         else:
-            raise ValueError(f'{func_name}: Unsupported key {i} in after_args')
+            raise KeyError(f'{func_name}: Unsupported key {i} in after_args')
     
     if borders:
         if len(borders) < 4:
@@ -1594,6 +1660,15 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     '''
     
     func_name = 'search_field_diffs'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if plane not in set(range(clip.format.num_planes)):
+        raise ValueError(f'{func_name}: Unsupported plane')
     
     match mode:
         case int() if mode in set(range(12)):
@@ -1724,8 +1799,11 @@ def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float 
     
     func_name = 'mt_CombMask'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if thr1 < 0 or thr2 < 0 or thr1 > 65535 or thr2 > 65535:
         raise ValueError(f'{func_name}: Please use 0...65535 thr1 and thr2 value')
@@ -1736,13 +1814,12 @@ def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float 
     if div <= 0:
         raise ValueError(f'{func_name}: div must be greater than zero')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     power = factor ** 2
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1765,15 +1842,17 @@ def mt_binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = F
     
     func_name = 'mt_binarize'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1810,15 +1889,17 @@ def delcomb(clip: VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, 
     
     func_name = 'delcomb'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1855,16 +1936,18 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     
     func_name = 'vinverse'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1905,16 +1988,18 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     
     func_name = 'vinverse2'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1955,15 +2040,17 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'sbr'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -1992,15 +2079,17 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'sbrV'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2029,14 +2118,16 @@ def avs_Blur(clip: VideoNode, amountH: float = 0, amountV: float | None = None, 
     
     func_name = 'avs_Blur'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2087,18 +2178,20 @@ def mt_clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, ov
     
     func_name = 'mt_clamp'
     
+    if any(not isinstance(clip, VideoNode) for i in (clip, bright_limit, dark_limit)):
+        raise TypeError(f'{func_name} all clips must be of the VideoNode type')
+    
     if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if clip.format.id != bright_limit.format.id or clip.format.id != dark_limit.format.id:
         raise ValueError(f'{func_name}: "clip", "bright_limit" and "dark_limit" must have the same format')
     
-    space = clip.format.color_family
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2123,15 +2216,17 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
     
     func_name = 'MinBlur'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     half = 128 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2180,16 +2275,18 @@ def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, pla
     
     func_name = 'Dither_Luma_Rebuild'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     half = 128 * factor
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -2216,6 +2313,9 @@ def mt_expand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
                     **thr_arg: float) -> VideoNode:
     
     func_name = 'mt_expand_multi'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
     num_p = clip.format.num_planes
     
@@ -2256,6 +2356,9 @@ def mt_inpand_multi(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: i
     
     func_name = 'mt_inpand_multi'
     
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
     num_p = clip.format.num_planes
     
     match planes:
@@ -2294,15 +2397,17 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
     
     func_name = 'avs_TemporalSoften'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     if radius < 0 or radius > 7:
         raise ValueError(f'{func_name}: Please use 0...7 "radius" value')
@@ -2336,15 +2441,17 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     func_name = 'UnsharpMask'
     
-    if clip.format.sample_type != INTEGER:
-        raise ValueError(f'{func_name}: floating point sample type is not supported')
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
-    space = clip.format.color_family
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
-    
-    if space not in {YUV, GRAY}:
-        raise ValueError(f'{func_name}: Unsupported color family')
     
     blurclip = clip.std.BoxBlur(vradius=radius, hradius=radius, planes=0)
     
