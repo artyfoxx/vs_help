@@ -1415,7 +1415,7 @@ def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool 
     return clip
 
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
-              **after_args: Any) -> VideoNode:
+              mt_prewitt: bool | None = None, **after_args: Any) -> VideoNode:
     
     func_name = 'diff_mask'
     
@@ -1449,7 +1449,15 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     else:
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
-    clip = core.std.Expr([first, second], f'x y - abs {scale} *')
+    clip = core.std.Expr([first, second], 'x y - abs')
+    
+    if mt_prewitt is None:
+        clip = core.std.Expr(clip, f'x {scale} *')
+    else:
+        if mt_prewitt:
+            clip = custom_mask(clip, 1, scale)
+        else:
+            clip = core.std.Prewitt(clip, scale=scale)
     
     if thr:
         clip = mt_binarize(clip, thr)
