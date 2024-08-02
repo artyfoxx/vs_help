@@ -1793,7 +1793,7 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     temp = core.std.SetFieldBased(clip, 0).std.SeparateFields(True)
     fields = [temp[::2], temp[1::2]]
     
-    fields[0] = core.std.PlaneStats(fields[0], fields[1], plane=plane)
+    fields[0] = core.std.PlaneStats(*fields, plane=plane)
     fields[1] = core.std.PlaneStats(fields[1], plane=plane)
     
     clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=fields)
@@ -2490,10 +2490,9 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, plan
     nc_clip_d = core.tivtc.TFM(nc_clip, ovr=ovr_d, **tfm_args)
     nc_clip_c = core.tivtc.TFM(nc_clip, ovr=ovr_c, **tfm_args)
     
-    diff = core.std.MakeFullDiff(clip_c, nc_clip_c)
-    diff = core.std.MergeFullDiff(nc_clip_d, diff)
+    diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'), core.std.Expr([clip_c, nc_clip_c], 'y x -')]
     
-    lcomps = [diff if i in planes else clip_d for i in range(num_p)]
-    clip = core.std.ShufflePlanes(lcomps, list(range(num_p)), space)
+    clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
+    clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
     
     return clip
