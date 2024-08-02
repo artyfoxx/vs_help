@@ -2,7 +2,7 @@
 Just a few vapoursynth function... 
 # Dependencies
 ## General
-* [VapourSynth](https://www.vapoursynth.com/) >= R58
+* [VapourSynth](https://www.vapoursynth.com/) >= R61
 * [Python](https://www.python.org/) >= 3.10
 ## Scripts
 * [muvsfunc](https://github.com/WolframRhodium/muvsfunc) (master branch)\
