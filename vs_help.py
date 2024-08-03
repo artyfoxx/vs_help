@@ -2494,7 +2494,9 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, plan
     diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'), core.std.Expr([clip_c, nc_clip_c], 'y x -')]
     
     clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
-    clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
+    
+    if set(planes) != set(range(num_p)):
+        clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
     
     return clip
 
