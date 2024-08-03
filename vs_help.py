@@ -2552,6 +2552,6 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
     clip = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
     
     if expand:
-        clip = core.std.Maximum(clip, planes=planes)
+        clip = core.std.Maximum(clip, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
     
     return clip
