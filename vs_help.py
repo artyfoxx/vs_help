@@ -2530,6 +2530,7 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor - 1
     
     match planes:
         case None:
@@ -2542,16 +2543,23 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
             raise ValueError(f'{func_name}: invalid "planes"')
     
     if metric:
-        expr = f'x[0,-1] x - x[0,1] x - * {cthresh * factor ** 2} > {256 * factor - 1} 0 ?'
+        expr = f'x[0,-1] x - x[0,1] x - * {cthresh * factor ** 2} > {full} 0 ?'
     else:
         cthresh *= factor
         expr = (f'x x[0,1] - d1! x x[0,-1] - d2! d1@ {cthresh} > d2@ {cthresh} > and d1@ {-cthresh} < d2@ {-cthresh} < '
-                f'and or x[0,2] 4 x * + x[0,-2] + 3 x[0,1] x[0,-1] + * - abs {cthresh * 6} > and {256 * factor - 1} 0 ?')
+                f'and or x[0,2] 4 x * + x[0,-2] + 3 x[0,1] x[0,-1] + * - abs {cthresh * 6} > and {full} 0 ?')
     
     defaults = ['0'] + [f'{128 * factor}'] * (num_p - 1)
-    clip = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
+    mask = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
+    
+    if mthresh:
+        expr = f'x y max x y min - {mthresh * factor} > {full} 0 ?'
+        motionmask = core.std.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
+        
+        expr = 'x[0,1] x[0,-1] x max max y min'
+        mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
     
     if expand:
-        clip = core.std.Maximum(clip, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
+        mask = core.std.Maximum(mask, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
     
-    return clip
+    return mask
