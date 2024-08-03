@@ -42,6 +42,7 @@ Functions:
     mt_inpand_multi
     avs_TemporalSoften
     UnsharpMask
+    double_tfm
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -222,7 +223,7 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     fd12 = core.resize.Lanczos(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, filter_param_a=mtaps2)
     fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a=mtaps2)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
-    m12 = core.resize.Lanczos(m12, dx // 16 * 8, dy // 16 * 8, filter_param_a=mtaps2).resize.Lanczos(dx, dy, filter_param_a=mtaps2)
+    m12 = core.resize.Lanczos(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), filter_param_a=mtaps2).resize.Lanczos(dx, dy, filter_param_a=mtaps2)
     
     e2 = core.resize.Lanczos(core.resize.Lanczos(e, w, h, filter_param_a=ltaps), dx, dy, filter_param_a=ltaps)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
@@ -360,7 +361,7 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     if space == YUV:
         num_p = clip.format.num_planes
-        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = core.std.SplitPlanes(clip)
     elif space == GRAY:
         clips = [clip]
     else:
@@ -781,7 +782,7 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
             raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
     if space == YUV:
-        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = core.std.SplitPlanes(clip)
         
         for i in range(num_p):
             clips[i] = simple_average(clips[i], curve[i], weight, mode)
@@ -840,7 +841,7 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
             raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
     
     if space == YUV:
-        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = core.std.SplitPlanes(clip)
         
         for i in range(num_p):
             clips[i] = simple_fix(clips[i], mode[i])
@@ -971,7 +972,6 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     clip = core.std.SetFieldBased(clip, 0)
     
     space = clip.format.color_family
-    num_p = clip.format.num_planes
     
     if mt_prewitt:
         clip = custom_mask(clip, 1, scale)
@@ -990,7 +990,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         w = clip.width
         h = clip.height
         
-        clips = [core.std.ShufflePlanes(clip, i, GRAY) for i in range(num_p)]
+        clips = core.std.SplitPlanes(clip)
         clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w > 0 or sub_h > 0:
@@ -2494,5 +2494,64 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, plan
     
     clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
     clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
+    
+    return clip
+
+def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, expand: bool = True, metric: int = 0,
+              planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'CombMask2'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if metric not in {0, 1}:
+        raise ValueError(f'{func_name}: invalid "metric"')
+    
+    match cthresh:
+        case None:
+            cthresh = 10 if metric else 6
+        case int() if 0 <= cthresh <= (65535 if metric else 255):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "cthresh"')
+    
+    if not isinstance(mthresh, int) or mthresh < 0 or mthresh > 255:
+        raise ValueError(f'{func_name}: invalid "mthresh"')
+    
+    if not isinstance(expand, bool):
+        raise ValueError(f'{func_name}: invalid "expand"')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    if metric:
+        expr = f'x[0,-1] x - x[0,1] x - * {cthresh * factor ** 2} > {256 * factor - 1} 0 ?'
+    else:
+        cthresh *= factor
+        expr = (f'x x[0,1] - d1! x x[0,-1] - d2! d1@ {cthresh} > d2@ {cthresh} > and d1@ {-cthresh} < d2@ {-cthresh} < '
+                f'and or x[0,2] 4 x * + x[0,-2] + 3 x[0,1] x[0,-1] + * - abs {cthresh * 6} > and {256 * factor - 1} 0 ?')
+    
+    defaults = ['0'] + [f'{128 * factor}'] * (num_p - 1)
+    clip = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
+    
+    if expand:
+        clip = core.std.Maximum(clip, planes=planes)
     
     return clip
