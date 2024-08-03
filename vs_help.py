@@ -43,6 +43,7 @@ Functions:
     avs_TemporalSoften
     UnsharpMask
     double_tfm
+    CombMask2
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
