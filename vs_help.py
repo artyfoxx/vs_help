@@ -2559,8 +2559,8 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
     mask = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
     
     if mthresh:
-        expr = f'x y sort2 - {mthresh * factor} > {full} 0 ?'
-        motionmask = core.akarin.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
+        expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
+        motionmask = core.std.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
         
         expr = 'x[0,1] x[0,-1] x max max y min'
         mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
