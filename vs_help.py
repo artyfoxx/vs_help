@@ -2454,8 +2454,8 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     return clip
 
-def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, planes: int | list[int] | None = None,
-               **tfm_args) -> VideoNode:
+def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, post_proc: int | None = None,
+               planes: int | list[int] | None = None, **tfm_args) -> VideoNode:
     
     func_name = 'double_tfm'
     
@@ -2496,7 +2496,21 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, plan
     nc_clip_d = core.tivtc.TFM(nc_clip, ovr=ovr_d, **tfm_args)
     nc_clip_c = core.tivtc.TFM(nc_clip, ovr=ovr_c, **tfm_args)
     
-    diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'), core.std.Expr([clip_c, nc_clip_c], 'y x -')]
+    match post_proc:
+        case None:
+            diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'),
+                    core.std.Expr([clip_c, nc_clip_c], 'y x -')]
+        case 0:
+            diff = [vinverse(core.std.Expr([clip_c, nc_clip_c], 'x y -'), 2.3),
+                    vinverse(core.std.Expr([clip_c, nc_clip_c], 'y x -'), 2.3)]
+        case 1:
+            diff = [vinverse2(core.std.Expr([clip_c, nc_clip_c], 'x y -'), 2.3),
+                    vinverse2(core.std.Expr([clip_c, nc_clip_c], 'y x -'), 2.3)]
+        case 2:
+            diff = [daa(core.std.Expr([clip_c, nc_clip_c], 'x y -'), nns=4, qual=2, pscrn=4, exp=2),
+                    daa(core.std.Expr([clip_c, nc_clip_c], 'y x -'), nns=4, qual=2, pscrn=4, exp=2)]
+        case _:
+            raise ValueError(f'{func_name}: invalid "post_proc"')
     
     clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
     
