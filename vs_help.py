@@ -812,6 +812,9 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
+    if space not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
     def simple_fix(clip: VideoNode, mode: int) -> VideoNode:
         
         match mode:
@@ -832,26 +835,22 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     
     match mode:
         case int():
-            mode = [mode] * num_p
-        case list() if mode:
-            if len(mode) < num_p:
-                mode += [mode[-1]] * (num_p - len(mode))
-            elif len(mode) > num_p:
-                raise ValueError(f'{func_name}: "mode" must be shorter or the same length to number of planes, or "mode" must be "int"')
+            clip = simple_fix(clip, mode)
+        case list() if mode and len(mode) <= num_p:
+            if len(set(mode)) == 1:
+                clip = simple_fix(clip, mode[0])
+            else:
+                if len(mode) < num_p:
+                    mode += [mode[-1]] * (num_p - len(mode))
+                
+                clips = core.std.SplitPlanes(clip)
+                
+                for i in range(num_p):
+                    clips[i] = simple_fix(clips[i], mode[i])
+                
+                clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
         case _:
-            raise ValueError(f'{func_name}: "mode" must be list[int] or "int"')
-    
-    if space == YUV:
-        clips = core.std.SplitPlanes(clip)
-        
-        for i in range(num_p):
-            clips[i] = simple_fix(clips[i], mode[i])
-        
-        clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
-    elif space == GRAY:
-        clip = simple_fix(clip, mode[0])
-    else:
-        raise TypeError(f'{func_name}: Unsupported color family')
+            raise ValueError(f'{func_name}: invalid "mode"')
     
     return clip
 
@@ -1735,11 +1734,14 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
             tab = max(len(str(i)) for i in thr)
             
             if norm:
-                min_diffs_0, max_diffs_0 = min(diffs[0]), max(diffs[0])
-                min_diffs_1, max_diffs_1 = min(diffs[1]), max(diffs[1])
+                min_diffs_0 = min(diffs[0])
+                max_diffs_0 = max(diffs[0])
+                min_diffs_1 = min(diffs[1])
+                max_diffs_1 = max(diffs[1])
                 
-                diffs[0] = [(i - min_diffs_0) / (max_diffs_0 - min_diffs_0) for i in diffs[0]]
-                diffs[1] = [(i - min_diffs_1) / (max_diffs_1 - min_diffs_1) for i in diffs[1]]
+                for i in range(num_f):
+                    diffs[0][i] = (diffs[0][i] - min_diffs_0) / (max_diffs_0 - min_diffs_0)
+                    diffs[1][i] = (diffs[1][i] - min_diffs_1) / (max_diffs_1 - min_diffs_1)
             
             for i, j in enumerate(mode):
                 par = j % 2
