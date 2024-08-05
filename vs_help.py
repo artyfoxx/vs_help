@@ -44,6 +44,7 @@ Functions:
     UnsharpMask
     double_tfm
     CombMask2
+    diff_transfer
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
