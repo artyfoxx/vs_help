@@ -2585,3 +2585,42 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
         mask = core.std.Maximum(mask, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
     
     return mask
+
+def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'diff_transfer'
+    
+    if any(not isinstance(i, VideoNode) for i in (clip, nc_clip, target)):
+        raise TypeError(f'{func_name} all clips must be of the VideoNode type')
+    
+    if clip.format.name != nc_clip.format.name or clip.format.name != target.format.name:
+        raise ValueError(f'{func_name}: The clip formats do not match')
+    
+    if clip.num_frames != nc_clip.num_frames or clip.num_frames != target.num_frames:
+        raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    
+    if space not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    diff = [core.std.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
+            core.std.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
+    
+    clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    
+    return clip
