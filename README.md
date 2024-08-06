@@ -14,7 +14,7 @@ and some dependencies on them.
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
 * [vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
 * [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
-* [vapoursynth-mvtools](https://github.com/AmusementClub/vapoursynth-mvtools)
+* [vapoursynth-mvtools](https://github.com/dubhater/vapoursynth-mvtools)
 * [descale](https://github.com/Irrational-Encoding-Wizardry/descale)
 * [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
 * [fmtconv](https://github.com/EleonoreMizo/fmtconv)
