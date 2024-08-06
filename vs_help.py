@@ -26,6 +26,7 @@ Functions:
     titles_mask
     after_mask
     search_field_diffs
+    CombMask2
     mt_CombMask
     mt_binarize
     delcomb
@@ -42,8 +43,7 @@ Functions:
     mt_inpand_multi
     avs_TemporalSoften
     UnsharpMask
-    double_tfm
-    CombMask2
+    diff_tfm
     diff_transfer
 '''
 
@@ -53,6 +53,7 @@ from typing import Any
 from math import sqrt
 from functools import partial
 from inspect import signature
+import re
 
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
     '''
@@ -1740,9 +1741,8 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
                 min_diffs_1 = min(diffs[1])
                 max_diffs_1 = max(diffs[1])
                 
-                for i in range(num_f):
-                    diffs[0][i] = (diffs[0][i] - min_diffs_0) / (max_diffs_0 - min_diffs_0)
-                    diffs[1][i] = (diffs[1][i] - min_diffs_1) / (max_diffs_1 - min_diffs_1)
+                diffs[0] = [(i - min_diffs_0) / (max_diffs_0 - min_diffs_0) for i in diffs[0]]
+                diffs[1] = [(i - min_diffs_1) / (max_diffs_1 - min_diffs_1) for i in diffs[1]]
             
             for i, j in enumerate(mode):
                 par = j % 2
@@ -1803,6 +1803,73 @@ def search_field_diffs(clip: VideoNode, mode: int | list[int] = 0, thr: float | 
     clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=fields)
     
     return clip
+
+def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, expand: bool = True, metric: int = 0,
+              planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'CombMask2'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if metric not in {0, 1}:
+        raise ValueError(f'{func_name}: invalid "metric"')
+    
+    match cthresh:
+        case None:
+            cthresh = 10 if metric else 6
+        case int() if 0 <= cthresh <= (65535 if metric else 255):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "cthresh"')
+    
+    if not isinstance(mthresh, int) or mthresh < 0 or mthresh > 255:
+        raise ValueError(f'{func_name}: invalid "mthresh"')
+    
+    if not isinstance(expand, bool):
+        raise ValueError(f'{func_name}: invalid "expand"')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor - 1
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    if metric:
+        expr = f'x[0,-1] x - x[0,1] x - * {cthresh * factor ** 2} > {full} 0 ?'
+    else:
+        cthresh *= factor
+        expr = (f'x x[0,1] - d1! x x[0,-1] - d2! d1@ {cthresh} > d2@ {cthresh} > and d1@ {-cthresh} < d2@ {-cthresh} < '
+                f'and or x[0,2] 4 x * + x[0,-2] + 3 x[0,1] x[0,-1] + * - abs {cthresh * 6} > and {full} 0 ?')
+    
+    defaults = ['0'] + [f'{128 * factor}'] * (num_p - 1)
+    mask = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
+    
+    if mthresh:
+        expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
+        motionmask = core.std.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
+        
+        expr = 'x[0,1] x[0,-1] x max max y min'
+        mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
+    
+    if expand:
+        mask = core.std.Maximum(mask, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
+    
+    return mask
 
 def mt_CombMask(clip: VideoNode, thr1: float = 10, thr2: float = 10, div: float = 256, planes: int | list[int] | None = None) -> VideoNode:
     
@@ -2455,10 +2522,10 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     return clip
 
-def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, post_proc: int | None = None,
+def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: int | None = None,
                planes: int | list[int] | None = None, **tfm_args) -> VideoNode:
     
-    func_name = 'double_tfm'
+    func_name = 'diff_tfm'
     
     if any(not isinstance(i, VideoNode) for i in (clip, nc_clip)):
         raise TypeError(f'{func_name} both clips must be of the VideoNode type')
@@ -2491,13 +2558,98 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, post
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    clip_d = core.tivtc.TFM(clip, ovr=ovr_d, **tfm_args)
-    clip_c = core.tivtc.TFM(clip, ovr=ovr_c, **tfm_args)
+    def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
+        
+        frames_d = [None] * num_f
+        frames_c = [None] * num_f
+        
+        with open(ovr_d, 'r') as file:
+            for line in file:
+                if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
+                    first = int(res.group(1))
+                    last = int(res.group(2))
+                    seq = res.group(3)
+                    
+                    for i in range(first, last + 1):
+                        frames_d[i] = seq[(i - first) % len(seq)]
+                elif (res := re.search(r'(\d+) (\w)', line)) is not None:
+                    frames_d[int(res.group(1))] = res.group(2)
+        
+        with open(ovr_c, 'r') as file:
+            for line in file:
+                if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
+                    first = int(res.group(1))
+                    last = int(res.group(2))
+                    seq = res.group(3)
+                    
+                    for i in range(first, last + 1):
+                        frames_c[i] = seq[(i - first) % len(seq)]
+                elif (res := re.search(r'(\d+) (\w)', line)) is not None:
+                    frames_c[int(res.group(1))] = res.group(2)
+        
+        result = [[], []]
+        
+        for i in range(num_f):
+            if frames_d[i] != frames_c[i]:
+                match frames_d[i]:
+                    case 'c':
+                        match frames_c[i]:
+                            case 'p':
+                                result[0] += [i]
+                            case 'u':
+                                result[1] += [i]
+                            case _:
+                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                    case 'p':
+                        match frames_c[i]:
+                            case 'c':
+                                result[0] += [i]
+                            case 'u':
+                                result[1] += [i]
+                            case _:
+                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                    case 'u':
+                        match frames_c[i]:
+                            case 'c':
+                                result[1] += [i]
+                            case 'p':
+                                result[1] += [i]
+                            case _:
+                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                    case _:
+                        raise ValueError(f'{func_name}: invalid "ovr_d" in frame {i}')
+        
+        return result
     
-    nc_clip_d = core.tivtc.TFM(nc_clip, ovr=ovr_d, **tfm_args)
-    nc_clip_c = core.tivtc.TFM(nc_clip, ovr=ovr_c, **tfm_args)
+    with clip.get_frame(0) as f:
+            if f.props.get('_FieldBased') in {1, 2}:
+                order = f.props['_FieldBased'] - 1
+            else:
+                raise KeyError(f'{func_name}: cannot determine field order')
     
-    match post_proc:
+    clip_d = core.tivtc.TFM(clip, order=order, ovr=ovr_d, **tfm_args)
+    clip_c = core.tivtc.TFM(clip, order=order, ovr=ovr_c, **tfm_args)
+    
+    nc_clip_d = core.tivtc.TFM(nc_clip, order=order, ovr=ovr_d, **tfm_args)
+    nc_clip_c = core.tivtc.TFM(nc_clip, order=order, ovr=ovr_c, **tfm_args)
+    
+    tfm_args['PP'] = 7
+    
+    result = ovr_comparator(ovr_d, ovr_c, clip.num_frames)
+    
+    if result[0]:
+        clip_d = apply_range(clip_d, core.tivtc.TFM(clip, order=order, ovr=ovr_d, **tfm_args), *result[0])
+    
+    if result[1]:
+        if 'order' in tfm_args:
+            tfm_args['order'] ^= 1
+        
+        if 'field' in tfm_args:
+            tfm_args['field'] ^= 1
+        
+        clip_d = apply_range(clip_d, core.tivtc.TFM(clip, order=order ^ 1, ovr=ovr_d, **tfm_args), *result[1])
+        
+    match pp:
         case None:
             diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'),
                     core.std.Expr([clip_c, nc_clip_c], 'y x -')]
@@ -2511,7 +2663,7 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, post
             diff = [daa(core.std.Expr([clip_c, nc_clip_c], 'x y -'), nns=4, qual=2, pscrn=4, exp=2),
                     daa(core.std.Expr([clip_c, nc_clip_c], 'y x -'), nns=4, qual=2, pscrn=4, exp=2)]
         case _:
-            raise ValueError(f'{func_name}: invalid "post_proc"')
+            raise ValueError(f'{func_name}: invalid "pp"')
     
     clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
     
@@ -2520,74 +2672,8 @@ def double_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, post
     
     return clip
 
-def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, expand: bool = True, metric: int = 0,
-              planes: int | list[int] | None = None) -> VideoNode:
-    
-    func_name = 'CombMask2'
-    
-    if not isinstance(clip, VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
-    
-    if clip.format.sample_type != INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
-    if clip.format.color_family not in {YUV, GRAY}:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
-    if metric not in {0, 1}:
-        raise ValueError(f'{func_name}: invalid "metric"')
-    
-    match cthresh:
-        case None:
-            cthresh = 10 if metric else 6
-        case int() if 0 <= cthresh <= (65535 if metric else 255):
-            pass
-        case _:
-            raise ValueError(f'{func_name}: invalid "cthresh"')
-    
-    if not isinstance(mthresh, int) or mthresh < 0 or mthresh > 255:
-        raise ValueError(f'{func_name}: invalid "mthresh"')
-    
-    if not isinstance(expand, bool):
-        raise ValueError(f'{func_name}: invalid "expand"')
-    
-    num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
-    full = 256 * factor - 1
-    
-    match planes:
-        case None:
-            planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
-            planes = [planes]
-        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
-            pass
-        case _:
-            raise ValueError(f'{func_name}: invalid "planes"')
-    
-    if metric:
-        expr = f'x[0,-1] x - x[0,1] x - * {cthresh * factor ** 2} > {full} 0 ?'
-    else:
-        cthresh *= factor
-        expr = (f'x x[0,1] - d1! x x[0,-1] - d2! d1@ {cthresh} > d2@ {cthresh} > and d1@ {-cthresh} < d2@ {-cthresh} < '
-                f'and or x[0,2] 4 x * + x[0,-2] + 3 x[0,1] x[0,-1] + * - abs {cthresh * 6} > and {full} 0 ?')
-    
-    defaults = ['0'] + [f'{128 * factor}'] * (num_p - 1)
-    mask = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
-    
-    if mthresh:
-        expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
-        motionmask = core.std.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
-        
-        expr = 'x[0,1] x[0,-1] x max max y min'
-        mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
-    
-    if expand:
-        mask = core.std.Maximum(mask, planes=planes, coordinates=[0, 0, 0, 1, 1, 0, 0, 0])
-    
-    return mask
-
-def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, pp: int | None = None, planes: int | list[int] | None = None,
+                  **pp_args: Any) -> VideoNode:
     
     func_name = 'diff_transfer'
     
@@ -2621,6 +2707,18 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, planes
     
     diff = [core.std.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
             core.std.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
+    
+    match pp:
+        case None:
+            pass
+        case 0:
+            diff = [vinverse(i, planes=planes, **pp_args) for i in diff]
+        case 1:
+            diff = [vinverse2(i, planes=planes, **pp_args) for i in diff]
+        case 2:
+            diff = [daa(i, planes=planes, **pp_args) for i in diff]
+        case _:
+            raise ValueError(f'{func_name}: invalid "pp"')
     
     clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
