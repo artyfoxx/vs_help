@@ -2572,6 +2572,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
                     
                     for i in range(first, last + 1):
                         frames_d[i] = seq[(i - first) % len(seq)]
+                    
                 elif (res := re.search(r'(\d+) (\w)', line)) is not None:
                     frames_d[int(res.group(1))] = res.group(2)
         
@@ -2584,6 +2585,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
                     
                     for i in range(first, last + 1):
                         frames_c[i] = seq[(i - first) % len(seq)]
+                    
                 elif (res := re.search(r'(\d+) (\w)', line)) is not None:
                     frames_c[int(res.group(1))] = res.group(2)
         
@@ -2648,24 +2650,23 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
             tfm_args['field'] ^= 1
         
         clip_d = apply_range(clip_d, core.tivtc.TFM(clip, order=order ^ 1, ovr=ovr_d, **tfm_args), *result[1])
-        
+    
+    diff = [core.std.Expr([clip_c, nc_clip_c], ['x y -' if i in planes else '' for i in range(num_p)]),
+            core.std.Expr([clip_c, nc_clip_c], ['y x -' if i in planes else '' for i in range(num_p)])]
+    
     match pp:
         case None:
-            diff = [core.std.Expr([clip_c, nc_clip_c], 'x y -'),
-                    core.std.Expr([clip_c, nc_clip_c], 'y x -')]
+            pass
         case 0:
-            diff = [vinverse(core.std.Expr([clip_c, nc_clip_c], 'x y -'), 2.3),
-                    vinverse(core.std.Expr([clip_c, nc_clip_c], 'y x -'), 2.3)]
+            diff = [vinverse(i, 2.3, planes=planes) for i in diff]
         case 1:
-            diff = [vinverse2(core.std.Expr([clip_c, nc_clip_c], 'x y -'), 2.3),
-                    vinverse2(core.std.Expr([clip_c, nc_clip_c], 'y x -'), 2.3)]
+            diff = [vinverse2(i, 2.3, planes=planes) for i in diff]
         case 2:
-            diff = [daa(core.std.Expr([clip_c, nc_clip_c], 'x y -'), nns=4, qual=2, pscrn=4, exp=2),
-                    daa(core.std.Expr([clip_c, nc_clip_c], 'y x -'), nns=4, qual=2, pscrn=4, exp=2)]
+            diff = [daa(i, planes=planes, nns=4, qual=2, pscrn=4, exp=2) for i in diff]
         case _:
             raise ValueError(f'{func_name}: invalid "pp"')
     
-    clip = core.std.Expr([nc_clip_d] + diff, 'x y z - +')
+    clip = core.std.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
     if set(planes) != set(range(num_p)):
         clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
