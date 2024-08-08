@@ -1596,12 +1596,12 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, flatten + 1):
-            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i), expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     elif flatten < 0:
         expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, -flatten + 1):
-            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i), expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     
     after_dict = dict(exp_n='Maximum', inp_n='Minimum', def_n='Deflate', inf_n='Inflate')
     
