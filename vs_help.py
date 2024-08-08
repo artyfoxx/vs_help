@@ -53,6 +53,7 @@ from typing import Any
 from math import sqrt
 from functools import partial
 from inspect import signature
+from collections.abc import Callable
 import re
 
 def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> VideoNode:
@@ -2522,8 +2523,8 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     return clip
 
-def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: int | None = None,
-               planes: int | list[int] | None = None, **tfm_args) -> VideoNode:
+def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_proc: Callable[[VideoNode, ...], VideoNode] | None = None,
+             planes: int | list[int] | None = None, **tfm_args) -> VideoNode:
     
     func_name = 'diff_tfm'
     
@@ -2623,9 +2624,9 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
         
         return result
     
-    with clip.get_frame(0) as f:
-            if f.props.get('_FieldBased') in {1, 2}:
-                order = f.props['_FieldBased'] - 1
+    with clip.get_frame(0) as frame:
+            if frame.props.get('_FieldBased') in {1, 2}:
+                order = frame.props['_FieldBased'] - 1
             else:
                 raise KeyError(f'{func_name}: cannot determine field order')
     
@@ -2654,17 +2655,8 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
     diff = [core.std.Expr([clip_c, nc_clip_c], ['x y -' if i in planes else '' for i in range(num_p)]),
             core.std.Expr([clip_c, nc_clip_c], ['y x -' if i in planes else '' for i in range(num_p)])]
     
-    match pp:
-        case None:
-            pass
-        case 0:
-            diff = [vinverse(i, 2.3, planes=planes) for i in diff]
-        case 1:
-            diff = [vinverse2(i, 2.3, planes=planes) for i in diff]
-        case 2:
-            diff = [daa(i, planes=planes, nns=4, qual=2, pscrn=4, exp=2) for i in diff]
-        case _:
-            raise ValueError(f'{func_name}: invalid "pp"')
+    if diff_proc is not None:
+        diff = [diff_proc(i, planes=planes) for i in diff]
     
     clip = core.std.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
@@ -2673,8 +2665,8 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, pp: in
     
     return clip
 
-def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, pp: int | None = None, planes: int | list[int] | None = None,
-                  **pp_args: Any) -> VideoNode:
+def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_proc: Callable[[VideoNode, ...], VideoNode] | None = None,
+                  planes: int | list[int] | None = None, **pp_args: Any) -> VideoNode:
     
     func_name = 'diff_transfer'
     
@@ -2709,17 +2701,8 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, pp: in
     diff = [core.std.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
             core.std.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
     
-    match pp:
-        case None:
-            pass
-        case 0:
-            diff = [vinverse(i, planes=planes, **pp_args) for i in diff]
-        case 1:
-            diff = [vinverse2(i, planes=planes, **pp_args) for i in diff]
-        case 2:
-            diff = [daa(i, planes=planes, **pp_args) for i in diff]
-        case _:
-            raise ValueError(f'{func_name}: invalid "pp"')
+    if diff_proc is not None:
+        diff = [diff_proc(i, planes=planes) for i in diff]
     
     clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
