@@ -45,6 +45,7 @@ Functions:
     UnsharpMask
     diff_tfm
     diff_transfer
+    shift_clip
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
