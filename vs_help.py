@@ -654,10 +654,11 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     if clip.format.sample_type != INTEGER:
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    if clip.format.color_family not in {YUV, GRAY}:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -677,6 +678,9 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
     shrpD = core.std.MakeDiff(dbl, core.std.Convolution(dbl, matrix, planes=planes), planes=planes)
     DD = core.rgvs.Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
+    
+    if set(planes) != set(range(num_p)):
+        clip = core.std.ShufflePlanes([clip if i in planes else dblD for i in range(num_p)], list(range(num_p)), space)
     
     return clip
 
@@ -858,7 +862,7 @@ def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
     return clip
 
 def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None,
-              **znedi3_args: Any) -> VideoNode:
+              **nnedi3_args: Any) -> VideoNode:
     '''
     nnedi2aas by Didée, ported from AviSynth version with minor additions.
     '''
@@ -871,10 +875,11 @@ def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     if clip.format.sample_type != INTEGER:
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    if clip.format.color_family not in {YUV, GRAY}:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
+    space = clip.format.color_family
     num_p = clip.format.num_planes
+    
+    if space not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
     
     match planes:
         case None:
@@ -886,7 +891,7 @@ def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    nn = core.znedi3.nnedi3(clip, field=3, planes=planes, **znedi3_args)
+    nn = core.znedi3.nnedi3(clip, field=3, planes=planes, **nnedi3_args)
     dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
     
     dblD = core.std.MakeDiff(clip, dbl, planes=planes)
@@ -899,6 +904,9 @@ def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     
     DD = core.rgvs.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
+    
+    if set(planes) != set(range(num_p)):
+        clip = core.std.ShufflePlanes([clip if i in planes else dblD for i in range(num_p)], list(range(num_p)), space)
     
     return clip
 
@@ -1587,12 +1595,12 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i), expr)
     elif flatten < 0:
         expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, -flatten + 1):
-            clip = core.std.Expr([clip, clip[i:] + clip[-1] * i, clip[0] * i + clip[:-i]], expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i), expr)
     
     after_dict = dict(exp_n='Maximum', inp_n='Minimum', def_n='Deflate', inf_n='Inflate')
     
@@ -1862,7 +1870,7 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
     
     if mthresh:
         expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
-        motionmask = core.std.Expr([clip, clip[0] + clip[:-1]], [expr if i in planes else defaults[i] for i in range(num_p)])
+        motionmask = core.std.Expr([clip, shift_clip(clip, 1)], [expr if i in planes else defaults[i] for i in range(num_p)])
         
         expr = 'x[0,1] x[0,-1] x max max y min'
         mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
@@ -2487,9 +2495,9 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
             raise ValueError(f'{func_name}: invalid "planes"')
     
     if scenechange:
-        clip = core.std.PlaneStats(clip, clip[1:] + clip[-1])
+        clip = core.std.PlaneStats(clip, shift_clip(clip, -1))
         clip = core.akarin.PropExpr(clip, lambda: dict(_SceneChangeNext=f'x.PlaneStatsDiff {scenechange * factor / (256 * factor - 1)} > 1 0 ?'))
-        clip = core.akarin.PropExpr([clip, clip[0] + clip[:-1]], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
+        clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
     if radius:
         clip = core.std.AverageFrames(clip, weights=[1] * (radius * 2 + 1), scenechange=bool(scenechange), planes=planes)
@@ -2717,5 +2725,40 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_p
             raise TypeError(f'{func_name} invalid "diff_proc"')
     
     clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def shift_clip(clip: VideoNode, shift: int = 0, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'shift_clip'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if not isinstance(shift, int) or abs(shift) >= clip.num_frames:
+        raise TypeError(f'{func_name} invalid "shift"')
+    
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    orig = clip
+    
+    if shift > 0:
+        clip = clip[0] * shift + clip[:-shift]
+    elif shift < 0:
+        clip = clip[-shift:] + clip[-1] * -shift
+    
+    if set(planes) != set(range(num_p)):
+        clip = core.std.ShufflePlanes([clip if i in planes else orig for i in range(num_p)], list(range(num_p)), space)
     
     return clip
