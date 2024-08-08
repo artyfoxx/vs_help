@@ -2666,7 +2666,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
     return clip
 
 def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_proc: Callable[[VideoNode, ...], VideoNode] | None = None,
-                  planes: int | list[int] | None = None, **pp_args: Any) -> VideoNode:
+                  planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'diff_transfer'
     
