@@ -2523,7 +2523,7 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     return clip
 
-def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_proc: Callable[[VideoNode, ...], VideoNode] | None = None,
+def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_proc: Callable[..., VideoNode] | None = None,
              planes: int | list[int] | None = None, **tfm_args) -> VideoNode:
     
     func_name = 'diff_tfm'
@@ -2534,7 +2534,9 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
     if clip.format.name != nc_clip.format.name:
         raise ValueError(f'{func_name}: The clip formats do not match')
     
-    if clip.num_frames != nc_clip.num_frames:
+    num_f = clip.num_frames
+    
+    if num_f != nc_clip.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
     
     if clip.format.sample_type != INTEGER:
@@ -2638,7 +2640,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
     
     tfm_args['PP'] = 7
     
-    result = ovr_comparator(ovr_d, ovr_c, clip.num_frames)
+    result = ovr_comparator(ovr_d, ovr_c, num_f)
     
     if result[0]:
         clip_d = apply_range(clip_d, core.tivtc.TFM(clip, order=order, ovr=ovr_d, **tfm_args), *result[0])
@@ -2655,8 +2657,13 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
     diff = [core.std.Expr([clip_c, nc_clip_c], ['x y -' if i in planes else '' for i in range(num_p)]),
             core.std.Expr([clip_c, nc_clip_c], ['y x -' if i in planes else '' for i in range(num_p)])]
     
-    if diff_proc is not None:
-        diff = [diff_proc(i, planes=planes) for i in diff]
+    match diff_proc:
+        case None:
+            pass
+        case Callable():
+            diff = [diff_proc(i, planes=planes) for i in diff]
+        case _:
+            raise TypeError(f'{func_name} invalid "diff_proc"')
     
     clip = core.std.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
@@ -2665,7 +2672,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
     
     return clip
 
-def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_proc: Callable[[VideoNode, ...], VideoNode] | None = None,
+def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_proc: Callable[..., VideoNode] | None = None,
                   planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'diff_transfer'
@@ -2701,8 +2708,13 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_p
     diff = [core.std.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
             core.std.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
     
-    if diff_proc is not None:
-        diff = [diff_proc(i, planes=planes) for i in diff]
+    match diff_proc:
+        case None:
+            pass
+        case Callable():
+            diff = [diff_proc(i, planes=planes) for i in diff]
+        case _:
+            raise TypeError(f'{func_name} invalid "diff_proc"')
     
     clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
