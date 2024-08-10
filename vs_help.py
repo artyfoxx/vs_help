@@ -662,6 +662,9 @@ def daa(clip: VideoNode, weight: float = 0.5, planes: int | list[int] | None = N
     if space not in {YUV, GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
+    if not isinstance(weight, float | int) or weight < 0 or weight > 1:
+        raise ValueError(f'{func_name}: invalid "weight"')
+    
     match planes:
         case None:
             planes = list(range(num_p))
