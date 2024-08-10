@@ -11,7 +11,6 @@ Functions:
     Destripe
     daa
     average_fields
-    rg_fix
     znedi3aas
     dehalo_mask
     tp7_deband_mask
@@ -530,7 +529,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         resc = rescaler.upscale(resc, w, h)
     
     mask = core.std.MakeDiff(clip, resc).hist.Luma()
-    mask = rg_fix(mask, rg)
+    mask = core.rgvs.RemoveGrain(mask, rg)
     mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
     
     if 'exp_n' not in after_args:
@@ -808,64 +807,6 @@ def average_fields(clip: VideoNode, curve: int | list[int | None] = 1, weight: f
     
     return clip
 
-def rg_fix(clip: VideoNode, mode: int | list[int] = 2) -> VideoNode:
-    '''
-    Alias for RemoveGrain. Redirects obsolete modes to internal functions-analogues of VapourSynth.
-    '''
-    
-    func_name = 'rg_fix'
-    
-    if not isinstance(clip, VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
-    
-    if clip.format.sample_type != INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
-    space = clip.format.color_family
-    num_p = clip.format.num_planes
-    
-    if space not in {YUV, GRAY}:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
-    def simple_fix(clip: VideoNode, mode: int) -> VideoNode:
-        
-        match mode:
-            case 0:
-                pass
-            case 4:
-                clip = core.std.Median(clip)
-            case 11 | 12:
-                clip = core.std.Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1])
-            case 19:
-                clip = core.std.Convolution(clip, [1, 1, 1, 1, 0, 1, 1, 1, 1])
-            case 20:
-                clip = core.std.Convolution(clip, [1, 1, 1, 1, 1, 1, 1, 1, 1])
-            case _:
-                clip = core.rgvs.RemoveGrain(clip, mode)
-        
-        return clip
-    
-    match mode:
-        case int():
-            clip = simple_fix(clip, mode)
-        case list() if mode and len(mode) <= num_p:
-            if len(set(mode)) == 1:
-                clip = simple_fix(clip, mode[0])
-            else:
-                if len(mode) < num_p:
-                    mode += [mode[-1]] * (num_p - len(mode))
-                
-                clips = core.std.SplitPlanes(clip)
-                
-                for i in range(num_p):
-                    clips[i] = simple_fix(clips[i], mode[i])
-                
-                clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
-        case _:
-            raise ValueError(f'{func_name}: invalid "mode"')
-    
-    return clip
-
 def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None,
               **nnedi3_args: Any) -> VideoNode:
     '''
@@ -902,10 +843,10 @@ def nnedi3aas(clip: VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, plan
     dblD = core.std.MakeDiff(clip, dbl, planes=planes)
     
     if clamp > 0:
-        shrpD = core.std.MakeDiff(dbl, mt_clamp(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]),
+        shrpD = core.std.MakeDiff(dbl, mt_clamp(dbl, core.rgvs.RemoveGrain(dbl, [rg if i in planes else 0 for i in range(num_p)]),
                                   dbl, 0, clamp, planes=planes), planes=planes)
     else:
-        shrpD = core.std.MakeDiff(dbl, rg_fix(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes=planes)
+        shrpD = core.std.MakeDiff(dbl, core.rgvs.RemoveGrain(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes=planes)
     
     DD = core.rgvs.Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
@@ -997,7 +938,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
     clip = mt_binarize(clip, thr)
     
     if rg:
-        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+        clip = core.rgvs.RemoveGrain(clip, 3).rgvs.RemoveGrain(4)
     
     if space == YUV:
         format_id = clip.format.id
@@ -1477,7 +1418,7 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
         clip = mt_binarize(clip, thr)
     
     if rg:
-        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+        clip = core.rgvs.RemoveGrain(clip, 3).rgvs.RemoveGrain(4)
     
     if after_args:
         clip = after_mask(clip, **after_args)
@@ -1560,7 +1501,7 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     clip = mt_binarize(clip, thr)
     
     if rg:
-        clip = core.rgvs.RemoveGrain(clip, 3).std.Median()
+        clip = core.rgvs.RemoveGrain(clip, 3).rgvs.RemoveGrain(4)
     
     if after_args:
         clip = after_mask(clip, **after_args)
