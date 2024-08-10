@@ -46,6 +46,7 @@ Functions:
     diff_tfm
     diff_transfer
     shift_clip
+    ovr_comparator
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -642,7 +643,7 @@ def Destripe(clip: VideoNode, dx: int | None = None, dy: int | None = None, tff:
     
     return clip
 
-def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
+def daa(clip: VideoNode, weight: float = 0.5, planes: int | list[int] | None = None, **znedi3_args: Any) -> VideoNode:
     '''
     daa by Didée, ported from AviSynth version with minor additions.
     '''
@@ -672,7 +673,7 @@ def daa(clip: VideoNode, planes: int | list[int] | None = None, **znedi3_args: A
             raise ValueError(f'{func_name}: invalid "planes"')
     
     nn = core.znedi3.nnedi3(clip, field=3, planes=planes, **znedi3_args)
-    dbl = core.std.Merge(nn[::2], nn[1::2], [0.5 if i in planes else 0 for i in range(num_p)])
+    dbl = core.std.Merge(nn[::2], nn[1::2], [weight if i in planes else 0 for i in range(num_p)])
     
     dblD = core.std.MakeDiff(clip, dbl, planes=planes)
     matrix = [1, 1, 1, 1, 1, 1, 1, 1, 1] if clip.width > 1100 else [1, 2, 1, 2, 4, 2, 1, 2, 1]
@@ -2570,71 +2571,6 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
-        
-        frames_d = [None] * num_f
-        frames_c = [None] * num_f
-        
-        with open(ovr_d, 'r') as file:
-            for line in file:
-                if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
-                    first = int(res.group(1))
-                    last = int(res.group(2))
-                    seq = res.group(3)
-                    
-                    for i in range(first, last + 1):
-                        frames_d[i] = seq[(i - first) % len(seq)]
-                    
-                elif (res := re.search(r'(\d+) (\w)', line)) is not None:
-                    frames_d[int(res.group(1))] = res.group(2)
-        
-        with open(ovr_c, 'r') as file:
-            for line in file:
-                if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
-                    first = int(res.group(1))
-                    last = int(res.group(2))
-                    seq = res.group(3)
-                    
-                    for i in range(first, last + 1):
-                        frames_c[i] = seq[(i - first) % len(seq)]
-                    
-                elif (res := re.search(r'(\d+) (\w)', line)) is not None:
-                    frames_c[int(res.group(1))] = res.group(2)
-        
-        result = [[], []]
-        
-        for i in range(num_f):
-            if frames_d[i] != frames_c[i]:
-                match frames_d[i]:
-                    case 'c':
-                        match frames_c[i]:
-                            case 'p':
-                                result[0] += [i]
-                            case 'u':
-                                result[1] += [i]
-                            case _:
-                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                    case 'p':
-                        match frames_c[i]:
-                            case 'c':
-                                result[0] += [i]
-                            case 'u':
-                                result[1] += [i]
-                            case _:
-                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                    case 'u':
-                        match frames_c[i]:
-                            case 'c':
-                                result[1] += [i]
-                            case 'p':
-                                result[1] += [i]
-                            case _:
-                                raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                    case _:
-                        raise ValueError(f'{func_name}: invalid "ovr_d" in frame {i}')
-        
-        return result
-    
     with clip.get_frame(0) as frame:
             if frame.props.get('_FieldBased') in {1, 2}:
                 order = frame.props['_FieldBased'] - 1
@@ -2763,3 +2699,76 @@ def shift_clip(clip: VideoNode, shift: int = 0, planes: int | list[int] | None =
         clip = core.std.ShufflePlanes([clip if i in planes else orig for i in range(num_p)], list(range(num_p)), space)
     
     return clip
+
+def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
+    
+    func_name = 'ovr_comparator'
+    
+    if any(not isinstance(i, str) for i in (ovr_d, ovr_c)):
+        raise TypeError(f'{func_name} both ovr\'s must be of the string type')
+    
+    if not isinstance(num_f, int) or num_f <= 0:
+        raise ValueError(f'{func_name}: invalid "num_f"')
+    
+    frames_d = [None] * num_f
+    frames_c = [None] * num_f
+    
+    with open(ovr_d, 'r') as file:
+        for line in file:
+            if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
+                first = int(res.group(1))
+                last = int(res.group(2))
+                seq = res.group(3)
+                
+                for i in range(first, last + 1):
+                    frames_d[i] = seq[(i - first) % len(seq)]
+                
+            elif (res := re.search(r'(\d+) (\w)', line)) is not None:
+                frames_d[int(res.group(1))] = res.group(2)
+    
+    with open(ovr_c, 'r') as file:
+        for line in file:
+            if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
+                first = int(res.group(1))
+                last = int(res.group(2))
+                seq = res.group(3)
+                
+                for i in range(first, last + 1):
+                    frames_c[i] = seq[(i - first) % len(seq)]
+                
+            elif (res := re.search(r'(\d+) (\w)', line)) is not None:
+                frames_c[int(res.group(1))] = res.group(2)
+    
+    result = [[], []]
+    
+    for i in range(num_f):
+        if frames_d[i] != frames_c[i]:
+            match frames_d[i]:
+                case 'c':
+                    match frames_c[i]:
+                        case 'p':
+                            result[0] += [i]
+                        case 'u':
+                            result[1] += [i]
+                        case _:
+                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                case 'p':
+                    match frames_c[i]:
+                        case 'c':
+                            result[0] += [i]
+                        case 'u':
+                            result[1] += [i]
+                        case _:
+                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                case 'u':
+                    match frames_c[i]:
+                        case 'c':
+                            result[1] += [i]
+                        case 'p':
+                            result[1] += [i]
+                        case _:
+                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
+                case _:
+                    raise ValueError(f'{func_name}: invalid "ovr_d" in frame {i}')
+    
+    return result
