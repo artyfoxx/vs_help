@@ -46,6 +46,7 @@ Functions:
     diff_transfer
     shift_clip
     ovr_comparator
+    RemoveGrain
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -2716,3 +2717,77 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
                     raise ValueError(f'{func_name}: invalid "ovr_d" in frame {i}')
     
     return result
+
+def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False) -> VideoNode:
+    '''
+    Implementation of RemoveGrain with clip edge processing.
+    Better for cleaning masks, worse for everything else.
+    It is better not to use it together with Repair.
+    By default, the reference RemoveGrain is imitated (edges=False).
+    
+    In the process of writing. Ready modes are specified in the variable "supported".
+    '''
+    
+    func_name = 'RemoveGrain'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+    
+    match mode:
+        case int() if mode in supported:
+            mode = [mode]
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and i in supported for i in mode):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "mode"')
+    
+    if not isinstance(edges, bool):
+        raise TypeError(f'{func_name}: invalid "edges"')
+    
+    expr = ['',
+            
+            'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 swap7 swap6 drop6 clamp',
+            
+            'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop swap6 drop5 clamp',
+            
+            'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop2 swap5 drop3 swap drop clamp',
+            
+            'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop3 swap4 drop swap2 drop2 clamp',
+            
+            'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
+            'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs da! x cb@ - abs db! x cc@ - abs dc! x cd@ - abs dd! '
+            'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
+            
+            'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
+            'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs 2 * x[-1,0] x[1,0] - abs + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
+            'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
+            'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
+            
+            'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
+            'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs x[-1,0] x[1,0] - abs + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
+            'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
+            'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
+            
+            'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
+            'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs x[-1,0] x[1,0] - abs 2 * + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
+            'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
+            'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
+            
+            'x[-1,0] x[1,0] - abs da! x[0,-1] x[0,1] - abs db! x[-1,1] x[1,-1] - abs dc! x[-1,-1] x[1,1] - abs dd! '
+            'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = x x[-1,0] x[1,0] sort2 swap clamp dmin@ db@ = x x[0,-1] x[0,1] '
+            'sort2 swap clamp dmin@ dc@ = x x[-1,1] x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?']
+    
+    orig = clip
+    
+    clip = core.akarin.Expr(clip, [expr[i] for i in mode])
+    
+    if not edges:
+        clip = core.akarin.Expr([clip, orig], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
+    
+    return clip
