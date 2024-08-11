@@ -2721,9 +2721,14 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
 def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False) -> VideoNode:
     '''
     Implementation of RemoveGrain with clip edge processing.
+    
     Better for cleaning masks, worse for everything else.
     It is better not to use it together with Repair.
     By default, the reference RemoveGrain is imitated (edges=False).
+    
+    In this implementation, modes 11 and 12 differ in the rounding method (11 - arithmetic, 12 - banking).
+    Accordingly, in the floating point sample type the result of both modes will be the same,
+    since rounding to the nearest integer does not occur.
     
     In the process of writing. Ready modes are specified in the variable "supported".
     '''
@@ -2737,7 +2742,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False)
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
     
     match mode:
         case int() if mode in supported:
@@ -2786,7 +2791,14 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False)
             'x x[0,1] - abs da! x x[1,1] - abs db! x x[-1,1] - abs dc! x x[0,-1] - abs dd! x x[1,-1] - abs de! '
             'x x[-1,-1] - abs df! x x[1,0] - abs dg! x x[-1,0] - abs dh! da@ db@ dc@ dd@ de@ df@ dg@ dh@ sort8 dmin! drop7 '
             'dmin@ da@ = x[0,1] dmin@ db@ = x[1,1] dmin@ dc@ = x[-1,1] dmin@ dd@ = x[0,-1] dmin@ de@ = x[1,-1] '
-            'dmin@ df@ = x[-1,-1] dmin@ dg@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?']
+            'dmin@ df@ = x[-1,-1] dmin@ dg@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
+            
+            'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /',
+            
+            'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /']
+    
+    if clip.format.sample_type == INTEGER:
+        expr[11] = f'{expr[11]} 0.5 + trunc'
     
     orig = clip
     
