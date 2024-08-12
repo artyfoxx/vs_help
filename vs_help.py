@@ -2718,17 +2718,12 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     
     return result
 
-def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False) -> VideoNode:
+def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False, bank_round: bool = False) -> VideoNode:
     '''
-    Implementation of RemoveGrain with clip edge processing.
+    Implementation of RemoveGrain with clip edge processing and bank rounding.
     
-    Better for cleaning masks, worse for everything else.
-    It is better not to use it together with Repair.
-    By default, the reference RemoveGrain is imitated (edges=False).
-    
-    In this implementation, modes 11 and 12 differ in the rounding method (11 - arithmetic, 12 - banking).
-    Accordingly, in the floating point sample type the result of both modes will be the same,
-    since rounding to the nearest integer does not occur.
+    By default, the reference RemoveGrain is imitated, no edge processing is done (edges=False),
+    arithmetic rounding is used (bank_round=False).
     
     In the process of writing. Ready modes are specified in the variable "supported".
     '''
@@ -2742,7 +2737,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False)
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
     
     match mode:
         case int() if mode in supported:
@@ -2754,6 +2749,17 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False)
     
     if not isinstance(edges, bool):
         raise TypeError(f'{func_name}: invalid "edges"')
+    
+    if not isinstance(bank_round, bool):
+        raise TypeError(f'{func_name}: invalid "bank_round"')
+    
+    if clip.format.sample_type == INTEGER:
+        if bank_round:
+            rnd = ' round'
+        else:
+            rnd = ' 0.5 + trunc'
+    else:
+        rnd = ''
     
     expr = ['',
             
@@ -2793,12 +2799,23 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False)
             'dmin@ da@ = x[0,1] dmin@ db@ = x[1,1] dmin@ dc@ = x[-1,1] dmin@ dd@ = x[0,-1] dmin@ de@ = x[1,-1] '
             'dmin@ df@ = x[-1,-1] dmin@ dg@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
             
-            'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /',
+            f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
             
-            'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /']
-    
-    if clip.format.sample_type == INTEGER:
-        expr[11] = f'{expr[11]} 0.5 + trunc'
+            f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
+            
+            'Y 2 % 0 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
+            f'dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} x ? ? ?',
+            
+            'Y 2 % 1 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
+            f'dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} x ? ? ?',
+            
+            'Y 2 % 0 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
+            f'x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! dmin@ da@ = avg@ x[0,-1] x[0,1] sort2 '
+            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?',
+            
+            'Y 2 % 1 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
+            f'x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! dmin@ da@ = avg@ x[0,-1] x[0,1] sort2 '
+            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?']
     
     orig = clip
     
