@@ -2737,7 +2737,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
     
     match mode:
         case int() if mode in supported:
@@ -2824,7 +2824,11 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'x x[-1,0] - abs x x[1,0] - abs max maxa! x x[0,-1] - abs x x[0,1] - abs max maxb! x x[-1,1] - abs x x[1,-1] - abs '
             'max maxc! x x[-1,-1] - abs x x[1,1] - abs max maxd! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 minmax@ maxa@ = '
             'x x[-1,0] x[1,0] sort2 swap clamp minmax@ maxb@ = x x[0,-1] x[0,1] sort2 swap clamp minmax@ maxc@ = x x[-1,1] '
-            'x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?']
+            'x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?',
+            
+            f'x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + 8 /{rnd}',
+            
+            f'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + + 9 /{rnd}']
     
     orig = clip
     
