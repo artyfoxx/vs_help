@@ -2737,7 +2737,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17}
     
     match mode:
         case int() if mode in supported:
@@ -2815,7 +2815,11 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             
             'Y 2 % 1 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
             f'x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! dmin@ da@ = avg@ x[0,-1] x[0,1] sort2 '
-            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?']
+            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?',
+            
+            'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
+            'sort2 mind! maxd! mina@ minb@ minc@ mind@ sort4 drop3 maxmin! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 '
+            'x maxmin@ minmax@ sort2 swap clamp']
     
     orig = clip
     
