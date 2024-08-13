@@ -2823,7 +2823,8 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'x x[-1,0] x[1,0] sort2 swap clamp minmax@ maxb@ = x x[0,-1] x[0,1] sort2 swap clamp minmax@ maxc@ = x x[-1,1] '
             'x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?',
             
-            f'x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + 8 /{rnd}',
+            f'x[-1,-1] x[1,-1] + 2 /{rnd} x[-1,1] x[1,1] + 2 /{rnd} + 2 /{rnd} 1 - x[0,-1] x[1,0] + 2 /{rnd} x[-1,0] x[0,1] + '
+            f'2 /{rnd} + 2 /{rnd} + 2 /{rnd}',
             
             f'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + + 9 /{rnd}',
             
