@@ -2733,11 +2733,14 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{func_name} the clip must be of the VideoNode type')
     
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {YUV, GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
     
     match mode:
         case int() if mode in supported:
@@ -2753,13 +2756,10 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
     if not isinstance(bank_round, bool):
         raise TypeError(f'{func_name}: invalid "bank_round"')
     
-    if clip.format.sample_type == INTEGER:
-        if bank_round:
-            rnd = ' round'
-        else:
-            rnd = ' 0.5 + trunc'
+    if bank_round:
+        rnd = ' round'
     else:
-        rnd = ''
+        rnd = ' 0.5 + trunc'
     
     expr = ['',
             
@@ -2828,7 +2828,15 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             
             f'x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + 8 /{rnd}',
             
-            f'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + + 9 /{rnd}']
+            f'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + + 9 /{rnd}',
+            
+            'x[-1,0] x[1,0] + 2 / trunc tavga! x[0,-1] x[0,1] + 2 / trunc tavgb! x[-1,1] x[1,-1] + 2 / trunc tavgc! '
+            f'x[-1,-1] x[1,1] + 2 / trunc tavgd! x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] '
+            f'+ 2 /{rnd} avgc! x[-1,-1] x[1,1] + 2 /{rnd} avgd! tavga@ tavgb@ tavgc@ tavgd@ sort4 mintavg! drop3 avga@ avgb@ '
+            'avgc@ avgd@ sort4 drop3 maxavg! x mintavg@ maxavg@ clamp',
+            
+            f'x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] + 2 /{rnd} avgc! x[-1,-1] x[1,1] + '
+            f'2 /{rnd} avgd! avga@ avgb@ avgc@ avgd@ sort4 minavg! drop2 maxavg! x minavg@ maxavg@ clamp']
     
     orig = clip
     
