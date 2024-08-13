@@ -2738,11 +2738,12 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
+    full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
-        case int() if 0 <= mode <= 24:
+        case int() if 0 <= mode <= 25:
             mode = [mode]
-        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 24 for i in mode):
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 25 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -2759,95 +2760,105 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         rnd = ' 0.5 + trunc'
     
     expr = ['',
-            
+            # mode 1
             'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 swap7 swap6 drop6 clamp',
-            
+            # mode 2
             'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop swap6 drop5 clamp',
-            
+            # mode 3
             'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop2 swap5 drop3 swap drop clamp',
-            
+            # mode 4
             'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] sort8 drop3 swap4 drop swap2 drop2 clamp',
-            
+            # mode 5
             'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
             'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs da! x cb@ - abs db! x cc@ - abs dc! x cd@ - abs dd! '
             'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
-            
+            # mode 6 ???
             'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
             'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs 2 * x[-1,0] x[1,0] - abs + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
             'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
             'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
-            
+            # mode 7 ???
             'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
             'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs x[-1,0] x[1,0] - abs + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
             'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
             'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
-            
+            # mode 8 ???
             'x x[-1,0] x[1,0] sort2 swap clamp ca! x x[0,-1] x[0,1] sort2 swap clamp cb! x x[-1,1] x[1,-1] sort2 swap clamp cc! '
             'x x[-1,-1] x[1,1] sort2 swap clamp cd! x ca@ - abs x[-1,0] x[1,0] - abs 2 * + da! x cb@ - abs 2 * x[0,-1] x[0,1] - '
             'abs + db! x cc@ - abs 2 * x[-1,1] x[1,-1] - abs + dc! x cd@ - abs 2 * x[-1,-1] x[1,1] - abs + dd! '
             'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = ca@ dmin@ db@ = cb@ dmin@ dc@ = cc@ cd@ ? ? ?',
-            
+            # mode 9
             'x[-1,0] x[1,0] - abs da! x[0,-1] x[0,1] - abs db! x[-1,1] x[1,-1] - abs dc! x[-1,-1] x[1,1] - abs dd! '
             'da@ db@ dc@ dd@ sort4 dmin! drop3 dmin@ da@ = x x[-1,0] x[1,0] sort2 swap clamp dmin@ db@ = x x[0,-1] x[0,1] '
             'sort2 swap clamp dmin@ dc@ = x x[-1,1] x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?',
-            
+            # mode 10
             'x x[0,1] - abs da! x x[1,1] - abs db! x x[-1,1] - abs dc! x x[0,-1] - abs dd! x x[1,-1] - abs de! '
             'x x[-1,-1] - abs df! x x[1,0] - abs dg! x x[-1,0] - abs dh! da@ db@ dc@ dd@ de@ df@ dg@ dh@ sort8 dmin! drop7 '
             'dmin@ da@ = x[0,1] dmin@ db@ = x[1,1] dmin@ dc@ = x[-1,1] dmin@ dd@ = x[0,-1] dmin@ de@ = x[1,-1] '
             'dmin@ df@ = x[-1,-1] dmin@ dg@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
-            
+            # mode 11 ???
             f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
-            
+            # mode 12 ???
             f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
-            
-            'Y 2 % 0 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
-            f'dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} x ? ? ?',
-            
-            'Y 2 % 1 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
-            f'dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} x ? ? ?',
-            
-            'Y 2 % 0 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
-            f'x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! dmin@ da@ = avg@ x[0,-1] x[0,1] sort2 '
-            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?',
-            
-            'Y 2 % 1 = x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 '
-            f'x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! dmin@ da@ = avg@ x[0,-1] x[0,1] sort2 '
-            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp x ? ? ?',
-            
+            # mode 13
+            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 Y 1 '
+            f'bitand 0 = dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} '
+            '? ? x ?',
+            # mode 14
+            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 Y 1 '
+            f'bitand 1 = dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} '
+            '? ? x ?',
+            # mode 15
+            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 x[0,-1] '
+            f'x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! Y 1 bitand 0 = dmin@ da@ = avg@ x[0,-1] x[0,1] '
+            'sort2 swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
+            # mode 16
+            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 x[0,-1] '
+            f'x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! Y 1 bitand 1 = dmin@ da@ = avg@ x[0,-1] x[0,1] '
+            'sort2 swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
+            # mode 17
             'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
             'sort2 mind! maxd! mina@ minb@ minc@ mind@ sort4 drop3 maxmin! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 '
             'x maxmin@ minmax@ sort2 swap clamp',
-            
+            # mode 18
             'x x[-1,0] - abs x x[1,0] - abs max maxa! x x[0,-1] - abs x x[0,1] - abs max maxb! x x[-1,1] - abs x x[1,-1] - abs '
             'max maxc! x x[-1,-1] - abs x x[1,1] - abs max maxd! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 minmax@ maxa@ = '
             'x x[-1,0] x[1,0] sort2 swap clamp minmax@ maxb@ = x x[0,-1] x[0,1] sort2 swap clamp minmax@ maxc@ = x x[-1,1] '
             'x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?',
-            
+            # mode 19 ???
             f'x[-1,-1] x[1,-1] + 2 /{rnd} x[-1,1] x[1,1] + 2 /{rnd} + 2 /{rnd} 1 - x[0,-1] x[1,0] + 2 /{rnd} x[-1,0] x[0,1] + '
             f'2 /{rnd} + 2 /{rnd} + 2 /{rnd}',
-            
+            # mode 20
             f'x x[-1,0] x[1,0] x[0,-1] x[0,1] x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + + + + 9 /{rnd}',
-            
+            # mode 21
             'x[-1,0] x[1,0] + 2 / trunc tavga! x[0,-1] x[0,1] + 2 / trunc tavgb! x[-1,1] x[1,-1] + 2 / trunc tavgc! '
             f'x[-1,-1] x[1,1] + 2 / trunc tavgd! x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] '
             f'+ 2 /{rnd} avgc! x[-1,-1] x[1,1] + 2 /{rnd} avgd! tavga@ tavgb@ tavgc@ tavgd@ sort4 mintavg! drop3 avga@ avgb@ '
             'avgc@ avgd@ sort4 drop3 maxavg! x mintavg@ maxavg@ clamp',
-            
+            # mode 22
             f'x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] + 2 /{rnd} avgc! x[-1,-1] x[1,1] + '
             f'2 /{rnd} avgd! avga@ avgb@ avgc@ avgd@ sort4 minavg! drop2 maxavg! x minavg@ maxavg@ clamp',
-            
+            # mode 23 ???
             'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
             'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ min umina! '
             'x maxb@ - db@ min uminb! x maxc@ - dc@ min uminc! x maxd@ - dd@ min umind! umina@ uminb@ uminc@ umind@ 0 sort5 drop4 '
             'maxumin! mina@ x - da@ min dmina! minb@ x - db@ min dminb! minc@ x - dc@ min dminc! mind@ x - dd@ min dmind! '
             'dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! x maxumin@ - maxdmin@ +',
-            
+            # mode 24 ???
             'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
             'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ dup1 - min '
             'umina! x maxb@ - db@ dup1 - min uminb! x maxc@ - dc@ dup1 - min uminc! x maxd@ - dd@ dup1 - min umind! umina@ uminb@ '
             'uminc@ umind@ 0 sort5 drop4 maxumin! mina@ x - da@ dup1 - min dmina! minb@ x - db@ dup1 - min dminb! minc@ x - dc@ '
             'dup1 - min dminc! mind@ x - dd@ dup1 - min dmind! dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! '
-            'x maxumin@ - maxdmin@ +']
+            'x maxumin@ - maxdmin@ +',
+            # mode 25 ???
+            'x x[-1,0] - da! x x[1,0] - db! x x[0,-1] - dc! x x[0,1] - dd! x x[-1,1] - de! x x[1,-1] - df! x x[-1,-1] - dg! x '
+            f'x[1,1] - dh! {full} full! da@ 0 > da@ da@ 0 < full@ 0 ? ? db@ 0 > db@ db@ 0 < full@ 0 ? ? dc@ 0 > dc@ dc@ 0 < full@ '
+            '0 ? ? dd@ 0 > dd@ dd@ 0 < full@ 0 ? ? de@ 0 > de@ de@ 0 < full@ 0 ? ? df@ 0 > df@ df@ 0 < full@ 0 ? ? dg@ 0 > dg@ '
+            'dg@ 0 < full@ 0 ? ? dh@ 0 > dh@ dh@ 0 < full@ 0 ? ? sort8 mn! drop7 da@ 0 > full@ da@ 0 < da@ abs 0 ? ? db@ 0 > '
+            'full@ db@ 0 < db@ abs 0 ? ? dc@ 0 > full@ dc@ 0 < dc@ abs 0 ? ? dd@ 0 > full@ dd@ 0 < dd@ abs 0 ? ? de@ 0 > full@ '
+            'de@ 0 < de@ abs 0 ? ? df@ 0 > full@ df@ 0 < df@ abs 0 ? ? dg@ 0 > full@ dg@ 0 < dg@ abs 0 ? ? dh@ 0 > full@ dh@ 0 < '
+            'dh@ abs 0 ? ? sort8 pl! drop7 x pl@ 2 / trunc mn@ pl@ - min + mn@ 2 / trunc pl@ mn@ - min -']
     
     orig = clip
     
