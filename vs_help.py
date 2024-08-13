@@ -2724,8 +2724,6 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
     
     By default, the reference RemoveGrain is imitated, no edge processing is done (edges=False),
     arithmetic rounding is used (bank_round=False).
-    
-    In the process of writing. Ready modes are specified in the variable "supported".
     '''
     
     func_name = 'RemoveGrain'
@@ -2740,12 +2738,11 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    supported = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
     
     match mode:
-        case int() if mode in supported:
+        case int() if 0 <= mode <= 24:
             mode = [mode]
-        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and i in supported for i in mode):
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 24 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -2836,7 +2833,20 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'avgc@ avgd@ sort4 drop3 maxavg! x mintavg@ maxavg@ clamp',
             
             f'x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] + 2 /{rnd} avgc! x[-1,-1] x[1,1] + '
-            f'2 /{rnd} avgd! avga@ avgb@ avgc@ avgd@ sort4 minavg! drop2 maxavg! x minavg@ maxavg@ clamp']
+            f'2 /{rnd} avgd! avga@ avgb@ avgc@ avgd@ sort4 minavg! drop2 maxavg! x minavg@ maxavg@ clamp',
+            
+            'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
+            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ min umina! '
+            'x maxb@ - db@ min uminb! x maxc@ - dc@ min uminc! x maxd@ - dd@ min umind! umina@ uminb@ uminc@ umind@ 0 sort5 drop4 '
+            'maxumin! mina@ x - da@ min dmina! minb@ x - db@ min dminb! minc@ x - dc@ min dminc! mind@ x - dd@ min dmind! '
+            'dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! x maxumin@ - maxdmin@ +',
+            
+            'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
+            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ dup1 - min '
+            'umina! x maxb@ - db@ dup1 - min uminb! x maxc@ - dc@ dup1 - min uminc! x maxd@ - dd@ dup1 - min umind! umina@ uminb@ '
+            'uminc@ umind@ 0 sort5 drop4 maxumin! mina@ x - da@ dub1 - min dmina! minb@ x - db@ dub1 - min dminb! minc@ x - dc@ '
+            'dub1 - min dminc! mind@ x - dd@ dub1 - min dmind! dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! '
+            'x maxumin@ - maxdmin@ +']
     
     orig = clip
     
