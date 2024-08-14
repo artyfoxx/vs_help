@@ -2801,21 +2801,19 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             # mode 12 ???
             f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
             # mode 13
-            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 Y 1 '
-            f'bitand 0 = dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} '
-            '? ? x ?',
+            'Y 1 bitand 0 = x[0,-1] x[0,1] - abs dup da! x[-1,1] x[1,-1] - abs dup db! x[-1,-1] x[1,1] - abs dup dc! min min dup '
+            f'dmin! da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
             # mode 14
-            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 Y 1 '
-            f'bitand 1 = dmin@ da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} '
-            '? ? x ?',
+            'Y 1 bitand 1 = x[0,-1] x[0,1] - abs dup da! x[-1,1] x[1,-1] - abs dup db! x[-1,-1] x[1,1] - abs dup dc! min min dup '
+            f'dmin! da@ = x[0,-1] x[0,1] + 2 /{rnd} dmin@ db@ = x[-1,1] x[1,-1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
             # mode 15
-            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 x[0,-1] '
-            f'x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! Y 1 bitand 0 = dmin@ da@ = avg@ x[0,-1] x[0,1] '
-            'sort2 swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
+            'Y 1 bitand 0 = x[0,-1] x[0,1] - abs dup da! x[-1,1] x[1,-1] - abs dup db! x[-1,-1] x[1,1] - abs dup dc! min min dup '
+            f'dmin! x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! da@ = avg@ x[0,-1] x[0,1] sort2 '
+            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
             # mode 16
-            'x[0,-1] x[0,1] - abs da! x[-1,1] x[1,-1] - abs db! x[-1,-1] x[1,1] - abs dc! da@ db@ dc@ sort3 dmin! drop2 x[0,-1] '
-            f'x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! Y 1 bitand 1 = dmin@ da@ = avg@ x[0,-1] x[0,1] '
-            'sort2 swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
+            'Y 1 bitand 1 = x[0,-1] x[0,1] - abs dup da! x[-1,1] x[1,-1] - abs dup db! x[-1,-1] x[1,1] - abs dup dc! min min dup '
+            f'dmin! x[0,-1] x[0,1] + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + 8 /{rnd} avg! da@ = avg@ x[0,-1] x[0,1] sort2 '
+            'swap clamp dmin@ db@ = avg@ x[-1,1] x[1,-1] sort2 swap clamp avg@ x[-1,-1] x[1,1] sort2 swap clamp ? ? x ?',
             # mode 17
             'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
             'sort2 mind! maxd! mina@ minb@ minc@ mind@ sort4 drop3 maxmin! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 '
@@ -2851,14 +2849,13 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'uminc@ umind@ 0 sort5 drop4 maxumin! mina@ x - da@ dup1 - min dmina! minb@ x - db@ dup1 - min dminb! minc@ x - dc@ '
             'dup1 - min dminc! mind@ x - dd@ dup1 - min dmind! dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! '
             'x maxumin@ - maxdmin@ +',
-            # mode 25 ???
-            'x x[-1,0] - da! x x[1,0] - db! x x[0,-1] - dc! x x[0,1] - dd! x x[-1,1] - de! x x[1,-1] - df! x x[-1,-1] - dg! x '
-            f'x[1,1] - dh! {full} full! da@ 0 > da@ da@ 0 < full@ 0 ? ? db@ 0 > db@ db@ 0 < full@ 0 ? ? dc@ 0 > dc@ dc@ 0 < full@ '
-            '0 ? ? dd@ 0 > dd@ dd@ 0 < full@ 0 ? ? de@ 0 > de@ de@ 0 < full@ 0 ? ? df@ 0 > df@ df@ 0 < full@ 0 ? ? dg@ 0 > dg@ '
-            'dg@ 0 < full@ 0 ? ? dh@ 0 > dh@ dh@ 0 < full@ 0 ? ? sort8 mn! drop7 da@ 0 > full@ da@ 0 < da@ abs 0 ? ? db@ 0 > '
-            'full@ db@ 0 < db@ abs 0 ? ? dc@ 0 > full@ dc@ 0 < dc@ abs 0 ? ? dd@ 0 > full@ dd@ 0 < dd@ abs 0 ? ? de@ 0 > full@ '
-            'de@ 0 < de@ abs 0 ? ? df@ 0 > full@ df@ 0 < df@ abs 0 ? ? dg@ 0 > full@ dg@ 0 < dg@ abs 0 ? ? dh@ 0 > full@ dh@ 0 < '
-            'dh@ abs 0 ? ? sort8 pl! drop7 x pl@ 2 / trunc mn@ pl@ - min + mn@ 2 / trunc pl@ mn@ - min -']
+            # mode 25
+            f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? x x[-1,-1] < {full} x x[-1,-1] - ? x x[0,-1] < '
+            f'{full} x x[0,-1] - ? x x[1,-1] < {full} x x[1,-1] - ? x x[-1,1] < {full} x x[-1,1] - ? x x[0,1] < {full} x x[0,1] - '
+            f'? x x[1,1] < {full} x x[1,1] - ? sort8 mn! drop7 x[-1,0] x < {full} x[-1,0] x - ? x[1,0] x < {full} x[1,0] x - ? '
+            f'x[-1,-1] x < {full} x[-1,-1] x - ? x[0,-1] x < {full} x[0,-1] x - ? x[1,-1] x < {full} x[1,-1] x - ? x[-1,1] x < '
+            f'{full} x[-1,1] x - ? x[0,1] x < {full} x[0,1] x - ? x[1,1] x < {full} x[1,1] x - ? sort8 pl! drop7 x mn@ pl@ - 0 '
+            f'max pl@ 2 / trunc min + {full} min pl@ mn@ - 0 max mn@ 2 / trunc min - 0 max']
     
     orig = clip
     
