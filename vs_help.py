@@ -2457,7 +2457,8 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
 
 def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box', roundoff: int = 0) -> VideoNode:
     '''
-    A perfectly accurate port of UnsharpMask from the WarpSharp package to AviSynth.
+    Implementation of UnsharpMask with the ability to select the blur type (box or gauss) and rounding mode.
+    By default, it perfectly imitates UnsharpMask from the WarpSharp package to AviSynth.
     '''
     
     func_name = 'UnsharpMask'
@@ -2835,9 +2836,9 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'x x[-1,-1] - abs df! x x[1,0] - abs dg! x x[-1,0] - abs dh! da@ db@ dc@ dd@ de@ df@ dg@ dh@ sort8 dmin! drop7 '
             'dmin@ da@ = x[0,1] dmin@ db@ = x[1,1] dmin@ dc@ = x[-1,1] dmin@ dd@ = x[0,-1] dmin@ de@ = x[1,-1] '
             'dmin@ df@ = x[-1,-1] dmin@ dg@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
-            # mode 11 ???
-            f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
-            # mode 12 ???
+            # mode 11
+            f'x 4 * x[0,-1] x[-1,0] x[1,0] x[0,1] + + + 2 * + x[-1,-1] x[1,-1] x[-1,1] x[1,1] + + + + 16 /{rnd}',
+            # mode 12
             f'x 4 * x[-1,0] x[1,0] x[0,-1] x[0,1] + + + 2 * x[-1,1] x[1,-1] x[-1,-1] x[1,1] + + + + + 16 /{rnd}',
             # mode 13
             'Y 1 bitand 0 = x[0,-1] x[0,1] - abs dup da! x[-1,1] x[1,-1] - abs dup db! x[-1,-1] x[1,1] - abs dup dc! min min dup '
@@ -2862,7 +2863,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'max maxc! x x[-1,-1] - abs x x[1,1] - abs max maxd! maxa@ maxb@ maxc@ maxd@ sort4 minmax! drop3 minmax@ maxa@ = '
             'x x[-1,0] x[1,0] sort2 swap clamp minmax@ maxb@ = x x[0,-1] x[0,1] sort2 swap clamp minmax@ maxc@ = x x[-1,1] '
             'x[1,-1] sort2 swap clamp x x[-1,-1] x[1,1] sort2 swap clamp ? ? ?',
-            # mode 19 ???
+            # mode 19
             f'x[-1,-1] x[1,-1] + 2 /{rnd} x[-1,1] x[1,1] + 2 /{rnd} + 2 /{rnd} 1 - x[0,-1] x[1,0] + 2 /{rnd} x[-1,0] x[0,1] + '
             f'2 /{rnd} + 2 /{rnd} + 2 /{rnd}',
             # mode 20
@@ -2875,19 +2876,18 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             # mode 22
             f'x[-1,0] x[1,0] + 2 /{rnd} avga! x[0,-1] x[0,1] + 2 /{rnd} avgb! x[-1,1] x[1,-1] + 2 /{rnd} avgc! x[-1,-1] x[1,1] + '
             f'2 /{rnd} avgd! avga@ avgb@ avgc@ avgd@ sort4 minavg! drop2 maxavg! x minavg@ maxavg@ clamp',
-            # mode 23 ???
-            'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
-            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ min umina! '
-            'x maxb@ - db@ min uminb! x maxc@ - dc@ min uminc! x maxd@ - dd@ min umind! umina@ uminb@ uminc@ umind@ 0 sort5 drop4 '
-            'maxumin! mina@ x - da@ min dmina! minb@ x - db@ min dminb! minc@ x - dc@ min dminc! mind@ x - dd@ min dmind! '
-            'dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! x maxumin@ - maxdmin@ +',
-            # mode 24 ???
-            'x[-1,0] x[1,0] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[-1,1] x[1,-1] sort2 minc! maxc! x[-1,-1] x[1,1] '
-            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x maxa@ - da@ dup1 - min '
-            'umina! x maxb@ - db@ dup1 - min uminb! x maxc@ - dc@ dup1 - min uminc! x maxd@ - dd@ dup1 - min umind! umina@ uminb@ '
-            'uminc@ umind@ 0 sort5 drop4 maxumin! mina@ x - da@ dup1 - min dmina! minb@ x - db@ dup1 - min dminb! minc@ x - dc@ '
-            'dup1 - min dminc! mind@ x - dd@ dup1 - min dmind! dmina@ dminb@ dminc@ dmind@ 0 sort5 drop4 maxdmin! '
-            'x maxumin@ - maxdmin@ +',
+            # mode 23
+            'x[-1,-1] x[1,1] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[1,-1] x[-1,1] sort2 minc! maxc! x[-1,0] x[1,0] '
+            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x x maxa@ - da@ min x '
+            'maxb@ - db@ min x maxc@ - dc@ min x maxd@ - dd@ min 0 max max max max - mina@ x - 0 max da@ min minb@ x - db@ min '
+            f'minc@ x - dc@ min mind@ x - dd@ min 0 max max max max + {full} min',
+            # mode 24
+            'x[-1,-1] x[1,1] sort2 mina! maxa! x[0,-1] x[0,1] sort2 minb! maxb! x[1,-1] x[-1,1] sort2 minc! maxc! x[-1,0] x[1,0] '
+            'sort2 mind! maxd! maxa@ mina@ - da! maxb@ minb@ - db! maxc@ minc@ - dc! maxd@ mind@ - dd! x x maxa@ - da@ dup1 - '
+            'min umina! x maxb@ - db@ dup1 - min uminb! x maxc@ - dc@ dup1 - min uminc! x maxd@ - dd@ dup1 - min umind! umina@ '
+            'uminb@ uminc@ umind@ 0 max max max max - 0 max mina@ x - da@ dup1 - min dmina! minb@ x - db@ dup1 - min dminb! '
+            'minc@ x - dc@ dup1 - min dminc! mind@ x - dd@ dup1 - min dmind! dmina@ dminb@ dminc@ dmind@ 0 max max max max + '
+            f'{full} min',
             # mode 25
             f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? x x[-1,-1] < {full} x x[-1,-1] - ? x x[0,-1] < '
             f'{full} x x[0,-1] - ? x x[1,-1] < {full} x x[1,-1] - ? x x[-1,1] < {full} x x[-1,1] - ? x x[0,1] < {full} x x[0,1] - '
