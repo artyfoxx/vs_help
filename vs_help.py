@@ -2455,7 +2455,7 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
     
     return clip
 
-def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, roundoff: int = 0) -> VideoNode:
+def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box', roundoff: int = 0) -> VideoNode:
     '''
     A perfectly accurate port of UnsharpMask from the WarpSharp package to AviSynth.
     '''
@@ -2494,10 +2494,20 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     
     num_p = clip.format.num_planes
     threshold <<= clip.format.bits_per_sample - 8
-    div = (radius * 2 + 1) ** 2
     
-    expr = (f'{' '.join(f'x[{i},{j}]' for i in range (-radius, radius + 1) for j in range (-radius, radius + 1))} '
-            f'{'+ ' * (div - 1)}{div} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
+    match blur:
+        case 'box':
+            div = (radius * 2 + 1) ** 2
+            expr = (f'{' '.join(f'x[{i},{j}]' for i in range(-radius, radius + 1) for j in range(-radius, radius + 1))} '
+                    f'{'+ ' * (div - 1)}{div} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
+        case 'gauss':
+            size = radius * 2 + 1
+            row = [x := (x * (size - i) // i if i > 0 else 1) for i in range(size)]
+            matrix = [i * j for i in row for j in row]
+            expr = (f'{' '.join(f'x[{i - radius},{j - radius}] {matrix[i * size + j]} *' for i in range(size) for j in range(size))} '
+                    f'{'+ ' * (size ** 2 - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
+        case _:
+            raise ValueError(f'{func_name}: invalid "blur"')
     
     clip = core.akarin.Expr(clip, [expr] + [''] * (num_p - 1))
     
