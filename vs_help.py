@@ -2455,7 +2455,10 @@ def avs_TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, p
     
     return clip
 
-def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8) -> VideoNode:
+def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, roundoff: int = 0) -> VideoNode:
+    '''
+    A perfectly accurate port of UnsharpMask from the WarpSharp package to AviSynth.
+    '''
     
     func_name = 'UnsharpMask'
     
@@ -2468,13 +2471,35 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     if clip.format.color_family not in {YUV, GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
+    if not isinstance(strength, int) or strength < 0:
+        raise TypeError(f'{func_name}: invalid "strength"')
+    
+    if not isinstance(radius, int) or radius < 0:
+        raise TypeError(f'{func_name}: invalid "radius"')
+    
+    if not isinstance(threshold, int) or threshold < 0:
+        raise TypeError(f'{func_name}: invalid "threshold"')
+    
+    match roundoff:
+        case 0:
+            rnd = ' trunc'
+        case 1:
+            rnd = ' 0.5 + trunc'
+        case 2:
+            rnd = ' round'
+        case 3:
+            rnd = ''
+        case _:
+            raise ValueError(f'{func_name}: invalid "roundoff"')
+    
     num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
+    threshold <<= clip.format.bits_per_sample - 8
+    div = (radius * 2 + 1) ** 2
     
-    blurclip = clip.std.BoxBlur(vradius=radius, hradius=radius, planes=0)
+    expr = (f'{' '.join(f'x[{i},{j}]' for i in range (-radius, radius + 1) for j in range (-radius, radius + 1))} '
+            f'{'+ ' * (div - 1)}{div} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
     
-    expr = f'x y - abs {threshold * factor} > x y - {strength / 128} * x + x ?'
-    clip = core.std.Expr([clip, blurclip], [expr] + [f'{128 * factor}'] * (num_p - 1))
+    clip = core.akarin.Expr(clip, [expr] + [''] * (num_p - 1))
     
     return clip
 
@@ -2718,12 +2743,12 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     
     return result
 
-def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False, bank_round: bool = False) -> VideoNode:
+def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> VideoNode:
     '''
     Implementation of RemoveGrain with clip edge processing and bank rounding.
     
     By default, the reference RemoveGrain is imitated, no edge processing is done (edges=False),
-    arithmetic rounding is used (bank_round=False).
+    arithmetic rounding is used (roundoff=1).
     '''
     
     func_name = 'RemoveGrain'
@@ -2751,13 +2776,17 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
     if not isinstance(edges, bool):
         raise TypeError(f'{func_name}: invalid "edges"')
     
-    if not isinstance(bank_round, bool):
-        raise TypeError(f'{func_name}: invalid "bank_round"')
-    
-    if bank_round:
-        rnd = ' round'
-    else:
-        rnd = ' 0.5 + trunc'
+    match roundoff:
+        case 0:
+            rnd = ' trunc'
+        case 1:
+            rnd = ' 0.5 + trunc'
+        case 2:
+            rnd = ' round'
+        case 3:
+            rnd = ''
+        case _:
+            raise ValueError(f'{func_name}: invalid "roundoff"')
     
     expr = ['',
             # mode 1
