@@ -2502,12 +2502,12 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     match blur:
         case 'box':
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} *{rnd} x + x ?')
+                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} * 128 /{rnd} x + x ?')
         case 'gauss':
             row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]
             matrix = [i * j for i in row for j in row]
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} *{rnd} x + x ?')
+                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} * 128 /{rnd} x + x ?')
         case _:
             raise ValueError(f'{func_name}: invalid "blur"')
     
@@ -2939,7 +2939,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
 def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> VideoNode:
     '''
     Implementation of RgTools.Repair with clip edge processing and bank rounding.
-    Supported modes: 0 - 4
+    Supported modes: 0 - 9
     
     By default, the reference Repair is imitated, no edge processing is done (edges=False),
     arithmetic rounding is used (roundoff=1).
@@ -2966,9 +2966,9 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
     full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
-        case int() if 0 <= mode <= 4:
+        case int() if 0 <= mode <= 9:
             mode = [mode]
-        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 4 for i in mode):
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 9 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -2997,7 +2997,40 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             # mode 3
             'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop2 swap6 drop4 swap drop clamp',
             # mode 4
-            'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop3 swap5 drop2 swap2 drop2 clamp']
+            'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop3 swap5 drop2 swap2 drop2 clamp',
+            # mode 5
+            'x[-1,-1] x[1,1] max x max mal1! x[-1,-1] x[1,1] min x min mil1! x[0,-1] x[0,1] max x max mal2! x[0,-1] x[0,1] min x '
+            'min mil2! x[1,-1] x[-1,1] max x max mal3! x[1,-1] x[-1,1] min x min mil3! x[-1,0] x[1,0] max x max mal4! x[-1,0] '
+            'x[1,0] min x min mil4! y mil1@ mal1@ clamp c1! y mil2@ mal2@ clamp c2! y mil3@ mal3@ clamp c3! y mil4@ mal4@ clamp '
+            'c4! y c1@ - abs d1! y c2@ - abs d2! y c3@ - abs d3! y c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = '
+            'c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+            # mode 6
+            'x[-1,-1] x[1,1] max x max mal1! x[-1,-1] x[1,1] min x min mil1! x[0,-1] x[0,1] max x max mal2! x[0,-1] x[0,1] min x '
+            'min mil2! x[1,-1] x[-1,1] max x max mal3! x[1,-1] x[-1,1] min x min mil3! x[-1,0] x[1,0] max x max mal4! x[-1,0] '
+            'x[1,0] min x min mil4! y mil1@ mal1@ clamp c1! y mil2@ mal2@ clamp c2! y mil3@ mal3@ clamp c3! y mil4@ mal4@ clamp '
+            f'c4! y c1@ - abs 2 * mal1@ mil1@ - + {full} min d1! y c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! y c3@ - abs 2 * '
+            f'mal3@ mil3@ - + {full} min d3! y c4@ - abs 2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! '
+            'mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+            # mode 7
+            'x[-1,-1] x[1,1] max x max mal1! x[-1,-1] x[1,1] min x min mil1! x[0,-1] x[0,1] max x max mal2! x[0,-1] x[0,1] min x '
+            'min mil2! x[1,-1] x[-1,1] max x max mal3! x[1,-1] x[-1,1] min x min mil3! x[-1,0] x[1,0] max x max mal4! x[-1,0] '
+            'x[1,0] min x min mil4! y mil1@ mal1@ clamp c1! y mil2@ mal2@ clamp c2! y mil3@ mal3@ clamp c3! y mil4@ mal4@ clamp '
+            f'c4! y c1@ - abs mal1@ mil1@ - + {full} min d1! y c2@ - abs mal2@ mil2@ - + {full} min d2! y c3@ - abs mal3@ mil3@ '
+            f'- + {full} min d3! y c4@ - abs mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ '
+            'mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+            # mode 8
+            'x[-1,-1] x[1,1] max x max mal1! x[-1,-1] x[1,1] min x min mil1! x[0,-1] x[0,1] max x max mal2! x[0,-1] x[0,1] min x '
+            'min mil2! x[1,-1] x[-1,1] max x max mal3! x[1,-1] x[-1,1] min x min mil3! x[-1,0] x[1,0] max x max mal4! x[-1,0] '
+            'x[1,0] min x min mil4! y mil1@ mal1@ clamp c1! y mil2@ mal2@ clamp c2! y mil3@ mal3@ clamp c3! y mil4@ mal4@ clamp '
+            f'c4! y c1@ - abs mal1@ mil1@ - 2 * + {full} min d1! y c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! y c3@ - abs '
+            f'mal3@ mil3@ - 2 * + {full} min d3! y c4@ - abs mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min '
+            'mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+            # mode 9
+            'x[-1,-1] x[1,1] max x max mal1! x[-1,-1] x[1,1] min x min mil1! x[0,-1] x[0,1] max x max mal2! x[0,-1] x[0,1] min x '
+            'min mil2! x[1,-1] x[-1,1] max x max mal3! x[1,-1] x[-1,1] min x min mil3! x[-1,0] x[1,0] max x max mal4! x[-1,0] '
+            'x[1,0] min x min mil4! mal1@ mil1@ - d1! mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min '
+            'd4@ min mind! mind@ d4@ = y mil4@ mal4@ clamp mind@ d2@ = y mil2@ mal2@ clamp mind@ d3@ = y mil3@ mal3@ clamp y '
+            'mil1@ mal1@ clamp ? ? ?']
     
     refclip = core.akarin.Expr([refclip, clip], [expr[i] for i in mode])
     
