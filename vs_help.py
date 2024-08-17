@@ -47,6 +47,7 @@ Functions:
     shift_clip
     ovr_comparator
     RemoveGrain
+    Repair
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
@@ -2501,12 +2502,12 @@ def UnsharpMask(clip: VideoNode, strength: int = 64, radius: int = 3, threshold:
     match blur:
         case 'box':
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
+                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} *{rnd} x + x ?')
         case 'gauss':
             row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]
             matrix = [i * j for i in row for j in row]
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} * x + x ?')
+                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength / 128} *{rnd} x + x ?')
         case _:
             raise ValueError(f'{func_name}: invalid "blur"')
     
@@ -2757,7 +2758,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
 def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> VideoNode:
     '''
     Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
-    Supported modes: 0-28
+    Supported modes: 0 - 28
     
     By default, the reference RemoveGrain is imitated, no edge processing is done (edges=False),
     arithmetic rounding is used (roundoff=1).
@@ -2934,3 +2935,73 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
         clip = core.akarin.Expr([clip, orig], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
     
     return clip
+
+def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> VideoNode:
+    '''
+    Implementation of RgTools.Repair with clip edge processing and bank rounding.
+    Supported modes: 0 - 4
+    
+    By default, the reference Repair is imitated, no edge processing is done (edges=False),
+    arithmetic rounding is used (roundoff=1).
+    '''
+    
+    func_name = 'Repair'
+    
+    if any(not isinstance(i, VideoNode) for i in (clip, refclip)):
+        raise TypeError(f'{func_name} both clips must be of the VideoNode type')
+    
+    if clip.format.name != refclip.format.name:
+        raise ValueError(f'{func_name}: The clip formats do not match')
+    
+    if clip.num_frames != refclip.num_frames:
+        raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    full = (1 << clip.format.bits_per_sample) - 1
+    
+    match mode:
+        case int() if 0 <= mode <= 4:
+            mode = [mode]
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 4 for i in mode):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "mode"')
+    
+    if not isinstance(edges, bool):
+        raise TypeError(f'{func_name}: invalid "edges"')
+    
+    match roundoff:
+        case 0:
+            rnd = ' trunc'
+        case 1:
+            rnd = ' 0.5 + trunc'
+        case 2:
+            rnd = ' round'
+        case 3:
+            rnd = ''
+        case _:
+            raise ValueError(f'{func_name}: invalid "roundoff"')
+    
+    expr = ['',
+            # mode 1
+            'y x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x min x[-1,-1] x[0,-1] '
+            'max x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max x max clamp',
+            # mode 2
+            'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop swap7 drop6 clamp',
+            # mode 3
+            'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop2 swap6 drop4 swap drop clamp',
+            # mode 4
+            'y x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] sort9 drop3 swap5 drop2 swap2 drop2 clamp']
+    
+    refclip = core.akarin.Expr([refclip, clip], [expr[i] for i in mode])
+    
+    if not edges:
+        refclip = core.akarin.Expr([refclip, clip], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
+    
+    return refclip
