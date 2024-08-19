@@ -2965,9 +2965,9 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
     full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
-        case int() if 0 <= mode <= 28 and mode != 25:
+        case int() if 0 <= mode <= 28:
             mode = [mode]
-        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 28 and i != 25 for i in mode):
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 28 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -3121,3 +3121,112 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
         refclip = core.akarin.Expr([refclip, clip], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
     
     return refclip
+
+def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode | None = None, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'Clense'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if previous is None:
+        previous = shift_clip(clip, 1)
+    elif isinstance(previous, VideoNode) and clip.format.name == previous.format.name and clip.num_frames == previous.num_frames:
+        pass
+    else:
+        raise TypeError(f'{func_name}: invalid "previous"')
+    
+    if next is None:
+        next = shift_clip(clip, -1)
+    elif isinstance(next, VideoNode) and clip.format.name == next.format.name and clip.num_frames == next.num_frames:
+        pass
+    else:
+        raise TypeError(f'{func_name}: invalid "next"')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    expr = 'x y z min max y z max min'
+    
+    clip = clip[0] + core.akarin.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
+    
+    return clip
+
+def BackwardClense(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'BackwardClense'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    full = (1 << clip.format.bits_per_sample) - 1
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    expr = f'x y z min 2 * z - 0 max y z max 2 * z - {full} min clamp'
+    
+    clip = clip[:2] + core.akarin.Expr([clip, shift_clip(clip, 1), shift_clip(clip, 2)], [expr if i in planes else '' for i in range(num_p)])[2:]
+    
+    return clip
+
+def ForwardClense(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
+    
+    func_name = 'ForwardClense'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    full = (1 << clip.format.bits_per_sample) - 1
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if planes and len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    expr = f'x y z min 2 * z - 0 max y z max 2 * z - {full} min clamp'
+    
+    clip = core.akarin.Expr([clip, shift_clip(clip, -1), shift_clip(clip, -2)], [expr if i in planes else '' for i in range(num_p)])[:-2] + clip[-2:]
+    
+    return clip
