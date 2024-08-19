@@ -3125,7 +3125,8 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
     
     return refclip
 
-def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode | None = None, planes: int | list[int] | None = None) -> VideoNode:
+def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode | None = None, reduceflicker: bool = False,
+           planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'Clense'
     
@@ -3164,9 +3165,14 @@ def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode |
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
+    orig = clip
+    
     expr = 'x y z min max y z max min'
     
     clip = clip[0] + core.akarin.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
+    
+    if reduceflicker:
+        clip = clip[0:2] + core.akarin.Expr([orig, shift_clip(clip, 1), next], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
     
     return clip
 
