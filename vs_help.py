@@ -3153,6 +3153,9 @@ def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode |
     else:
         raise TypeError(f'{func_name}: invalid "next"')
     
+    if not isinstance(reduceflicker, bool):
+        raise TypeError(f'{func_name}: invalid "reduceflicker"')
+    
     num_p = clip.format.num_planes
     
     match planes:
