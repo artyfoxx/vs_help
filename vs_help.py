@@ -48,6 +48,9 @@ Functions:
     ovr_comparator
     RemoveGrain
     Repair
+    Clense
+    BackwardClense
+    ForwardClense
 '''
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
