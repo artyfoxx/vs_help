@@ -2990,7 +2990,7 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
         case _:
             raise ValueError(f'{func_name}: invalid "roundoff"')
     
-    expr = ['',
+    expr = ['y',
             # mode 1
             'y x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x min x[-1,-1] x[0,-1] '
             'max x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max x max clamp',
@@ -3075,10 +3075,9 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'x x[0,1] - abs min x x[1,1] - abs min mind! y x mind@ - 0 max x mind@ + {full} min clamp',
             # mode 20
             'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
-            'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
-            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
-            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
-            f'maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
+            'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ max d1@ d2@ min dup mind! d3@ clamp mind@ d3@ min dup mind! d4@ '
+            'clamp mind@ d4@ min dup mind! d5@ clamp mind@ d5@ min dup mind! d6@ clamp mind@ d6@ min dup mind! d7@ clamp mind@ '
+            f'd7@ min d8@ clamp maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
             # mode 21
             'x[-1,-1] x[1,1] max x - 0 max x x[-1,-1] x[1,1] min - 0 max max x[0,-1] x[0,1] max x - 0 max x x[0,-1] x[0,1] min - '
             '0 max max min x[1,-1] x[-1,1] max x - 0 max x x[1,-1] x[-1,1] min - 0 max max min x[-1,0] x[1,0] max x - 0 max x '
@@ -3088,16 +3087,15 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'y x[0,1] - abs min y x[1,1] - abs min mind! x y mind@ - 0 max y mind@ + {full} min clamp',
             # mode 23
             'y x[-1,-1] - abs d1! y x[0,-1] - abs d2! y x[1,-1] - abs d3! y x[-1,0] - abs d4! y x[1,0] - abs d5! y x[-1,1] - abs '
-            'd6! y x[0,1] - abs d7! y x[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
-            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
-            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
-            f'maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
+            'd6! y x[0,1] - abs d7! y x[1,1] - abs d8! d1@ d2@ max d1@ d2@ min dup mind! d3@ clamp mind@ d3@ min dup mind! d4@ '
+            'clamp mind@ d4@ min dup mind! d5@ clamp mind@ d5@ min dup mind! d6@ clamp mind@ d6@ min dup mind! d7@ clamp mind@ '
+            f'd7@ min d8@ clamp maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
             # mode 24
             'x[-1,-1] x[1,1] max y - 0 max y x[-1,-1] x[1,1] min - 0 max max x[0,-1] x[0,1] max y - 0 max y x[0,-1] x[0,1] min - '
             '0 max max min x[1,-1] x[-1,1] max y - 0 max y x[1,-1] x[-1,1] min - 0 max max min x[-1,0] x[1,0] max y - 0 max y '
             f'x[-1,0] x[1,0] min - 0 max max min minu! x y minu@ - 0 max y minu@ + {full} min clamp',
             # mode 25
-            '',
+            'y',
             # mode 26
             'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
             'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max '
@@ -3240,5 +3238,54 @@ def ForwardClense(clip: VideoNode, planes: int | list[int] | None = None) -> Vid
     expr = f'x y z min 2 * z - 0 max y z max 2 * z - {full} min clamp'
     
     clip = core.akarin.Expr([clip, shift_clip(clip, -1), shift_clip(clip, -2)], [expr if i in planes else '' for i in range(num_p)])[:-2] + clip[-2:]
+    
+    return clip
+
+def VerticalCleaner(clip: VideoNode, mode: int | list[int] = 1, edges: bool = False) -> VideoNode:
+    
+    func_name = 'VerticalCleaner'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {YUV, GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    full = (1 << clip.format.bits_per_sample) - 1
+    
+    match mode:
+        case int() if 0 <= mode <= 2:
+            mode = [mode]
+        case list() if 0 < len(mode) <= num_p and all(isinstance(i, int) and 0 <= i <= 2 for i in mode):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "mode"')
+    
+    if not isinstance(edges, bool):
+        raise TypeError(f'{func_name}: invalid "edges"')
+    
+    expr = ['',
+            # mode 1
+            'x[0,-1] x[0,1] min x max x[0,-1] x[0,1] max min',
+            # mode 2
+            'x x[0,-1] x[0,1] min x[0,-1] x[0,-2] x[0,-1] - 0 max - 0 max x[0,1] x[0,2] x[0,1] - 0 max - 0 max max min x[0,-1] '
+            f'x[0,-2] - 0 max x[0,-1] + {full} min x[0,1] x[0,2] - 0 max x[0,1] + {full} min min x[0,-1] max x[0,1] max clamp']
+    
+    orig = clip
+    
+    clip = core.akarin.Expr(clip, [expr[i] for i in mode])
+    
+    if not edges:
+        expr = ['',
+                # mode 1
+                'Y 0 = Y height 1 - = or y x ?',
+                # mode 2
+                'Y 1 <= Y height 2 - >= or y x ?']
+        
+        clip = core.akarin.Expr([clip, orig], [expr[i] for i in mode])
     
     return clip
