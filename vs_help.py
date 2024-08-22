@@ -58,7 +58,7 @@ Functions:
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
 from muvsfunc import rescale
-from typing import Any, Seq
+from typing import Any
 from math import sqrt
 from functools import partial
 from inspect import signature
