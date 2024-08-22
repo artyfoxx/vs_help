@@ -58,7 +58,7 @@ Functions:
 
 from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
 from muvsfunc import rescale
-from typing import Any
+from typing import Any, Seq
 from math import sqrt
 from functools import partial
 from inspect import signature
@@ -1460,7 +1460,7 @@ def apply_range(first: VideoNode, second: VideoNode, *args: int | list[int]) -> 
                     first = first[:a] + second[a:]
                 else:
                     first = first[:a] + second[a:b + 1] + first[b + 1:]
-            case int(a) | (int(a)) if 0 <= a < num_f:
+            case int(a) | (int(a),) if 0 <= a < num_f:
                 if a == 0:
                     first = second[a] + first[a + 1:]
                 elif a == num_f - 1:
