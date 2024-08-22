@@ -8,7 +8,6 @@ Just a few vapoursynth function...
 * [muvsfunc](https://github.com/WolframRhodium/muvsfunc) (master branch)\
 and some dependencies on them.
 ## Plugins
-* [vs-removegrain](https://github.com/vapoursynth/vs-removegrain)
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
