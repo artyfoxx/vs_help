@@ -3396,10 +3396,10 @@ def Convolution(clip: VideoNode, mode: str | list[int] | list[list[int]] | None 
             raise ValueError(f'{func_name}: invalid "planes"')
     
     match mode:
-        case ((int(), *_), (int(), *_)) if len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
+        case ((int(), *a), (int(), *b)) if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
             side_h, side_v = len(mode[0]), len(mode[1])
             mode = [j * i for i in mode[1] for j in mode[0]]
-        case (int(), *_) if len(mode) % 2 == 1 and (side_h := int(sqrt(len(mode)))) ** 2 == len(mode):
+        case (int(), *a) if all(isinstance(i, int) for i in a) and (side_h := int(sqrt(len(mode)))) ** 2 == len(mode) and side_h % 2 == 1:
             side_v = side_h
         case None:
             side_h = side_v = 3
