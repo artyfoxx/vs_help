@@ -19,7 +19,6 @@ Functions:
     FineDehalo2
     InsaneAA
     upscaler
-    custom_mask
     diff_mask
     apply_range
     titles_mask
@@ -1341,42 +1340,6 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
     
     return clip
 
-def custom_mask(clip: VideoNode, mask: int = 0, scale: float = 1.0, boost: bool = False, offset: float = 0.0,
-                **after_args: Any) -> VideoNode:
-    
-    func_name = 'custom_mask'
-    
-    if not isinstance(clip, VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
-    
-    if clip.format.sample_type != INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
-    match mask:
-        case 0:
-            pass
-        case 1:
-            pass
-        case 2:
-            clip = core.akarin.Expr([Convolution(clip, [5, 10, 5, 0, 0, 0, -5, -10, -5], saturate=0, total=4.0),
-                                     Convolution(clip, [5, 0, -5, 10, 0, -10, 5, 0, -5], saturate=0, total=4.0)],
-                                     f'x y max {scale} *')
-        case 3:
-            clip = core.akarin.Expr([Convolution(clip, [8, 16, 8, 0, 0, 0, -8, -16, -8], saturate=0, total=8.0),
-                                     Convolution(clip, [8, 0, -8, 16, 0, -16, 8, 0, -8], saturate=0, total=8.0)],
-                                     f'x y max {scale} *')
-        case _:
-            raise ValueError(f'{func_name}: Please use 0...3 mask value')
-    
-    if boost:
-        factor = 1 << clip.format.bits_per_sample - 8
-        clip = core.akarin.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {256 * factor - 1} *')
-    
-    if after_args:
-        clip = after_mask(clip, **after_args)
-    
-    return clip
-
 def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
               mt_prewitt: bool | None = None, **after_args: Any) -> VideoNode:
     
@@ -1505,8 +1468,8 @@ def titles_mask(clip: VideoNode, thr: float = 230, rg: bool = True, **after_args
     
     return clip
 
-def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = None, planes: int | list[int] | None = None,
-               **after_args: int) -> VideoNode:
+def after_mask(clip: VideoNode, boost: bool = False, offset: float = 0.0, flatten: int = 0, borders: list[int] | None = None,
+               planes: int | list[int] | None = None, **after_args: int) -> VideoNode:
     
     func_name = 'after_mask'
     
@@ -1520,6 +1483,7 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
     
     match planes:
         case None:
@@ -1530,6 +1494,9 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
+    
+    if boost:
+        clip = core.akarin.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {256 * factor - 1} *')
     
     if flatten > 0:
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
@@ -1557,8 +1524,6 @@ def after_mask(clip: VideoNode, flatten: int = 0, borders: list[int] | None = No
             borders += defaults[len(borders):]
         elif len(borders) > 4:
             raise ValueError(f'{func_name}: borders length must be <= 4')
-        
-        factor = 1 << clip.format.bits_per_sample - 8
         
         expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {256 * factor - 1} 0 ? x min'
         clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
@@ -1984,13 +1949,12 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     Vblur = Convolution(clip, [[1], [50, 99, 50]], planes=planes)
     VblurD = core.std.MakeDiff(clip, Vblur, planes=planes)
     
-    expr0 = f'x x y - {sstr} * +'
     Vshrp = Convolution(Vblur, [[1], [1, 4, 6, 4, 1]], planes=planes)
-    Vshrp = core.akarin.Expr([Vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
+    Vshrp = core.akarin.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
     VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes=planes)
     
-    expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
-    VlimD = core.akarin.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
+    expr = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD = core.akarin.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
     
     res = core.std.MergeDiff(Vblur, VlimD, planes=planes)
     
@@ -2000,8 +1964,8 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
         pass
     else:
         amnt *= factor
-        expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
-        clip = core.akarin.Expr([clip, res], [expr2 if i in planes else '' for i in range(num_p)])
+        expr = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+        clip = core.akarin.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -2035,13 +1999,12 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     Vblur = sbrV(clip, planes=planes)
     VblurD = core.std.MakeDiff(clip, Vblur, planes=planes)
     
-    expr0 = f'x x y - {sstr} * +'
     Vshrp = Convolution(Vblur, [[1], [1, 2, 1]], planes=planes)
-    Vshrp  = core.akarin.Expr([Vblur, Vshrp], [expr0 if i in planes else '' for i in range(num_p)])
+    Vshrp  = core.akarin.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
     VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes=planes)
     
-    expr1 = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
-    VlimD  = core.akarin.Expr([VshrpD, VblurD], [expr1 if i in planes else '' for i in range(num_p)])
+    expr = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD  = core.akarin.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
     
     res = core.std.MergeDiff(Vblur, VlimD, planes=planes)
     
@@ -2051,8 +2014,8 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
         pass
     else:
         amnt *= factor
-        expr2 = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
-        clip = core.akarin.Expr([clip, res], [expr2 if i in planes else '' for i in range(num_p)])
+        expr = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+        clip = core.akarin.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
