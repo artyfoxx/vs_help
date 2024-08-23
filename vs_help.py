@@ -36,7 +36,7 @@ Functions:
     Sharpen
     Clamp
     MinBlur
-    Dither_Luma_Rebuild
+    DitherLumaRebuild
     ExpandMulti
     InpandMulti
     TemporalSoften
@@ -605,7 +605,7 @@ def degrain_n(clip: VideoNode, *args: dict[str, Any], tr: int = 1, full_range: b
         args += ({},) * (3 - len(args))
     
     if full_range:
-        sup1 = Dither_Luma_Rebuild(clip, s0 = 1).mv.Super(rfilter=4, **args[0])
+        sup1 = DitherLumaRebuild(clip, s0 = 1).mv.Super(rfilter=4, **args[0])
         sup2 = core.mv.Super(clip, levels=1, **args[0])
     else:
         sup1 = core.mv.Super(clip, **args[0])
@@ -1035,7 +1035,7 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
         remove = core.akarin.Expr([remove, core.std.Minimum(lets).resize.Bicubic(x, y)], 'x y max')
         remove = core.resize.Lanczos(remove, w, h, filter_param_a=3)
     
-    clip = core.akarin.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
+    clip = core.akarin.Expr([clip, remove], f'x y < x x y - dup diff! {darkstr} * - x diff@ {brightstr} * - ?')
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
@@ -1088,7 +1088,7 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
         bb = RemoveGrain(dehaloed, 11)
         bb2 = Repair(bb, Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
         xd = core.std.MakeDiff(bb, bb2).akarin.Expr(f'x {half} - 2.49 * {contra} * {half} +')
-        xdd = core.akarin.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
+        xdd = core.akarin.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?')
         dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
     if mt_prewitt:
@@ -1383,13 +1383,15 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     
     clip = core.akarin.Expr([first, second], 'x y - abs')
     
-    if mt_prewitt is None:
-        clip = core.akarin.Expr(clip, f'x {scale} *')
-    else:
-        if mt_prewitt:
+    match mt_prewitt:
+        case None:
+            clip = core.akarin.Expr(clip, f'x {scale} *')
+        case True:
             clip = Convolution(clip, 'prewitt', total=1 / scale)
-        else:
+        case False:
             clip = core.std.Prewitt(clip, scale=scale)
+        case _:
+            raise TypeError(f'{func_name}: invalid "mt_prewitt"')
     
     if thr:
         clip = Binarize(clip, thr)
@@ -2083,7 +2085,7 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     rg11 = Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
     rg11DD = Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.akarin.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
@@ -2121,7 +2123,7 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     rg11 = Convolution(clip, [[1], [1, 2, 1]], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
     rg11DD = Convolution(rg11D, [[1], [1, 2, 1]], planes=planes)
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.akarin.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
@@ -2277,16 +2279,16 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
         case _:
             raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
     DD = core.akarin.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, DD, planes=planes)
     
     return clip
 
-def Dither_Luma_Rebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> VideoNode:
+def DitherLumaRebuild(clip: VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> VideoNode:
     
-    func_name = 'Dither_Luma_Rebuild'
+    func_name = 'DitherLumaRebuild'
     
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{func_name} the clip must be of the VideoNode type')
