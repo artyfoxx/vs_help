@@ -55,7 +55,7 @@ Functions:
     Convolution
 '''
 
-from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER
+from vapoursynth import core, GRAY, YUV, VideoNode, VideoFrame, INTEGER, Core
 from muvsfunc import rescale
 from typing import Any
 from math import sqrt
@@ -2405,7 +2405,7 @@ def InpandMulti(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int =
     
     return clip
 
-def TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, planes: int | list[int] | None = None) -> VideoNode:
+def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int = 0, planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'TemporalSoften'
     
@@ -2421,8 +2421,16 @@ def TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, plane
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
     
-    if radius < 0 or radius > 7:
-        raise ValueError(f'{func_name}: Please use 0...7 "radius" value')
+    match radius:
+        case None:
+            pass
+        case int() if 0 <= radius <= 7:
+            pass
+        case _:
+            raise ValueError(f'{func_name}: Please use 0...7 "radius" value')
+    
+    if not isinstance(scenechange, int) or scenechange < 0 or scenechange > 255:
+        raise ValueError(f'{func_name}: invalid "scenechange"')
     
     match planes:
         case None:
@@ -2439,8 +2447,33 @@ def TemporalSoften(clip: VideoNode, radius: int = 0, scenechange: int = 0, plane
         clip = core.akarin.PropExpr(clip, lambda: dict(_SceneChangeNext=f'x.PlaneStatsDiff {scenechange * factor / (256 * factor - 1)} > 1 0 ?'))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
+    def get_blur(n: int, f: list[VideoFrame], clips: list[VideoNode], core: Core) -> VideoNode:
+        
+        drop_frames = set()
+        for i in range(scope):
+            if i < radius:
+                for j in range(radius, i, -1):
+                    if f[j].props['_SceneChangeNext'] == 1:
+                        drop_frames.add(i)
+            elif i > radius:
+                for j in range(radius, i):
+                    if f[j].props['_SceneChangePrev'] == 1:
+                        drop_frames.add(i)
+        
+        expr = f'{' '.join(f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
+        clip = core.akarin.Expr(clips, [expr if i in planes else '' for i in range(num_p)])
+        
+        return clip
+    
     if radius:
-        clip = core.std.AverageFrames(clip, weights=[1] * (radius * 2 + 1), scenechange=bool(scenechange), planes=planes)
+        scope = radius * 2 + 1
+        clips = [shift_clip(clip, i - radius) for i in range(scope)]
+        
+        if scenechange:
+            clip = core.std.FrameEval(clip, partial(get_blur, clips=clips, core=core), prop_src=clips)
+        else:
+            expr = f'{' '.join(f'src{i}' for i in range(scope))} {'+ ' * (scope - 1)}{scope} /'
+            clip = core.akarin.Expr(clips, [expr if i in planes else '' for i in range(num_p)])
     
     if scenechange:
         clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage',
