@@ -136,27 +136,27 @@ def autotap3(clip: VideoNode, dx: int | None = None, dy: int | None = None, mtap
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
     
-    m1 = core.akarin.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m2 = core.akarin.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m3 = core.akarin.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m4 = core.akarin.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m5 = core.akarin.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m6 = core.akarin.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
-    m7 = core.akarin.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
     
     expr = f'x y - {thresh} *'
     
-    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.akarin.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m100 = core.akarin.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.akarin.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m101 = core.akarin.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.akarin.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m102 = core.akarin.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.akarin.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m103 = core.akarin.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.akarin.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m104 = core.akarin.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.akarin.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
@@ -217,13 +217,13 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a=mtaps1)
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
-    m1 = core.akarin.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
+    m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
     m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, 2.01, 256, 256), x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
     d3 = core.resize.Lanczos(core.resize.Lanczos(d, w, h, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
-    d4 = core.std.MaskedMerge(core.akarin.Expr([d2, d3],  f'x y - {sharp1} * x +'), core.akarin.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
+    d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'), core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
     
     e = autotap3(core.std.MaskedMerge(d5, clip, m1), dx, dy, mtaps3, athresh)
@@ -234,7 +234,7 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     
     fd12 = core.resize.Lanczos(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, filter_param_a=mtaps2)
     fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a=mtaps2)
-    m12 = core.akarin.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
+    m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
     m12 = core.resize.Lanczos(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), filter_param_a=mtaps2).resize.Lanczos(dx, dy, filter_param_a=mtaps2)
     
     e2 = core.resize.Lanczos(core.resize.Lanczos(e, w, h, filter_param_a=ltaps), dx, dy, filter_param_a=ltaps)
@@ -243,7 +243,7 @@ def Lanczosplus(clip: VideoNode, dx: int | None = None, dy: int | None = None, t
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     
-    e3 = core.std.MaskedMerge(core.akarin.Expr([e, e2], f'y x - {blur2} * x +'), core.akarin.Expr([e, e2], f'x y - {sharp2} * x +'), m12)
+    e3 = core.std.MaskedMerge(core.std.Expr([e, e2], f'y x - {blur2} * x +'), core.std.Expr([e, e2], f'x y - {sharp2} * x +'), m12)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
@@ -300,18 +300,18 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         
         match mask:
             case 0:
-                m1 = core.akarin.Expr(Convolution(clip, 'min-max'), f'x {4 * factor} - 4 *')
+                m1 = core.std.Expr(Convolution(clip, 'min-max'), f'x {4 * factor} - 4 *')
                 m2 = core.std.Maximum(m1).std.Maximum()
                 m2 = core.std.Merge(m2, core.std.Maximum(m2)).std.Inflate()
-                m3 = core.akarin.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], 'x y 1.2 * -').std.Inflate()
+                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], 'x y 1.2 * -').std.Inflate()
             case 1:
-                m1 = core.akarin.Expr([clip, UnsharpMask(clip, 40, 2, 0)], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
+                m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0)], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
-                m3 = RemoveGrain(core.akarin.Expr([m1, m2], 'y x -'), 21).std.Maximum()
+                m3 = RemoveGrain(core.std.Expr([m1, m2], 'y x -'), 21).std.Maximum()
             case 2:
-                m1 = core.akarin.Expr([clip, UnsharpMask(clip, 40, 2, 0, 'gauss')], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
+                m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0, 'gauss')], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
-                m3 = RemoveGrain(core.akarin.Expr([m1, m2], 'y x -'), 21).std.Maximum()
+                m3 = RemoveGrain(core.std.Expr([m1, m2], 'y x -'), 21).std.Maximum()
         
         return m3
     
@@ -321,13 +321,13 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         case 2:
             mask = get_mask(clip, 1)
         case 3:
-            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y min')
+            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y min')
         case 4:
-            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y max')
+            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y max')
         case 5:
             mask = get_mask(clip, 2)
         case 6:
-            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y min')
+            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y min')
         case _:
             raise ValueError(f'{func_name}: Please use 1...6 mask value')
     
@@ -341,7 +341,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
-    DD  = core.akarin.Expr([dh1D, med2D], f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs 2 * < x ny@ 2 * {half} + ? ?')
+    DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
     dh2 = core.std.MergeDiff(dh1, DD)
     
     clip = Clamp(clip, Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20)
@@ -550,7 +550,7 @@ def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None
         resc = rescaler.upscale(resc, w, h)
     
     mask = RemoveGrain(core.std.MakeDiff(clip, resc).hist.Luma(), rg)
-    mask = core.akarin.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
+    mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
     
     if 'exp_n' not in after_args:
         after_args['exp_n'] = 2
@@ -912,8 +912,8 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     
     factor = 1 << clip.format.bits_per_sample - 8
     
-    clip = core.akarin.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift * factor} - 128 *')
-    mask = core.tcanny.TCanny(clip, sigma=sqrt(expand * 2), mode=-1).akarin.Expr('x 16 *')
+    clip = core.std.Expr([clip, core.std.Maximum(clip).std.Maximum()], f'y x - {shift * factor} - 128 *')
+    mask = core.tcanny.TCanny(clip, sigma=sqrt(expand * 2), mode=-1).std.Expr('x 16 *')
     
     for _ in range(iterations):
         clip = core.std.Maximum(clip)
@@ -926,7 +926,7 @@ def dehalo_mask(clip: VideoNode, expand: float = 0.5, iterations: int = 2, brz: 
     if brz < 255:
         clip = core.std.Inflate(clip).std.Inflate().std.BinarizeMask(brz * factor)
     
-    mask = core.akarin.Expr([mask, RemoveGrain(clip, 12, edges=True)], 'x y min')
+    mask = core.std.Expr([mask, RemoveGrain(clip, 12, edges=True)], 'x y min')
     
     if space == YUV:
         mask = core.resize.Point(mask, format=format_id)
@@ -966,7 +966,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
         h = clip.height
         
         clips = core.std.SplitPlanes(clip)
-        clip = core.akarin.Expr(clips[1:], 'x y max')
+        clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w > 0 or sub_h > 0:
             bits = clip.format.bits_per_sample
@@ -975,7 +975,7 @@ def tp7_deband_mask(clip: VideoNode, thr: float | list[float] = 8, scale: float 
             if bits != 16:
                 clip = core.fmtc.bitdepth(clip, bits=bits, dmode=1)
         
-        clip = core.akarin.Expr([clip, clips[0]], 'x y max')
+        clip = core.std.Expr([clip, clips[0]], 'x y max')
     elif space == GRAY:
         pass
     else:
@@ -1024,18 +1024,18 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry)).resize.Bicubic(w, h, filter_param_a=1, filter_param_b=0)
     are = Convolution(clip, 'min-max')
     ugly = Convolution(halos, 'min-max')
-    so = core.akarin.Expr([ugly, are], f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+    so = core.std.Expr([ugly, are], f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
         remove = Repair(clip, lets, 1)
     else:
         remove = core.resize.Lanczos(clip, x := m4(w * ss), y := m4(h * ss), filter_param_a=3)
-        remove = core.akarin.Expr([remove, core.std.Maximum(lets).resize.Bicubic(x, y)], 'x y min')
-        remove = core.akarin.Expr([remove, core.std.Minimum(lets).resize.Bicubic(x, y)], 'x y max')
+        remove = core.std.Expr([remove, core.std.Maximum(lets).resize.Bicubic(x, y)], 'x y min')
+        remove = core.std.Expr([remove, core.std.Minimum(lets).resize.Bicubic(x, y)], 'x y max')
         remove = core.resize.Lanczos(remove, w, h, filter_param_a=3)
     
-    clip = core.akarin.Expr([clip, remove], f'x y < x x y - dup diff! {darkstr} * - x diff@ {brightstr} * - ?')
+    clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
     if space == YUV:
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
@@ -1087,8 +1087,8 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
         
         bb = RemoveGrain(dehaloed, 11)
         bb2 = Repair(bb, Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
-        xd = core.std.MakeDiff(bb, bb2).akarin.Expr(f'x {half} - 2.49 * {contra} * {half} +')
-        xdd = core.akarin.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?')
+        xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {contra} * {half} +')
+        xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
         dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
     if mt_prewitt:
@@ -1096,18 +1096,18 @@ def FineDehalo(clip: VideoNode, rx: float = 2, ry: float | None = None, thmi: in
     else:
         edges = core.std.Prewitt(clip)
     
-    strong = core.akarin.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
+    strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
     large = ExpandMulti(strong, sw=rx_i, sh=ry_i)
-    light = core.akarin.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
-    shrink = ExpandMulti(light, mode='ellipse', sw=rx_i, sh=ry_i).akarin.Expr('x 4 *')
+    light = core.std.Expr(edges, f'x {thlimi} - {thlima - thlimi} / {full} *')
+    shrink = ExpandMulti(light, mode='ellipse', sw=rx_i, sh=ry_i).std.Expr('x 4 *')
     shrink = InpandMulti(shrink, mode='ellipse', sw=rx_i, sh=ry_i)
     shrink = RemoveGrain(RemoveGrain(shrink, 20), 20)
-    outside = core.akarin.Expr([large, core.akarin.Expr([strong, shrink], 'x y max') if excl else strong], 'x y - 2 *')
+    outside = core.std.Expr([large, core.std.Expr([strong, shrink], 'x y max') if excl else strong], 'x y - 2 *')
     
     if edgeproc > 0:
-        outside = core.akarin.Expr([outside, strong], f'x y {edgeproc * 0.66} * +')
+        outside = core.std.Expr([outside, strong], f'x y {edgeproc * 0.66} * +')
     
-    outside = core.akarin.Expr(RemoveGrain(outside, 20), 'x 2 *')
+    outside = core.std.Expr(RemoveGrain(outside, 20), 'x 2 *')
     
     clip = core.std.MaskedMerge(clip, dehaloed, outside)
     
@@ -1165,8 +1165,8 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
         clip = core.std.Maximum(clip, coordinates=coord).std.Minimum(coordinates=coord)
         mask_1 = core.std.Maximum(clip, coordinates=coord)
         mask_2 = core.std.Maximum(mask_1, coordinates=coord).std.Maximum(coordinates=coord)
-        clip = core.akarin.Expr([mask_2, mask_1], 'x y -')
-        clip = core.akarin.Expr(RemoveGrain(clip, 12), 'x 1.8 *')
+        clip = core.std.Expr([mask_2, mask_1], 'x y -')
+        clip = core.std.Expr(RemoveGrain(clip, 12), 'x 1.8 *')
         
         return clip
     
@@ -1174,8 +1174,8 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
     fix_v = Convolution(clip, [hconv, [1]])
     mask_h = Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], saturate=0, total=4.0)
     mask_v = Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], saturate=0, total=4.0)
-    temp_h = core.akarin.Expr([mask_h, mask_v], 'x 3 * y -')
-    temp_v = core.akarin.Expr([mask_v, mask_h], 'x 3 * y -')
+    temp_h = core.std.Expr([mask_h, mask_v], 'x 3 * y -')
+    temp_v = core.std.Expr([mask_v, mask_h], 'x 3 * y -')
     
     mask_h = grow_mask(temp_h, 'v')
     mask_v = grow_mask(temp_v, 'h')
@@ -1187,7 +1187,7 @@ def FineDehalo2(clip: VideoNode, hconv: list[int] | None = None, vconv: list[int
         clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     if showmask:
-        clip = core.akarin.Expr([mask_h, mask_v], 'x y max')
+        clip = core.std.Expr([mask_h, mask_v], 'x y max')
         if space == YUV:
             clip = core.resize.Point(clip, format=orig.format.id)
     
@@ -1335,7 +1335,7 @@ def upscaler(clip: VideoNode, dx: int | None = None, dy: int | None = None, src_
             case 1:
                 clip = edi3_aa(clip, mode, False, **upscaler_args)
             case 2:
-                clip = core.akarin.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
+                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
             case _:
                 raise ValueError(f'{func_name}: Please use 0...2 order value')
         
@@ -1381,11 +1381,11 @@ def diff_mask(first: VideoNode, second: VideoNode, thr: float = 8, scale: float 
     else:
         raise ValueError(f'{func_name}: Unsupported color family in the second clip')
     
-    clip = core.akarin.Expr([first, second], 'x y - abs')
+    clip = core.std.Expr([first, second], 'x y - abs')
     
     match mt_prewitt:
         case None:
-            clip = core.akarin.Expr(clip, f'x {scale} *')
+            clip = core.std.Expr(clip, f'x {scale} *')
         case True:
             clip = Convolution(clip, 'prewitt', total=1 / scale)
         case False:
@@ -1504,18 +1504,18 @@ def after_mask(clip: VideoNode, boost: bool = False, offset: float = 0.0, flatte
             raise ValueError(f'{func_name}: invalid "planes"')
     
     if boost:
-        clip = core.akarin.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {256 * factor - 1} *')
+        clip = core.std.Expr(clip, f'x {128 * factor} / 0.86 {offset} + pow {256 * factor - 1} *')
     
     if flatten > 0:
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, flatten + 1):
-            clip = core.akarin.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     elif flatten < 0:
         expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
         
         for i in range(1, -flatten + 1):
-            clip = core.akarin.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
+            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     
     after_dict = dict(exp_n='Maximum', inp_n='Minimum', def_n='Deflate', inf_n='Inflate')
     
@@ -1534,7 +1534,7 @@ def after_mask(clip: VideoNode, boost: bool = False, offset: float = 0.0, flatte
             raise ValueError(f'{func_name}: borders length must be <= 4')
         
         expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {256 * factor - 1} 0 ? x min'
-        clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
+        clip = core.std.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -1783,7 +1783,7 @@ def CombMask2(clip: VideoNode, cthresh: int | None = None, mthresh: int = 9, exp
     
     if mthresh:
         expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
-        motionmask = core.akarin.Expr([clip, shift_clip(clip, 1)], [expr if i in planes else defaults[i] for i in range(num_p)])
+        motionmask = core.std.Expr([clip, shift_clip(clip, 1)], [expr if i in planes else defaults[i] for i in range(num_p)])
         
         expr = 'x[0,1] x[0,-1] x max max y min'
         mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
@@ -1877,7 +1877,7 @@ def Binarize(clip: VideoNode, thr: float | list[float] = 128, upper: bool = Fals
     else:
         expr = [f'x {thr[i] * factor} > {256 * factor - 1} 0 ?' for i in range(num_p)]
     
-    clip = core.akarin.Expr(clip, [expr[i] if i in planes else f'{128 * factor}' for i in range(num_p)])
+    clip = core.std.Expr(clip, [expr[i] if i in planes else f'{128 * factor}' for i in range(num_p)])
     
     return clip
 
@@ -1972,21 +1972,21 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
     
     if clip2 is None:
         Vshrp = Convolution(Vblur, [[1], [1, 4, 6, 4, 1]], planes=planes)
-        Vshrp = core.akarin.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
+        Vshrp = core.std.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
         VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes=planes)
     elif isinstance(clip2, VideoNode) and clip.num_frames == clip2.num_frames and clip.format.name == clip2.format.name:
         VshrpD = core.std.MakeDiff(clip, clip2, planes=planes)
     else:
         raise TypeError(f'{func_name}: invalid "clip2"')
     
-    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < nx@ abs ny@ abs < dup cond! x y ? {half} - {scl} * {half} + cond@ x y ? ?'
-    VlimD = core.akarin.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
+    expr = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD = core.std.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
     
     res = core.std.MergeDiff(Vblur if clip2 is None else clip2, VlimD, planes=planes)
     
     if thr:
         thr *= factor
-        res = core.akarin.Expr([clip, res, VblurD], [f'z {half} - abs {thr} < x y ?' if i in planes else '' for i in range(num_p)])
+        res = core.std.Expr([clip, res, VblurD], [f'z {half} - abs {thr} < x y ?' if i in planes else '' for i in range(num_p)])
     
     match amnt:
         case 255:
@@ -1995,8 +1995,8 @@ def vinverse(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0
             return clip
         case _:
             amnt *= factor
-            expr = f'x {amnt} + dup px! y < px@ x {amnt} - dup nx! y > nx@ y ? ?'
-            return core.akarin.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
+            expr = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+            return core.std.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
 
 def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 0.25, planes: int | list[int] | None = None) -> VideoNode:
     
@@ -2038,11 +2038,11 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
     VblurD = core.std.MakeDiff(clip, Vblur, planes=planes)
     
     Vshrp = Convolution(Vblur, [[1], [1, 2, 1]], planes=planes)
-    Vshrp  = core.akarin.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
+    Vshrp  = core.std.Expr([Vblur, Vshrp], [f'x x y - {sstr} * +' if i in planes else '' for i in range(num_p)])
     VshrpD = core.std.MakeDiff(Vshrp, Vblur, planes=planes)
     
-    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < nx@ abs ny@ abs < dup cond! x y ? {half} - {scl} * {half} + cond@ x y ? ?'
-    VlimD  = core.akarin.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
+    expr = f'x {half} - y {half} - * 0 < x {half} - abs y {half} - abs < x y ? {half} - {scl} * {half} + x {half} - abs y {half} - abs < x y ? ?'
+    VlimD  = core.std.Expr([VshrpD, VblurD], [expr if i in planes else '' for i in range(num_p)])
     
     res = core.std.MergeDiff(Vblur, VlimD, planes=planes)
     
@@ -2053,8 +2053,8 @@ def vinverse2(clip: VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float = 
             return clip
         case _:
             amnt *= factor
-            expr = f'x {amnt} + dup px! y < px@ x {amnt} - dup nx! y > nx@ y ? ?'
-            return core.akarin.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
+            expr = f'x {amnt} + y < x {amnt} + x {amnt} - y > x {amnt} - y ? ?'
+            return core.std.Expr([clip, res], [expr if i in planes else '' for i in range(num_p)])
 
 def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     
@@ -2085,10 +2085,10 @@ def sbr(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     rg11 = Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
     rg11DD = Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
-    rg11DD = core.akarin.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
+    rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, rg11DD, planes=planes)
     
@@ -2123,10 +2123,10 @@ def sbrV(clip: VideoNode, planes: int | list[int] | None = None) -> VideoNode:
     rg11 = Convolution(clip, [[1], [1, 2, 1]], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
     rg11DD = Convolution(rg11D, [[1], [1, 2, 1]], planes=planes)
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
-    rg11DD = core.akarin.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
+    rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, rg11DD, planes=planes)
     
@@ -2279,8 +2279,8 @@ def MinBlur(clip: VideoNode, r: int = 1, planes: int | list[int] | None = None) 
         case _:
             raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
-    expr = f'x {half} - dup nx! y {half} - dup ny! * 0 < {half} nx@ abs ny@ abs < x y ? ?'
-    DD = core.akarin.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
+    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, DD, planes=planes)
     
@@ -2606,8 +2606,8 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
         
         clip_d = apply_range(clip_d, core.tivtc.TFM(clip, order=order ^ 1, ovr=ovr_d, **tfm_args), *result[1])
     
-    diff = [core.akarin.Expr([clip_c, nc_clip_c], ['x y -' if i in planes else '' for i in range(num_p)]),
-            core.akarin.Expr([clip_c, nc_clip_c], ['y x -' if i in planes else '' for i in range(num_p)])]
+    diff = [core.std.Expr([clip_c, nc_clip_c], ['x y -' if i in planes else '' for i in range(num_p)]),
+            core.std.Expr([clip_c, nc_clip_c], ['y x -' if i in planes else '' for i in range(num_p)])]
     
     match diff_proc:
         case None:
@@ -2617,7 +2617,7 @@ def diff_tfm(clip: VideoNode, nc_clip: VideoNode, ovr_d: str, ovr_c: str, diff_p
         case _:
             raise TypeError(f'{func_name} invalid "diff_proc"')
     
-    clip = core.akarin.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    clip = core.std.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
     if set(planes) != set(range(num_p)):
         clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
@@ -2657,8 +2657,8 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_p
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    diff = [core.akarin.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
-            core.akarin.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
+    diff = [core.std.Expr([clip, nc_clip], ['x y -' if i in planes else '' for i in range(num_p)]),
+            core.std.Expr([clip, nc_clip], ['y x -' if i in planes else '' for i in range(num_p)])]
     
     match diff_proc:
         case None:
@@ -2668,7 +2668,7 @@ def diff_transfer(clip: VideoNode, nc_clip: VideoNode, target: VideoNode, diff_p
         case _:
             raise TypeError(f'{func_name} invalid "diff_proc"')
     
-    clip = core.akarin.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -2877,21 +2877,21 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             # mode 12
             f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
             # mode 13
-            'Y 1 bitand 0 = x[-1,-1] x[1,1] - abs dup d1! x[0,-1] x[0,1] - abs dup d2! x[1,-1] x[-1,1] - abs dup d3! min min dup '
-            f'mind! d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+            'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 '
+            f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
             # mode 14
-            'Y 1 bitand 1 = x[-1,-1] x[1,1] - abs dup d1! x[0,-1] x[0,1] - abs dup d2! x[1,-1] x[-1,1] - abs dup d3! min min dup '
-            f'mind! d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+            'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 '
+            f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
             # mode 15
-            'Y 1 bitand 0 = x[-1,-1] x[1,1] - abs dup d1! x[0,-1] x[0,1] - abs dup d2! x[1,-1] x[-1,1] - abs dup d3! min min dup '
-            f'mind! x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! d2@ = avg@ x[0,-1] x[0,1] min '
-            'x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] min '
-            'x[-1,-1] x[1,1] max clamp ? ? x ?',
+            f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
+            'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
+            'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
+            'min x[-1,-1] x[1,1] max clamp ? ? x ?',
             # mode 16
-            'Y 1 bitand 1 = x[-1,-1] x[1,1] - abs dup d1! x[0,-1] x[0,1] - abs dup d2! x[1,-1] x[-1,1] - abs dup d3! min min dup '
-            f'mind! x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! d2@ = avg@ x[0,-1] x[0,1] min '
-            'x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] min '
-            'x[-1,-1] x[1,1] max clamp ? ? x ?',
+            f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
+            'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
+            'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
+            'min x[-1,-1] x[1,1] max clamp ? ? x ?',
             # mode 17
             'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
             'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mil1@ mil2@ max mil3@ '
@@ -2921,10 +2921,10 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             # mode 24
             'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
             'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
-            'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x x mal1@ - 0 max ld1@ dup1 - min x mal2@ - 0 max ld2@ '
-            'dup1 - min max x mal3@ - 0 max ld3@ dup1 - min max x mal4@ - 0 max ld4@ dup1 - min max 0 max - 0 max mil1@ x - 0 '
-            'max ld1@ dup1 - min mil2@ x - 0 max ld2@ dup1 - min max mil3@ x - 0 max ld3@ dup1 - min max mil4@ x - 0 max ld4@ '
-            f'dup1 - min max 0 max + {full} min',
+            'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x mal1@ - 0 max u1! x mal2@ - 0 max u2! x mal3@ - 0 max '
+            'u3! x mal4@ - 0 max u4! mil1@ x - 0 max d1! mil2@ x - 0 max d2! mil3@ x - 0 max d3! mil4@ x - 0 max d4! x u1@ ld1@ '
+            'u1@ - min u2@ ld2@ u2@ - min max u3@ ld3@ u3@ - min max u4@ ld4@ u4@ - min max 0 max - 0 max d1@ ld1@ d1@ - min d2@ '
+            f'ld2@ d2@ - min max d3@ ld3@ d3@ - min max d4@ ld4@ d4@ - min max 0 max + {full} min',
             # mode 25
             f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? min x x[-1,-1] < {full} x x[-1,-1] - ? min x '
             f'x[0,-1] < {full} x x[0,-1] - ? min x x[1,-1] < {full} x x[1,-1] - ? min x x[-1,1] < {full} x x[-1,1] - ? min x '
@@ -3101,9 +3101,10 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'y y[0,1] - abs min y y[1,1] - abs min mind! x y mind@ - 0 max y mind@ + {full} min clamp',
             # mode 20
             'y y[-1,-1] - abs d1! y y[0,-1] - abs d2! y y[1,-1] - abs d3! y y[-1,0] - abs d4! y y[1,0] - abs d5! y y[-1,1] - abs '
-            'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ max d1@ d2@ min dup mind! d3@ clamp mind@ d3@ min dup mind! d4@ '
-            'clamp mind@ d4@ min dup mind! d5@ clamp mind@ d5@ min dup mind! d6@ clamp mind@ d6@ min dup mind! d7@ clamp mind@ '
-            f'd7@ min d8@ clamp maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
+            'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
+            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
+            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
+            f'maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
             # mode 21
             'y[-1,-1] y[1,1] max y - 0 max y y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max y - 0 max y y[0,-1] y[0,1] min - '
             '0 max max min y[1,-1] y[-1,1] max y - 0 max y y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max y - 0 max y '
@@ -3113,9 +3114,10 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'x y[0,1] - abs min x y[1,1] - abs min mind! y x mind@ - 0 max x mind@ + {full} min clamp',
             # mode 23
             'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
-            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ max d1@ d2@ min dup mind! d3@ clamp mind@ d3@ min dup mind! d4@ '
-            'clamp mind@ d4@ min dup mind! d5@ clamp mind@ d5@ min dup mind! d6@ clamp mind@ d6@ min dup mind! d7@ clamp mind@ '
-            f'd7@ min d8@ clamp maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
+            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
+            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
+            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
+            f'maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
             # mode 24
             'y[-1,-1] y[1,1] max x - 0 max x y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max x - 0 max x y[0,-1] y[0,1] min - '
             '0 max max min y[1,-1] y[-1,1] max x - 0 max x y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max x - 0 max x '
@@ -3271,10 +3273,10 @@ def Clense(clip: VideoNode, previous: VideoNode | None = None, next: VideoNode |
     
     expr = 'x y z min max y z max min'
     
-    clip = clip[0] + core.akarin.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
+    clip = clip[0] + core.std.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
     
     if reduceflicker:
-        clip = clip[0:2] + core.akarin.Expr([orig, shift_clip(clip, 1), next], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
+        clip = clip[0:2] + core.std.Expr([orig, shift_clip(clip, 1), next], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
     
     return clip
 
@@ -3459,17 +3461,17 @@ def Convolution(clip: VideoNode, mode: str | list[int] | list[list[int]] | None 
             div = 1
         case 'min-max':
             expr = f'x y -{'' if total is None else f' {total} /'}'
-            return core.akarin.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], [expr if i in planes else '' for i in range(num_p)])
+            return core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], [expr if i in planes else '' for i in range(num_p)])
         case 'hprewitt':
-            return core.akarin.Expr([Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                     Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
-                                     ['x y max' if i in planes else '' for i in range(num_p)])
+            return core.std.Expr([Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
+                                  Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
+                                 ['x y max' if i in planes else '' for i in range(num_p)])
         case 'prewitt':
-            return core.akarin.Expr([Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                     Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                     Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                     Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
-                                     ['x y max z a max max' if i in planes else '' for i in range(num_p)])
+            return core.std.Expr([Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
+                                  Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
+                                  Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
+                                  Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
+                                 ['x y max z a max max' if i in planes else '' for i in range(num_p)])
         case _:
             raise TypeError(f'{func_name}: invalid "mode"')
     
