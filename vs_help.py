@@ -2450,15 +2450,15 @@ def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int 
     def get_blur(n: int, f: list[VideoFrame], clips: list[VideoNode], core: Core) -> VideoNode:
         
         drop_frames = set()
-        for i in range(scope):
-            if i < radius:
-                for j in range(radius, i, -1):
-                    if f[j].props['_SceneChangeNext'] == 1:
-                        drop_frames.add(i)
-            elif i > radius:
-                for j in range(radius, i):
-                    if f[j].props['_SceneChangePrev'] == 1:
-                        drop_frames.add(i)
+        for i in range(radius, 0, -1):
+            if f[i].props['_SceneChangeNext'] == 1:
+                drop_frames.update(range(i - 1, -1, -1))
+                break
+        
+        for i in range(radius, scope - 1):
+            if f[i].props['_SceneChangePrev'] == 1:
+                drop_frames.update(range(i + 1, scope))
+                break
         
         expr = f'{' '.join(f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
         clip = core.akarin.Expr(clips, [expr if i in planes else '' for i in range(num_p)])
