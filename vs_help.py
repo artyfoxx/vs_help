@@ -2405,7 +2405,8 @@ def InpandMulti(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int =
     
     return clip
 
-def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int = 0, planes: int | list[int] | None = None) -> VideoNode:
+def TemporalSoften(clip: VideoNode, radius: int | None = None, thr: int | None = None, scenechange: int = 0,
+                        planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'TemporalSoften'
     
@@ -2432,6 +2433,14 @@ def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int 
     if not isinstance(scenechange, int) or scenechange < 0 or scenechange > 255:
         raise ValueError(f'{func_name}: invalid "scenechange"')
     
+    match thr:
+        case None:
+            thr = 256 * factor - 1
+        case int() if 0 <= thr <= 255:
+            thr *= factor
+        case _:
+            raise ValueError(f'{func_name}: invalid "thr"')
+    
     match planes:
         case None:
             planes = list(range(num_p))
@@ -2447,21 +2456,24 @@ def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int 
         clip = core.akarin.PropExpr(clip, lambda: dict(_SceneChangeNext=f'x.PlaneStatsDiff {scenechange * factor / (256 * factor - 1)} > 1 0 ?'))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
-    def get_blur(n: int, f: list[VideoFrame], clips: list[VideoNode], core: Core) -> VideoNode:
+    def get_smooth(n: int, f: list[VideoFrame], clips: list[VideoNode], core: Core) -> VideoNode:
         
         drop_frames = set()
-        for i in range(radius, 0, -1):
-            if f[i].props['_SceneChangeNext'] == 1:
-                drop_frames.update(range(i - 1, -1, -1))
-                break
         
-        for i in range(radius, scope - 1):
-            if f[i].props['_SceneChangePrev'] == 1:
-                drop_frames.update(range(i + 1, scope))
-                break
+        if scenechange:
+            for i in range(radius, 0, -1):
+                if f[i].props['_SceneChangeNext'] == 1:
+                    drop_frames.update(range(i - 1, -1, -1))
+                    break
+            
+            for i in range(radius, scope - 1):
+                if f[i].props['_SceneChangePrev'] == 1:
+                    drop_frames.update(range(i + 1, scope))
+                    break
         
-        expr = f'{' '.join(f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
-        clip = core.akarin.Expr(clips, [expr if i in planes else '' for i in range(num_p)])
+        expr = f'{' '.join(f'src{radius} src{i} - abs {thr} > src{radius} src{i} ?' if radius != i else 
+               f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
+        clip = core.akarin.Expr(clips, [expr if i in planes else f'src{radius}' for i in range(num_p)])
         
         return clip
     
@@ -2469,11 +2481,7 @@ def TemporalSoften(clip: VideoNode, radius: int | None = None, scenechange: int 
         scope = radius * 2 + 1
         clips = [shift_clip(clip, i - radius) for i in range(scope)]
         
-        if scenechange:
-            clip = core.std.FrameEval(clip, partial(get_blur, clips=clips, core=core), prop_src=clips)
-        else:
-            expr = f'{' '.join(f'src{i}' for i in range(scope))} {'+ ' * (scope - 1)}{scope} /'
-            clip = core.akarin.Expr(clips, [expr if i in planes else '' for i in range(num_p)])
+        clip = core.std.FrameEval(clip, partial(get_smooth, clips=clips, core=core), prop_src=clips)
     
     if scenechange:
         clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage',
