@@ -300,7 +300,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
         
         match mask:
             case 0:
-                m1 = core.std.Expr(Convolution(clip, 'min-max'), f'x {4 * factor} - 4 *')
+                m1 = core.std.Expr(Convolution(clip, 'min/max'), f'x {4 * factor} - 4 *')
                 m2 = core.std.Maximum(m1).std.Maximum()
                 m2 = core.std.Merge(m2, core.std.Maximum(m2)).std.Inflate()
                 m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], 'x y 1.2 * -').std.Inflate()
@@ -1022,8 +1022,8 @@ def DeHalo_alpha(clip: VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: flo
     m4 = lambda var: max(int(var / 4 + 0.5) * 4, 16)
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry)).resize.Bicubic(w, h, filter_param_a=1, filter_param_b=0)
-    are = Convolution(clip, 'min-max')
-    ugly = Convolution(halos, 'min-max')
+    are = Convolution(clip, 'min/max')
+    ugly = Convolution(halos, 'min/max')
     so = core.std.Expr([ugly, are], f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
@@ -3465,9 +3465,15 @@ def Convolution(clip: VideoNode, mode: str | list[int] | list[list[int]] | None 
             mode = [0, 2, -1, 0, -1, 0, 0, 0, 0]
             fix = ' -1 *'
             div = 1
-        case 'min-max':
-            expr = f'x y -{'' if total is None else f' {total} /'}'
-            return core.std.Expr([core.std.Maximum(clip), core.std.Minimum(clip)], [expr if i in planes else '' for i in range(num_p)])
+        case 'min/max':
+            if total is None:
+                expr = 'x y -'
+            elif isinstance(total, float):
+                expr = f'x y - {total} /'
+            else:
+                raise TypeError(f'{func_name}: invalid "total"')
+            
+            return core.std.Expr([core.std.Maximum(clip, planes=planes), core.std.Minimum(clip, planes=planes)], [expr if i in planes else '' for i in range(num_p)])
         case 'hprewitt':
             return core.std.Expr([Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
                                   Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
@@ -3507,5 +3513,37 @@ def Convolution(clip: VideoNode, mode: str | list[int] | list[list[int]] | None 
             f'{'+ ' * (len(mode) - 1)}{div} /{fix}')
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def stats_x(clip: VideoNode, x: int | list[int]) -> VideoNode:
+    
+    w = clip.weight
+    
+    match x:
+        case int() if 0 <= x < w:
+            x = [x]
+        case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "x" = {x}')
+    
+    clip = core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]).std.PlaneStats()
+    
+    return clip
+
+def stats_y(clip: VideoNode, y: int | list[int]) -> VideoNode:
+    
+    h = clip.height
+    
+    match y:
+        case int() if 0 <= y < h:
+            y = [y]
+        case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "y" = {y}')
+    
+    clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]).std.PlaneStats()
     
     return clip
