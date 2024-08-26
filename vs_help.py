@@ -2874,7 +2874,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
             'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - d1! '
             'mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ mal4@ '
-            'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ ♥ ? ? ?',
+            'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
             # mode 10
             'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
             'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min mind! mind@ '
