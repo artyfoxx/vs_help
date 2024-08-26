@@ -2406,7 +2406,7 @@ def InpandMulti(clip: VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int =
     return clip
 
 def TemporalSoften(clip: VideoNode, radius: int | None = None, thr: int | None = None, scenechange: int = 0,
-                        planes: int | list[int] | None = None) -> VideoNode:
+                   planes: int | list[int] | None = None) -> VideoNode:
     
     func_name = 'TemporalSoften'
     
@@ -2874,7 +2874,7 @@ def RemoveGrain(clip: VideoNode, mode: int | list[int] = 2, edges: bool = False,
             'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
             'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - d1! '
             'mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ mal4@ '
-            'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
+            'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ ♥ ? ? ?',
             # mode 10
             'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
             'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min mind! mind@ '
@@ -3109,10 +3109,10 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'y y[0,1] - abs min y y[1,1] - abs min mind! x y mind@ - 0 max y mind@ + {full} min clamp',
             # mode 20
             'y y[-1,-1] - abs d1! y y[0,-1] - abs d2! y y[1,-1] - abs d3! y y[-1,0] - abs d4! y y[1,0] - abs d5! y y[-1,1] - abs '
-            'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
-            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
-            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
-            f'maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
+            'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
+            'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max d3@ min mind2@ max d4@ min mind3@ max d5@ min '
+            f'mind4@ max d6@ min mind5@ max d7@ min mind6@ max d8@ min mind7@ max maxd! x y maxd@ - 0 max y maxd@ + {full} min '
+            'clamp',
             # mode 21
             'y[-1,-1] y[1,1] max y - 0 max y y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max y - 0 max y y[0,-1] y[0,1] min - '
             '0 max max min y[1,-1] y[-1,1] max y - 0 max y y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max y - 0 max y '
@@ -3122,10 +3122,10 @@ def Repair(clip: VideoNode, refclip: VideoNode, mode: int | list[int] = 2, edges
             f'x y[0,1] - abs min x y[1,1] - abs min mind! y x mind@ - 0 max x mind@ + {full} min clamp',
             # mode 23
             'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
-            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ min mind! d1@ d2@ max maxd! maxd@ mind@ d3@ clamp maxd! mind@ d3@ '
-            'min mind! maxd@ mind@ d4@ clamp maxd! mind@ d4@ min mind! maxd@ mind@ d5@ clamp maxd! mind@ d5@ min mind! maxd@ '
-            'mind@ d6@ clamp maxd! mind@ d6@ min mind! maxd@ mind@ d7@ clamp maxd! mind@ d7@ min mind! maxd@ mind@ d8@ clamp '
-            f'maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
+            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
+            'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max d3@ min mind2@ max d4@ min mind3@ max d5@ min '
+            f'mind4@ max d6@ min mind5@ max d7@ min mind6@ max d8@ min mind7@ max maxd! y x maxd@ - 0 max x maxd@ + {full} min '
+            'clamp',
             # mode 24
             'y[-1,-1] y[1,1] max x - 0 max x y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max x - 0 max x y[0,-1] y[0,1] min - '
             '0 max max min y[1,-1] y[-1,1] max x - 0 max x y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max x - 0 max x '
@@ -3222,8 +3222,8 @@ def TemporalRepair(clip: VideoNode, refclip: VideoNode, mode: int = 0, edges: bo
             f'pmax@ + {full} min clamp',
             # mode 4
             f'a z max max_np! a z min min_np! y min_np@ - 0 max 2 * {full} min min_np@ + {full} min max_np@ min reg5! max_np@ '
-            f'max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x reg3@ reg5@ '
-            'clamp ?']
+            f'max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x reg5@ min reg3@ '
+            'max ?']
     
     orig = clip
     
