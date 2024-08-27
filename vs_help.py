@@ -354,146 +354,7 @@ def bion_dehalo(clip: VideoNode, mode: int = 13, rep: bool = True, rg: bool = Fa
     
     return clip
 
-def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNode:
-    '''
-    A simple functions for fix brightness artifacts at the borders of the frame.
-    
-    All values are set as positional list arguments. The list have the following format:
-    [axis, target, donor, limit, curve, plane]. Only axis is mandatory.
-    
-    Args:
-        axis: can take the values "x" or "y" for columns and rows, respectively.
-        target: the target column/row, it is counted from the upper left edge of the screen, by default 0.
-        donor: the donor column/row, by default "None" (is calculated automatically as one closer to the center of the frame).
-        limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
-            and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-        curve: target correction curve, by default 1, 0 - subtraction and addition, -1 and 1 - division and multiplication,
-            -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation.
-        plane: by default 0.
-    
-    Example:
-        clip = fix_border(clip, ['x', 0, 1, 50], ['x', 1919, 1918, 50], ['y', 0, 1, 50], ['y', 1079, 1078, 50])
-    '''
-    
-    func_name = 'fix_border'
-    
-    if not isinstance(clip, VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
-    
-    if clip.format.sample_type != INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
-    space = clip.format.color_family
-    
-    if space == YUV:
-        num_p = clip.format.num_planes
-        clips = core.std.SplitPlanes(clip)
-    elif space == GRAY:
-        clips = [clip]
-    else:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
-    def axis_x(clip: VideoNode, target: int, donor: int | None, limit: int, curve: int) -> VideoNode:
-        
-        w = clip.width
-        
-        if donor is None:
-            donor = target + 1 if target < w // 2 else target - 1
-        
-        target_line = core.std.Crop(clip, target, w - target - 1, 0, 0)
-        donor_line = core.std.Crop(clip, donor, w - donor - 1, 0, 0)
-        
-        fix_line = correction(target_line, donor_line, limit, curve)
-        
-        if target == 0:
-            clip = core.std.StackHorizontal([fix_line, core.std.Crop(clip, 1, 0, 0, 0)])
-        elif target == w - 1:
-            clip = core.std.StackHorizontal([core.std.Crop(clip, 0, 1, 0, 0), fix_line])
-        else:
-            clip = core.std.StackHorizontal([core.std.Crop(clip, 0, w - target, 0, 0), fix_line, core.std.Crop(clip, target + 1, 0, 0, 0)])
-        
-        return clip
-    
-    def axis_y(clip: VideoNode, target: int, donor: int | None, limit: int, curve: int) -> VideoNode:
-        
-        h = clip.height
-        
-        if donor is None:
-            donor = target + 1 if target < h // 2 else target - 1
-        
-        target_line = core.std.Crop(clip, 0, 0, target, h - target - 1)
-        donor_line = core.std.Crop(clip, 0, 0, donor, h - donor - 1)
-        
-        fix_line = correction(target_line, donor_line, limit, curve)
-        
-        if target == 0:
-            clip = core.std.StackVertical([fix_line, core.std.Crop(clip, 0, 0, 1, 0)])
-        elif target == h - 1:
-            clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, 1), fix_line])
-        else:
-            clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, 0, h - target), fix_line, core.std.Crop(clip, 0, 0, target + 1, 0)])
-        
-        return clip
-    
-    def correction(target_line: VideoNode, donor_line: VideoNode, limit: int, curve: int) -> VideoNode:
-        
-        match abs(curve):
-            case 0:
-                expr = 'y.PlaneStatsAverage x.PlaneStatsAverage - x +'
-            case 1:
-                expr = 'y.PlaneStatsAverage x.PlaneStatsAverage / x *'
-            case 2:
-                expr = 'x y.PlaneStatsAverage log x.PlaneStatsAverage log / pow'
-            case 3:
-                expr = 'y.PlaneStatsAverage 1 x.PlaneStatsAverage / pow x pow'
-            case _:
-                raise ValueError(f'{func_name}: Please use -3...3 curve value')
-        
-        if curve < 0:
-            target_line = core.std.Invert(target_line)
-            donor_line = core.std.Invert(donor_line)
-            limit = -limit
-        
-        target_line = core.std.PlaneStats(target_line)
-        donor_line = core.std.PlaneStats(donor_line)
-        
-        fix_line = core.akarin.Expr([target_line, donor_line], expr)
-        fix_line = core.std.RemoveFrameProps(fix_line, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
-        
-        if limit > 0:
-            fix_line = Clamp(fix_line, target_line, target_line, limit, 0)
-        elif limit < 0:
-            fix_line = Clamp(fix_line, target_line, target_line, 0, -limit)
-        
-        if curve < 0:
-            fix_line = core.std.Invert(fix_line)
-        
-        return fix_line
-    
-    defaults = ['x', 0, None, 0, 1, 0]
-    
-    for i in args:
-        match i:
-            case str() if i in {'x', 'y'}:
-                i = [i] + defaults[1:]
-            case list() if i and i[0] in {'x', 'y'}:
-                if len(i) < 6:
-                    i += defaults[len(i):]
-                elif len(i) > 6:
-                    raise ValueError(f'{func_name}: *args length must be <= 6 or *args must be "str"')
-            case _:
-                raise ValueError(f'{func_name}: *args must be "list" or "x|y"')
-        
-        clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
-    
-    if space == YUV:
-        clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
-    else:
-        clip = clips[0]
-    
-    return clip
-
-def fix_border_test(clip: VideoNode, *args: str | list[str | int | list[int]]) -> VideoNode:
+def fix_border(clip: VideoNode, *args: str | list[str | int | list[int]]) -> VideoNode:
     '''
     A simple functions for fix brightness artifacts at the borders of the frame.
     
@@ -514,7 +375,7 @@ def fix_border_test(clip: VideoNode, *args: str | list[str | int | list[int]]) -
         clip = fix_border(clip, ['x', 0, 1, 50], ['x', 1919, 1918, 50], ['y', 0, 1, 50], ['y', 1079, 1078, 50])
     '''
     
-    func_name = 'fix_border_test'
+    func_name = 'fix_border'
     
     if not isinstance(clip, VideoNode):
         raise TypeError(f'{func_name} the clip must be of the VideoNode type')
