@@ -482,7 +482,10 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | list[int]]) -> Vid
         else:
             raise ValueError(f'{func_name}: *args must be a sequence of lists with 3 <= len(list) <= 6')
         
-        clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
+        if i[5] in set(range(num_p)):
+            clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
+        else:
+            raise ValueError(f'{func_name}: invalid plane = {i[5]}')
     
     if space == YUV:
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
@@ -2204,6 +2207,12 @@ def Clamp(clip: VideoNode, bright_limit: VideoNode, dark_limit: VideoNode, overs
     
     if clip.format.color_family not in {YUV, GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if not isinstance(overshoot, int | float):
+        raise TypeError(f'{func_name}: invalid "overshoot"')
+    
+    if not isinstance(undershoot, int | float):
+        raise TypeError(f'{func_name}: invalid "undershoot"')
     
     num_p = clip.format.num_planes
     factor = 1 << clip.format.bits_per_sample - 8
