@@ -493,6 +493,143 @@ def fix_border(clip: VideoNode, *args: str | list[str | int | None]) -> VideoNod
     
     return clip
 
+def fix_border_test(clip: VideoNode, *args: str | list[str | int | list[int]]) -> VideoNode:
+    '''
+    A simple functions for fix brightness artifacts at the borders of the frame.
+    
+    All values are set as positional list arguments. The list have the following format:
+    [axis, target, donor, limit, curve, plane]. The first three are mandatory.
+    
+    Args:
+        axis: can take the values "x" or "y" for columns and rows, respectively.
+        target: the target column/row, it is counted from the upper left edge of the screen. It could be a list.
+        donor: the donor column/row. It could be a list.
+        limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
+            and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
+        curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
+            -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation, by default 1.
+        plane: by default 0.
+    
+    Example:
+        clip = fix_border(clip, ['x', 0, 1, 50], ['x', 1919, 1918, 50], ['y', 0, 1, 50], ['y', 1079, 1078, 50])
+    '''
+    
+    func_name = 'fix_border_test'
+    
+    if not isinstance(clip, VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.sample_type != INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    space = clip.format.color_family
+    
+    if space == YUV:
+        num_p = clip.format.num_planes
+        clips = core.std.SplitPlanes(clip)
+    elif space == GRAY:
+        clips = [clip]
+    else:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    def axis_x(clip: VideoNode, target: int | list[int], donor: int | list[int], limit: int, curve: int) -> VideoNode:
+        
+        def stats_x(clip: VideoNode, x: int | list[int]) -> VideoNode:
+            
+            match x:
+                case int() if 0 <= x < w:
+                    x = [x]
+                case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
+                    pass
+                case _:
+                    raise TypeError(f'{func_name}: invalid "x" = {x}')
+            
+            return core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]).std.PlaneStats()
+        
+        w = clip.width
+        
+        clip = core.akarin.PropExpr([clip, stats_x(clip, target), stats_x(clip, donor)],
+                                     lambda: dict(target_avg='y.PlaneStatsAverage', donor_avg='z.PlaneStatsAverage'))
+        
+        return correction(clip, target, limit, curve, 'X')
+    
+    def axis_y(clip: VideoNode, target: int | list[int], donor: int | list[int], limit: int, curve: int) -> VideoNode:
+        
+        def stats_y(clip: VideoNode, y: int | list[int]) -> VideoNode:
+            
+            match y:
+                case int() if 0 <= y < h:
+                    y = [y]
+                case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
+                    pass
+                case _:
+                    raise TypeError(f'{func_name}: invalid "y" = {y}')
+            
+            return core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]).std.PlaneStats()
+        
+        h = clip.height
+        
+        clip = core.akarin.PropExpr([clip, stats_y(clip, target), stats_y(clip, donor)],
+                                     lambda: dict(target_avg='y.PlaneStatsAverage', donor_avg='z.PlaneStatsAverage'))
+        
+        return correction(clip, target, limit, curve, 'Y')
+    
+    def correction(clip: VideoNode, target: int | list[int], limit: int, curve: int, axis: str) -> VideoNode:
+        
+        if isinstance(target, int):
+            target = [target]
+        
+        match abs(curve):
+            case 0:
+                expr = 'x.donor_avg x.target_avg - x +'
+            case 1:
+                expr = 'x.donor_avg x.target_avg / x *'
+            case 2:
+                expr = 'x x.donor_avg log x.target_avg log / pow'
+            case 3:
+                expr = 'x.donor_avg 1 x.target_avg / pow x pow'
+            case _:
+                raise ValueError(f'{func_name}: Please use -3...3 curve value')
+
+        expr = f'{' '.join(f'{axis} {i} =' for i in target)} {'or ' * (len(target) - 1)}{expr} x ?'
+        
+        if curve < 0:
+            clip = core.std.Invert(clip)
+            limit = -limit
+        
+        orig = clip
+        
+        clip = core.akarin.Expr(clip, expr)
+        clip = core.std.RemoveFrameProps(clip, ['target_avg', 'donor_avg'])
+        
+        if limit > 0:
+            clip = Clamp(clip, orig, orig, limit, 0)
+        elif limit < 0:
+            clip = Clamp(clip, orig, orig, 0, -limit)
+        
+        if curve < 0:
+            clip = core.std.Invert(clip)
+        
+        return clip
+    
+    defaults = ['x', 0, 0, 0, 1, 0]
+    
+    for i in args:
+        if isinstance(i, list) and 3 <= len(i) <= 6 and i[0] in {'x', 'y'}:
+            if len(i) < 6:
+                i += defaults[len(i):]
+        else:
+            raise ValueError(f'{func_name}: *args must be a sequence of lists with 3 <= len(list) <= 6')
+        
+        clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5])')
+    
+    if space == YUV:
+        clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
+    else:
+        clip = clips[0]
+    
+    return clip
+
 def MaskDetail(clip: VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                 gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
                 taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> VideoNode:
@@ -3513,37 +3650,5 @@ def Convolution(clip: VideoNode, mode: str | list[int] | list[list[int]] | None 
             f'{'+ ' * (len(mode) - 1)}{div} /{fix}')
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
-    
-    return clip
-
-def stats_x(clip: VideoNode, x: int | list[int]) -> VideoNode:
-    
-    w = clip.weight
-    
-    match x:
-        case int() if 0 <= x < w:
-            x = [x]
-        case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
-            pass
-        case _:
-            raise TypeError(f'{func_name}: invalid "x" = {x}')
-    
-    clip = core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]).std.PlaneStats()
-    
-    return clip
-
-def stats_y(clip: VideoNode, y: int | list[int]) -> VideoNode:
-    
-    h = clip.height
-    
-    match y:
-        case int() if 0 <= y < h:
-            y = [y]
-        case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
-            pass
-        case _:
-            raise TypeError(f'{func_name}: invalid "y" = {y}')
-    
-    clip = core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]).std.PlaneStats()
     
     return clip
