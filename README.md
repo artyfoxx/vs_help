@@ -20,3 +20,4 @@ and some dependencies on them.
 * [vapoursynth-frfun7](https://github.com/dubhater/vapoursynth-frfun7)
 * [vapoursynth-awarpsharp2](https://github.com/dubhater/vapoursynth-awarpsharp2)
 * [vapoursynth-tivtc](https://github.com/dubhater/vapoursynth-tivtc)
+* [numpy](https://github.com/numpy/numpy)
