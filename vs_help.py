@@ -3526,9 +3526,9 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     
     return clip
 
-def CrazyPlaneStats(clip: vs.VideoNode, mode: int = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
+def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
     '''
-    Calculates arithmetic mean, geometric mean, harmonic mean, root mean square and median, depending on the mode.
+    Calculates arithmetic mean, geometric mean, harmonic mean, root mean square, root mean cube and median, depending on the mode.
     The result is written to the frame properties with the corresponding name.
     '''
     
@@ -3546,8 +3546,13 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int = 0, plane: int = 0, norm: boo
     num_p = clip.format.num_planes
     full = (1 << clip.format.bits_per_sample) - 1
     
-    if not isinstance(mode, int) or mode < 0 or mode > 4:
-        raise ValueError(f'{func_name}: invalid "mode"')
+    match mode:
+        case int() if 0 <= mode <= 5:
+            mode = [mode]
+        case list() if mode and all(isinstance(i, int) and 0 <= i <= 5 for i in mode):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "mode"')
     
     if not isinstance(plane, int) or plane < 0 or plane >= num_p:
         raise ValueError(f'{func_name}: invalid "plane"')
@@ -3559,33 +3564,36 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int = 0, plane: int = 0, norm: boo
         
         fout = f.copy()
         
-        flat = f[plane].cast('B').cast(f[plane].format)
+        matrix = np.asarray(f[plane])
         
-        match mode:
-            case 0:
-                avg = np.mean(flat, dtype=np.float64)
-                name = 'arithmetic_mean'
-            case 1:
-                avg = np.exp(np.mean(np.log(flat, dtype=np.float64)))
-                name = 'geometric_mean'
-            case 2:
-                avg = len(flat) / np.sum(np.reciprocal(flat, dtype=np.float64))
-                name = 'harmonic_mean'
-            case 3:
-                avg = np.sqrt(np.mean(np.square(flat, dtype=np.float64)))
-                name = 'root_mean_square'
-            case 4:
-                avg = np.median(flat)
-                name = 'median'
-        
-        if norm:
-            avg /= full
-        
-        fout.props[name] = avg
+        for i in mode:
+            match i:
+                case 0:
+                    avg = np.mean(matrix, dtype=np.float64)
+                    name = 'arithmetic_mean'
+                case 1:
+                    avg = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
+                    name = 'geometric_mean'
+                case 2:
+                    avg = matrix.size / np.sum(np.reciprocal(matrix, dtype=np.float64))
+                    name = 'harmonic_mean'
+                case 3:
+                    avg = np.sqrt(np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64))
+                    name = 'root_mean_square'
+                case 4:
+                    avg = np.cbrt(np.mean(matrix.astype(np.uint64) ** 3, dtype=np.float64))
+                    name = 'root_mean_cube'
+                case 5:
+                    avg = np.median(matrix)
+                    name = 'median'
+            
+            if norm:
+                avg /= full
+            
+            fout.props[name] = avg
         
         return fout
     
     clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=frame_stats)
     
     return clip
-
