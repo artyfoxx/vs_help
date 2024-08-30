@@ -54,6 +54,7 @@ Functions:
     VerticalCleaner
     Convolution
     CrazyPlaneStats
+    out_of_range_search
 '''
 
 import vapoursynth as vs
@@ -1611,8 +1612,13 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
         case _:
             raise ValueError(f'{func_name}: Please use 0...7 or 8...11 mode value or list[mode]')
     
-    if output is None:
-        output = f'field_diffs_mode({'_'.join(f'{i}' for i in mode)})_thr({'_'.join(f'{i}' for i in thr) if isinstance(thr, list) else thr}).txt'
+    match output:
+        case None:
+            output = f'field_diffs_mode({'_'.join(f'{i}' for i in mode)})_thr({'_'.join(f'{i}' for i in thr) if isinstance(thr, list) else thr}).txt'
+        case str():
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "output"')
     
     match thr:
         case float():
@@ -1710,9 +1716,9 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
             if res:
                 with open(output, 'w') as file:
                     if set(mode) <= set(range(8, 12)):
-                        file.write(f'{'frame':<{dig}} mode {'diff':<22} {'thr':<22} {'div':<8} thr2\n')
+                        file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<22} {'div':<8} thr2\n')
                     else:
-                        file.write(f'{'frame':<{dig}} mode {'diff':<22} {'thr':<{tab}} div\n')
+                        file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<{tab}} div\n')
                     
                     file.writelines(res) if len(mode) == 1 else file.writelines(sorted(res))
             else:
@@ -3595,5 +3601,113 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
         return fout
     
     clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=frame_stats)
+    
+    return clip
+
+def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int | None = None, output: str | None = None,
+                        planes: int | list[int] | None = None) -> vs.VideoNode:
+    '''
+    Searches for pixel values outside the specified range. The found values are written to a text file.
+    '''
+    
+    func_name = 'out_of_range_search'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_f = clip.num_frames
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor - 1
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in set(range(num_p)):
+            planes = [planes]
+        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
+    
+    check = 0
+    
+    match lower:
+        case None:
+            pass
+        case int() if 0 <= lower <= 255:
+            lower *= factor
+            check += 1
+        case _:
+            raise TypeError(f'{func_name}: invalid "lower"')
+    
+    match upper:
+        case None:
+            pass
+        case int() if 0 <= upper <= 255:
+            upper *= factor
+            check += 2
+        case _:
+            raise TypeError(f'{func_name}: invalid "upper"')
+    
+    if not check:
+        raise ValueError(f'{func_name}: "lower" and "upper" cannot both be None')
+    
+    match output:
+        case None:
+            output = (f'out_of_range_{f'lower({lower})_' if lower is not None else ''}'
+                      f'{f'upper({upper})_' if upper is not None else ''}planes({'_'.join(f'{i}' for i in planes)}).txt')
+        case str():
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "output"')
+    
+    out_of_range = []
+    
+    def get_search(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
+        
+        nonlocal out_of_range
+        
+        for i in planes:
+            matrix = np.asarray(f[i])
+            
+            match check:
+                case 1:
+                    temp = np.where(matrix < lower)
+                case 2:
+                    temp = np.where(matrix > upper)
+                case 3:
+                    temp = np.where((matrix < lower) | (matrix > upper))
+            
+            if temp[0].size:
+                out_of_range += [[i, n, temp, matrix[temp]]]
+        
+        if n == num_f - 1:
+            res = []
+            
+            dig = max(len(str(num_f)), 5)
+            w = len(str(clip.width))
+            h = len(str(clip.height))
+            out = max(len(str(full)), 3)
+            
+            for i in out_of_range:
+                res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {l:>{out}} {i[0]:>5}\n' for j, k, l in zip(*i[2], i[3])]
+            
+            if res:
+                with open(output, 'w') as file:
+                    file.write(f'{'frame':>{dig}} {'x':>{w}} {'y':>{h}} {'out':>{out}} plane\n')
+                    file.writelines(res)
+            else:
+                raise ValueError(f'{func_name}: there is no result, check the settings')
+        
+        return clip
+    
+    clip = core.std.FrameEval(clip, partial(get_search, clip=clip), prop_src=clip)
     
     return clip
