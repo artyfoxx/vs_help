@@ -3534,7 +3534,8 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
 
 def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
     '''
-    Calculates arithmetic mean, geometric mean, harmonic mean, root mean square, root mean cube and median, depending on the mode.
+    Calculates arithmetic mean, geometric mean, arithmetic–geometric mean, modified arithmetic–geometric mean,
+    harmonic mean, contraharmonic mean, root mean square, root mean cube and median, depending on the mode.
     The result is written to the frame properties with the corresponding name.
     '''
     
@@ -3553,9 +3554,9 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
-        case int() if 0 <= mode <= 5:
+        case int() if 0 <= mode <= 8:
             mode = [mode]
-        case list() if mode and all(isinstance(i, int) and 0 <= i <= 5 for i in mode):
+        case list() if mode and all(isinstance(i, int) and 0 <= i <= 8 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -3581,15 +3582,35 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
                     name = 'geometric_mean'
                 case 2:
+                    avg = np.mean(matrix, dtype=np.float64)
+                    avgs = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
+                    
+                    while avg != avgs:
+                        avg, avgs = np.mean([avg, avgs]), np.sqrt(np.prod([avg, avgs]))
+                    
+                    name = 'AGM'
+                case 3:
+                    avg = np.mean(matrix, dtype=np.float64)
+                    avgs = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
+                    z = np.float64(0)
+                    
+                    while avg != avgs:
+                        avg, avgs, z = np.mean([avg, avgs]), z + np.sqrt(np.prod([avg - z, avgs - z])), z - np.sqrt(np.prod([avg - z, avgs - z]))
+                    
+                    name = 'MAGM'
+                case 4:
                     avg = matrix.size / np.sum(np.reciprocal(matrix, dtype=np.float64))
                     name = 'harmonic_mean'
-                case 3:
+                case 5:
+                    avg = np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64) / np.mean(matrix, dtype=np.float64)
+                    name = 'contraharmonic_mean'
+                case 6:
                     avg = np.sqrt(np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64))
                     name = 'root_mean_square'
-                case 4:
+                case 7:
                     avg = np.cbrt(np.mean(matrix.astype(np.uint64) ** 3, dtype=np.float64))
                     name = 'root_mean_cube'
-                case 5:
+                case 8:
                     avg = np.median(matrix)
                     name = 'median'
             
