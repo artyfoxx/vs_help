@@ -67,6 +67,7 @@ from inspect import signature
 from collections.abc import Callable
 import re
 import numpy as np
+from scipy.special import ellipk
 
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> vs.VideoNode:
     '''
@@ -363,7 +364,7 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
     A simple functions for fix brightness artifacts at the borders of the frame.
     
     All values are set as positional list arguments. The list have the following format:
-    [axis, target, donor, limit, mode, curve, plane]. The first three are mandatory.
+    [axis, target, donor, limit, curve, mean, plane]. The first three are mandatory.
     
     Args:
         axis: can take the values "x" or "y" for columns and rows, respectively.
@@ -371,9 +372,9 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
         donor: the donor column/row. It could be a list.
         limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
             and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-        mode: CrazyPlaneStats mode, by default 0.
         curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
             -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation, by default 1.
+        mean: CrazyPlaneStats mode, by default 0.
         plane: by default 0.
     
     Example:
@@ -398,7 +399,7 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    def axis_x(clip: vs.VideoNode, target: int | list[int], donor: int | list[int], limit: int, mode: int, curve: int) -> vs.VideoNode:
+    def axis_x(clip: vs.VideoNode, target: int | list[int], donor: int | list[int], limit: int, curve: int, mean: int) -> vs.VideoNode:
         
         def stats_x(clip: vs.VideoNode, x: int | list[int]) -> vs.VideoNode:
             
@@ -410,16 +411,16 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
                 case _:
                     raise TypeError(f'{func_name}: invalid "x" = {x}')
             
-            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]), mode)
+            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]), mean)
         
         w = clip.width
         
         clip = core.akarin.PropExpr([clip, stats_x(clip, target), stats_x(clip, donor)],
-                                     lambda: dict(target_avg=f'y.{modes[mode]}', donor_avg=f'z.{modes[mode]}'))
+                                     lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}'))
         
         return correction(clip, target, limit, curve, 'X')
     
-    def axis_y(clip: vs.VideoNode, target: int | list[int], donor: int | list[int], limit: int, mode: int, curve: int) -> vs.VideoNode:
+    def axis_y(clip: vs.VideoNode, target: int | list[int], donor: int | list[int], limit: int, curve: int, mean: int) -> vs.VideoNode:
         
         def stats_y(clip: vs.VideoNode, y: int | list[int]) -> vs.VideoNode:
             
@@ -431,12 +432,12 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
                 case _:
                     raise TypeError(f'{func_name}: invalid "y" = {y}')
             
-            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]), mode)
+            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]), mean)
         
         h = clip.height
         
         clip = core.akarin.PropExpr([clip, stats_y(clip, target), stats_y(clip, donor)],
-                                     lambda: dict(target_avg=f'y.{modes[mode]}', donor_avg=f'z.{modes[mode]}'))
+                                     lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}'))
         
         return correction(clip, target, limit, curve, 'Y')
     
@@ -478,10 +479,10 @@ def fix_border(clip: vs.VideoNode, *args: str | list[str | int | list[int]]) -> 
         
         return clip
     
-    defaults = ['x', 0, 0, 0, 0, 1, 0]
+    defaults = ['x', 0, 0, 0, 1, 0, 0]
     
-    modes = ['arithmetic_mean', 'geometric_mean', 'harmonic_mean', 'contraharmonic_mean', 'root_mean_square',
-             'root_mean_cube', 'median']
+    means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
+             'root_mean_square', 'root_mean_cube', 'median']
     
     for i in args:
         if isinstance(i, list) and 3 <= len(i) <= 7 and i[0] in {'x', 'y'}:
@@ -3538,8 +3539,8 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
 
 def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
     '''
-    Calculates arithmetic mean, geometric mean, harmonic mean, contraharmonic mean, root mean square,
-    root mean cube and median, depending on the mode.
+    Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
+    root mean square, root mean cube and median, depending on the mode.
     The result is written to the frame properties with the corresponding name.
     '''
     
@@ -3558,9 +3559,9 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
-        case int() if 0 <= mode <= 6:
+        case int() if 0 <= mode <= 7:
             mode = [mode]
-        case list() if mode and all(isinstance(i, int) and 0 <= i <= 6 for i in mode):
+        case list() if mode and all(isinstance(i, int) and 0 <= i <= 7 for i in mode):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "mode"')
@@ -3586,18 +3587,23 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
                     name = 'geometric_mean'
                 case 2:
+                    avg0 = np.mean(matrix, dtype=np.float64)
+                    avg1 = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
+                    avg = np.pi * (avg0 + avg1) / ellipk(np.square(avg0 - avg1) / np.square(avg0 + avg1)) / 4
+                    name = 'arithmetic_geometric_mean'
+                case 3:
                     avg = matrix.size / np.sum(np.reciprocal(matrix, dtype=np.float64))
                     name = 'harmonic_mean'
-                case 3:
+                case 4:
                     avg = np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64) / np.mean(matrix, dtype=np.float64)
                     name = 'contraharmonic_mean'
-                case 4:
+                case 5:
                     avg = np.sqrt(np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64))
                     name = 'root_mean_square'
-                case 5:
+                case 6:
                     avg = np.cbrt(np.mean(matrix.astype(np.uint64) ** 3, dtype=np.float64))
                     name = 'root_mean_cube'
-                case 6:
+                case 7:
                     avg = np.median(matrix)
                     name = 'median'
             
