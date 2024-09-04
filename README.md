@@ -21,3 +21,4 @@ and some dependencies on them.
 * [vapoursynth-awarpsharp2](https://github.com/dubhater/vapoursynth-awarpsharp2)
 * [vapoursynth-tivtc](https://github.com/dubhater/vapoursynth-tivtc)
 * [numpy](https://github.com/numpy/numpy)
+* [scipy](https://github.com/scipy/scipy)
