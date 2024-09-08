@@ -729,7 +729,8 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
     
     return clip
 
-def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, mode: int = 0) -> vs.VideoNode:
+def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, shift: int | list[int] = 0,
+                   mode: int = 0, mean: int = 0) -> vs.VideoNode:
     '''
     Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
     Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
@@ -746,43 +747,47 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
     
-    def simple_average(clip: vs.VideoNode, curve: int | None, weight: float, mode: int) -> vs.VideoNode:
+    def simple_average(clip: vs.VideoNode, curve: int | None, weight: float, shift: int, mode: int, mean: int) -> vs.VideoNode:
         
         if curve is None:
             return clip
         
         if weight == 0:
-            expr0 = 'x.PlaneStatsAverage'
+            expr0 = f'x.{means[mean]}'
         elif weight == 1:
-            expr0 = 'y.PlaneStatsAverage'
+            expr0 = f'y.{means[mean]}'
         elif 0 < weight < 1:
-            expr0 = f'x.PlaneStatsAverage {1 - weight} * y.PlaneStatsAverage {weight} * +'
+            expr0 = f'x.{means[mean]} {1 - weight} * y.{means[mean]} {weight} * +'
         else:
             raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
         
         match abs(curve):
             case 0:
-                expr1 = f'{expr0} x.PlaneStatsAverage - x +'
-                expr2 = f'{expr0} y.PlaneStatsAverage - y +'
+                expr1 = f'{expr0} x.{means[mean]} - x +'
+                expr2 = f'{expr0} y.{means[mean]} - y +'
             case 1:
-                expr1 = f'{expr0} x.PlaneStatsAverage / x *'
-                expr2 = f'{expr0} y.PlaneStatsAverage / y *'
+                expr1 = f'{expr0} x.{means[mean]} / x *'
+                expr2 = f'{expr0} y.{means[mean]} / y *'
             case 2:
-                expr1 = f'x {expr0} log x.PlaneStatsAverage log / pow'
-                expr2 = f'y {expr0} log y.PlaneStatsAverage log / pow'
+                expr1 = f'x {expr0} log x.{means[mean]} log / pow'
+                expr2 = f'y {expr0} log y.{means[mean]} log / pow'
             case 3:
-                expr1 = f'{expr0} 1 x.PlaneStatsAverage / pow x pow'
-                expr2 = f'{expr0} 1 y.PlaneStatsAverage / pow y pow'
+                expr1 = f'{expr0} 1 x.{means[mean]} / pow x pow'
+                expr2 = f'{expr0} 1 y.{means[mean]} / pow y pow'
             case _:
                 raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
         
         if curve < 0:
             clip = core.std.Invert(clip)
         
+        if shift:
+            clip = core.std.Expr(clip, f'x {shift} +')
+        
         match mode:
             case 0:
-                clip = core.std.SeparateFields(clip, True).std.PlaneStats()
+                clip = CrazyPlaneStats(core.std.SeparateFields(clip, True), mean)
                 fields = [clip[::2], clip[1::2]]
                 
                 match weight:
@@ -798,7 +803,7 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
                 clip = core.std.SetFieldBased(clip, 0)
             case 1:
                 h = clip.height
-                clips = [core.std.Crop(clip, 0, 0, i, h - i - 1).std.PlaneStats() for i in range(h)]
+                clips = [CrazyPlaneStats(core.std.Crop(clip, 0, 0, i, h - i - 1), mean) for i in range(h)]
                 
                 match weight:
                     case 0:
@@ -816,10 +821,13 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
             case _:
                 raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
+        if shift:
+            clip = core.std.Expr(clip, f'x {shift} -')
+        
         if curve < 0:
             clip = core.std.Invert(clip)
         
-        clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage'])
+        clip = core.std.RemoveFrameProps(clip, ['minimum', 'maximum', means[mean]])
         
         return clip
     
@@ -834,15 +842,28 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
         case _:
             raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
+    match shift:
+        case int() if -20 <= shift <= 20:
+            shift = [shift * factor] * num_p
+        case list() if 0 < len(shift) <= num_p and all(isinstance(i, int) and -20 <= i <= 20 for i in shift):
+            shift = [shift * factor for i in shift]
+            if len(shift) < num_p:
+                shift += [shift[-1]] * (num_p - len(shift))
+        case _:
+            raise ValueError(f'{func_name}: "shift" must be "int" or list[int] and -20 <= "shift" <= 20')
+    
+    means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
+             'root_mean_square', 'root_mean_cube', 'median']
+    
     if space == vs.YUV:
         clips = core.std.SplitPlanes(clip)
         
         for i in range(num_p):
-            clips[i] = simple_average(clips[i], curve[i], weight, mode)
+            clips[i] = simple_average(clips[i], curve[i], weight, shift[i], mode, mean)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     elif space == vs.GRAY:
-        clip = simple_average(clip, curve[0], weight, mode)
+        clip = simple_average(clip, curve[0], weight, shift[0], mode, mean)
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
