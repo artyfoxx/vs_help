@@ -55,14 +55,14 @@ Functions:
     Convolution
     CrazyPlaneStats
     out_of_range_search
-    Rescaler
+    rescaler
 '''
 
 import vapoursynth as vs
 from vapoursynth import core
 from muvsfunc import rescale
 from typing import Any
-from math import sqrt
+from math import sqrt, ceil
 from functools import partial
 from inspect import signature
 from collections.abc import Callable
@@ -360,7 +360,7 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     
     return clip
 
-def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int], bool]) -> vs.VideoNode:
+def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) -> vs.VideoNode:
     '''
     A simple functions for fix brightness artifacts at the borders of the frame.
     
@@ -490,14 +490,20 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int], bool]) -> 
              'root_mean_square', 'root_mean_cube', 'median']
     
     for i in args:
-        if isinstance(i, list) and 3 <= len(i) <= 8 and i[0] in {'x', 'y'}:
+        if isinstance(i, list) and 3 <= len(i) <= 8:
             if len(i) < 8:
                 i += defaults[len(i):]
         else:
             raise ValueError(f'{func_name}: *args must be a sequence of lists with 3 <= len(list) <= 8')
         
         if i[5] in set(range(num_p)):
-            clips[i[5]] = eval(f'axis_{i[0]}(clips[i[5]], *i[1:5], *i[6:])')
+            match i[0]:
+                case 'x':
+                    clips[i[5]] = axis_x(clips[i[5]], *i[1:5], *i[6:])
+                case 'y':
+                    clips[i[5]] = axis_y(clips[i[5]], *i[1:5], *i[6:])
+                case _:
+                    raise ValueError(f'{func_name}: invalid "axis"')
         else:
             raise ValueError(f'{func_name}: invalid plane = {i[5]}')
     
@@ -631,7 +637,7 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
         for j in range(tr * 2):
             vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
     
-    clip = eval(f'core.mv.Degrain{tr}(clip, sup2 if full_range else sup1, *vectors, **args[2])')
+    clip = getattr(core.mv, f'Degrain{tr}')(clip, sup2 if full_range else sup1, *vectors, **args[2])
     
     return clip
 
@@ -971,7 +977,7 @@ def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: flo
     clip = Binarize(clip, thr)
     
     if rg:
-        clip = RemoveGrain(RemoveGrain(clip, 3, edges=True), 4, edges=True)
+        clip = RemoveGrain(RemoveGrain(clip, 3), 4)
     
     if space == vs.YUV:
         format_id = clip.format.id
@@ -1357,7 +1363,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, s
         clip = autotap3(clip, dx, dy, src_left=src_left * 2 - 0.5, src_top=src_top * 2 - 0.5, src_width=src_width * 2, src_height=src_height * 2)
     else:
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
-        clip = eval(f'core.resize.{kernel}(clip, dx, dy, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **upscaler_args)')
+        clip = getattr(core.resize, kernel)(clip, dx, dy, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **upscaler_args)
     
     return clip
 
@@ -1412,7 +1418,7 @@ def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: 
         clip = Binarize(clip, thr)
     
     if rg:
-        clip = RemoveGrain(RemoveGrain(clip, 3, edges=True), 4, edges=True)
+        clip = RemoveGrain(RemoveGrain(clip, 3), 4)
     
     if after_args:
         clip = after_mask(clip, **after_args)
@@ -1481,7 +1487,7 @@ def titles_mask(clip: vs.VideoNode, thr: float = 230, rg: bool = True, **after_a
     clip = Binarize(clip, thr)
     
     if rg:
-        clip = RemoveGrain(RemoveGrain(clip, 3, edges=True), 4, edges=True)
+        clip = RemoveGrain(RemoveGrain(clip, 3), 4)
     
     if after_args:
         clip = after_mask(clip, **after_args)
@@ -1537,7 +1543,7 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
     for i in after_args:
         if i in after_dict:
             for _ in range(after_args[i]):
-                clip = eval(f'core.std.{after_dict[i]}(clip, planes=planes)')
+                clip = getattr(core.std, after_dict[i])(clip, planes=planes)
         else:
             raise KeyError(f'{func_name}: Unsupported key {i} in after_args')
     
@@ -3739,10 +3745,10 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     return clip
 
-def Rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear', frac: bool = True,
+def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear', frac: bool = True,
              upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
     
-    func_name = 'Rescaler'
+    func_name = 'rescaler'
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
