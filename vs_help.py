@@ -55,6 +55,7 @@ Functions:
     Convolution
     CrazyPlaneStats
     out_of_range_search
+    Rescaler
 '''
 
 import vapoursynth as vs
@@ -3735,5 +3736,120 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
         return clip
     
     clip = core.std.FrameEval(clip, partial(get_search, clip=clip), prop_src=clip)
+    
+    return clip
+
+def Rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear', frac: bool = True,
+             upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
+    
+    func_name = 'Rescaler'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    w = clip.width
+    h = clip.height
+    
+    match dx, dy:
+        case None, None:
+            dy = h * 2 // 3
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
+        case None, int():
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
+        case None, float():
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
+        case int(), None:
+            src_width = dx
+            src_left = 0
+            src_height = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
+        case int(), int():
+            src_width = dx
+            src_left = 0
+            src_height = dy
+            src_top = 0
+        case int(), float():
+            src_width = dx
+            src_left = 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
+        case float(), None:
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
+        case float(), int():
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
+        case float(), float():
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
+        case _, None | int() | float():
+            raise TypeError(f'{func_name}: invalid "dx"')
+        case _:
+            raise TypeError(f'{func_name}: invalid "dy"')
+    
+    if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
+        raise ValueError(f'{func_name}: invalid "kernel"')
+    
+    upscale_args = {}
+    
+    if descale_args:
+        match kernel:
+            case 'bicubic':
+                if 'b' in descale_args:
+                    upscale_args['filter_param_a'] = descale_args['b']
+                else:
+                    descale_args['b'] = upscale_args['filter_param_a'] = 0.0
+                
+                if 'c' in descale_args:
+                    upscale_args['filter_param_b'] = descale_args['c']
+                else:
+                    descale_args['c'] = upscale_args['filter_param_b'] = 0.5
+            case 'lanczos':
+                if 'taps' in descale_args:
+                    upscale_args['filter_param_a'] = descale_args['taps']
+                else:
+                    descale_args['taps'] = upscale_args['filter_param_a'] = 3
+        
+        if any((x := i) not in upscale_args for i in descale_args):
+            raise KeyError(f'{func_name}: Unsupported key {x} in descale_args')
+    
+    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **descale_args)
+    
+    match upscaler:
+        case None:
+            clip = getattr(core.resize, kernel.capitalize())(clip, w, h, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **upscale_args)
+        case Callable():
+            clip = upscaler(clip, w, h, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height)
+        case _:
+            raise TypeError(f'{func_name}: invalid "upscaler"')
     
     return clip
