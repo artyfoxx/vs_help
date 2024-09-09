@@ -1580,7 +1580,7 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
     return clip
 
 def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2.0,
-                       norm: bool = False, frames: list[int] | None = None, output: str | None = None, plane: int = 0) -> vs.VideoNode:
+                       norm: bool = True, frames: list[int] | None = None, output: str | None = None, plane: int = 0, mean: int = 0) -> vs.VideoNode:
     '''
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
@@ -1618,7 +1618,7 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
             It is relevant for modes 4...7. You can specify several as a list, they will positionally correspond to the modes.
             If the div list is less than the list of modes, the last div value will work for all remaining modes. The default is "2.0".
         
-        norm: normalization of absolute normalized difference values between 0 and 1. The default is "False".
+        norm: normalization to absolute normalized values of the difference between 0 and 1. The default is "True".
         
         frames: a list of frames to check. The default is "all frames".
         
@@ -1637,7 +1637,9 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    if plane not in set(range(clip.format.num_planes)):
+    num_p = clip.format.num_planes
+    
+    if plane not in set(range(num_p)):
         raise ValueError(f'{func_name}: Unsupported plane')
     
     match mode:
@@ -1690,27 +1692,18 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     
     diffs = [[0] * num_f, [0] * num_f]
     
-    def dump_diffs(n: int, f: list[vs.VideoFrame], clip: vs.VideoNode) -> vs.VideoNode:
+    def dump_diffs(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
         nonlocal diffs
         
-        diffs[0][n] = abs(f[0].props['PlaneStatsAverage'] - f[1].props['PlaneStatsAverage'])
-        diffs[1][n] = f[0].props['PlaneStatsDiff']
+        diffs[0][n] = abs(f.props['avg0'] - f.props['avg1'])
+        diffs[1][n] = f.props['avg2']
         
         if n == num_f - 1:
             res = []
             
             dig = max(len(str(num_f)), 5)
             tab = max(len(str(i)) for i in thr)
-            
-            if norm:
-                min_diffs_0 = min(diffs[0])
-                max_diffs_0 = max(diffs[0])
-                min_diffs_1 = min(diffs[1])
-                max_diffs_1 = max(diffs[1])
-                
-                diffs[0] = [(i - min_diffs_0) / (max_diffs_0 - min_diffs_0) for i in diffs[0]]
-                diffs[1] = [(i - min_diffs_1) / (max_diffs_1 - min_diffs_1) for i in diffs[1]]
             
             for i, j in enumerate(mode):
                 par = j % 2
@@ -1762,13 +1755,18 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
         
         return clip
     
+    means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
+             'root_mean_square', 'root_mean_cube', 'median']
+    
     temp = core.std.SetFieldBased(clip, 0).std.SeparateFields(True)
     fields = [temp[::2], temp[1::2]]
     
-    fields[0] = core.std.PlaneStats(*fields, plane=plane)
-    fields[1] = core.std.PlaneStats(fields[1], plane=plane)
+    clip = core.akarin.PropExpr([clip, CrazyPlaneStats(fields[0], mean, plane, norm), CrazyPlaneStats(fields[1], mean, plane, norm),
+                                 CrazyPlaneStats(core.std.Expr(fields, ['x y - abs' if i == plane else '' for i in range(num_p)]), mean, plane, norm)],
+                                lambda: dict(avg0=f'y.{means[mean]}', avg1=f'z.{means[mean]}', avg2=f'a.{means[mean]}'))
     
-    clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=fields)
+    clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip)
+    clip = core.std.RemoveFrameProps(clip, ['avg0', 'avg1', 'avg2'])
     
     return clip
 
