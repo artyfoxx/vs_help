@@ -2810,34 +2810,15 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     result = [[], []]
     
     for i in range(num_f):
-        if frames_d[i] != frames_c[i]:
-            match frames_d[i]:
-                case 'c':
-                    match frames_c[i]:
-                        case 'p':
-                            result[0] += [i]
-                        case 'u':
-                            result[1] += [i]
-                        case _:
-                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                case 'p':
-                    match frames_c[i]:
-                        case 'c':
-                            result[0] += [i]
-                        case 'u':
-                            result[1] += [i]
-                        case _:
-                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                case 'u':
-                    match frames_c[i]:
-                        case 'c':
-                            result[1] += [i]
-                        case 'p':
-                            result[1] += [i]
-                        case _:
-                            raise ValueError(f'{func_name}: invalid "ovr_c" in frame {i}')
-                case _:
-                    raise ValueError(f'{func_name}: invalid "ovr_d" in frame {i}')
+        match (frames_d[i], frames_c[i]):
+            case (None, None) | ('c', 'c') | ('p', 'p') | ('u', 'u'):
+                pass
+            case ('c', 'p') | ('p', 'c'):
+                result[0] += [i]
+            case ('c', 'u') | ('p', 'u') | ('u', 'c') | ('u', 'p'):
+                result[1] += [i]
+            case _:
+                raise ValueError(f'{func_name}: undefined behavior in frame {i}')
     
     return result
 
