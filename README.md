@@ -4,9 +4,6 @@ Just a few vapoursynth function...
 ## General
 * [VapourSynth](https://www.vapoursynth.com/) >= R58
 * [Python](https://www.python.org/) >= 3.10
-## Scripts
-* [muvsfunc](https://github.com/WolframRhodium/muvsfunc) (master branch)\
-and some dependencies on them.
 ## Plugins
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
