@@ -1,14 +1,15 @@
 '''
-All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Floating point sample type is not supported.
+All functions support the following formats: GRAY and YUV 8 - 16 bit integer.
+Support for floating point sample type is added when needed. Such functions are marked separately.
 
 Functions:
-    autotap3
+    autotap3 (float support)
     Lanczosplus
     bion_dehalo
     fix_border
     MaskDetail
     degrain_n
-    Destripe
+    Destripe (float only)
     daa
     average_fields
     znedi3aas
@@ -17,9 +18,9 @@ Functions:
     DeHalo_alpha
     FineDehalo
     FineDehalo2
-    upscaler
+    upscaler (float support)
     diff_mask
-    apply_range
+    apply_range (float support)
     titles_mask
     after_mask
     search_field_diffs
@@ -31,8 +32,8 @@ Functions:
     vinverse2
     sbr
     sbrV
-    Blur
-    Sharpen
+    Blur (float support)
+    Sharpen (float support)
     Clamp
     MinBlur
     DitherLumaRebuild
@@ -54,11 +55,11 @@ Functions:
     Convolution
     CrazyPlaneStats
     out_of_range_search
+    rescale (float only)
 '''
 
 import vapoursynth as vs
 from vapoursynth import core
-from muvsfunc import rescale
 from typing import Any
 from math import sqrt
 from functools import partial
@@ -82,9 +83,6 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
-    
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -140,27 +138,27 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
     
-    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
+    m1 = core.akarin.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m2 = core.akarin.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m3 = core.akarin.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m4 = core.akarin.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m5 = core.akarin.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m6 = core.akarin.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
+    m7 = core.akarin.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
     
-    expr = f'x y - {thresh} *'
+    expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 0.0 1.0 clamp'
     
-    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.akarin.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m100 = core.akarin.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.akarin.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m101 = core.akarin.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.akarin.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m102 = core.akarin.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.akarin.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m103 = core.akarin.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.akarin.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m104 = core.akarin.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.akarin.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
     
     if space == vs.YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
@@ -207,7 +205,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
         thresh2 = (thresh + 1) * 64
     
     space = clip.format.color_family
-    thresh *= 1 << clip.format.bits_per_sample - 8
+    bits = clip.format.bits_per_sample
+    thresh *= 1 << bits - 8
     
     if space == vs.YUV:
         orig = clip
@@ -222,7 +221,9 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
-    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, 2.01, 256, 256), x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
+    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else 
+                                                 core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits), 
+                                                 x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
@@ -390,9 +391,9 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     space = clip.format.color_family
+    num_p = clip.format.num_planes
     
     if space == vs.YUV:
-        num_p = clip.format.num_planes
         clips = core.std.SplitPlanes(clip)
     elif space == vs.GRAY:
         clips = [clip]
@@ -513,8 +514,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     return clip
 
 def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
-                gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
-                taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> vs.VideoNode:
+               gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
+               taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> vs.VideoNode:
     '''
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
     Has nothing to do with the port by MonoS.
@@ -546,7 +547,8 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    factor = 1 << clip.format.bits_per_sample - 8
+    bits = clip.format.bits_per_sample
+    factor = 1 << bits - 8
     full = 256 * factor
     w = clip.width
     h = clip.height
@@ -556,17 +558,20 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     
     match kernel:
         case 'bicubic':
-            rescaler = rescale.Bicubic(b, c)
+            rescaler = rescale.Bicubic(b=b, c=c)
         case 'lanczos':
-            rescaler = rescale.Lanczos(taps)
+            rescaler = rescale.Lanczos(taps=taps)
         case _:
-            rescaler = eval(f'rescale.{kernel.capitalize()}()')
+            rescaler = getattr(rescale, kernel.capitalize())()
     
     if dx is None:
-        resc = rescaler.rescale(clip, dy, h if frac else None)
+        resc = rescaler.rescale(clip if bits == 32 else core.fmtc.bitdepth(clip, bits=32), dy, h if frac else None)
     else:
-        resc = rescaler.descale(clip, dx, dy, h if frac else None)
+        resc = rescaler.descale(clip if bits == 32 else core.fmtc.bitdepth(clip, bits=32), dx, dy, h if frac else None)
         resc = rescaler.upscale(resc, w, h)
+    
+    if bits != 32:
+        resc = core.fmtc.bitdepth(resc, bits=bits, dmode=1)
     
     mask = RemoveGrain(core.std.MakeDiff(clip, resc).hist.Luma(), rg)
     mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
@@ -639,7 +644,7 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
     
     return clip
 
-def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, tff: bool = True, **descale_args: Any) -> vs.VideoNode:
+def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear', tff: bool = True, **descale_args: Any) -> vs.VideoNode:
     '''
     Simplified Destripe from YomikoR without any unnecessary conversions and soapy EdgeFixer
     The internal Descale functions are unloaded as usual.
@@ -672,8 +677,8 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, t
     clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(tff).std.SetFieldBased(0)
     fields = [clip[::2], clip[1::2]]
     
-    fields[0] = core.descale.Descale(fields[0], dx, dy, **descale_args)
-    fields[1] = core.descale.Descale(fields[1], dx, dy, **second_args)
+    fields[0] = getattr(core.descale, f'De{kernel}')(fields[0], dx, dy, **descale_args)
+    fields[1] = getattr(core.descale, f'De{kernel}')(fields[1], dx, dy, **second_args)
     
     clip = core.std.Interleave(fields)
     clip = core.std.DoubleWeave(clip, tff)[::2]
@@ -1446,7 +1451,7 @@ def titles_mask(clip: vs.VideoNode, thr: float = 230, rg: bool = True, **after_a
     if after_args:
         clip = after_mask(clip, **after_args)
     
-    if space_f == vs.YUV:
+    if space == vs.YUV:
         clip = core.resize.Point(clip, format=format_id)
     
     return clip
@@ -1942,7 +1947,7 @@ def vinverse(clip: vs.VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float 
     if not isinstance(thr, int) or thr < 0 or thr > 255:
         raise ValueError(f'{func_name}: invalid "thr"')
     
-    if not isinstance(amnt, int) or thr < 0 or thr > 255:
+    if not isinstance(amnt, int) or amnt < 0 or amnt > 255:
         raise ValueError(f'{func_name}: invalid "amnt"')
     
     Vblur = Convolution(clip, [[1], [50, 99, 50]], planes=planes)
@@ -2009,7 +2014,7 @@ def vinverse2(clip: vs.VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float
     if not isinstance(scl, float):
         raise ValueError(f'{func_name}: invalid "scl"')
     
-    if not isinstance(amnt, int) or thr < 0 or thr > 255:
+    if not isinstance(amnt, int) or amnt < 0 or amnt > 255:
         raise ValueError(f'{func_name}: invalid "amnt"')
     
     Vblur = sbrV(clip, planes=planes)
@@ -2117,9 +2122,6 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
@@ -2149,6 +2151,9 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     
     expr = (f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + '
             f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +')
+    
+    if clip.format.sample_type != vs.INTEGER:
+        expr = f'{expr} 0.0 1.0 clamp'
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
@@ -3677,3 +3682,130 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     clip = core.std.FrameEval(clip, partial(get_search, clip=clip), prop_src=clip)
     
     return clip
+
+class rescale:
+    
+    @staticmethod
+    def _get_descale_args(W: int, H: int, width: float | int, height: float | int, base_height: int = None):
+        if base_height is None:
+            width, height = round(width), round(height)
+            src_width, src_height = width, height
+            src_left, src_top = 0, 0
+        else:
+            base_width = round(W / H * base_height)
+            src_width = width
+            src_height = height
+            width = base_width - 2 * int((base_width - width) / 2)
+            height = base_height - 2 * int((base_height - height) / 2)
+            src_top = (height - src_height) / 2
+            src_left = (width - src_width) / 2
+        
+        return {
+            "width": width,
+            "height": height,
+            "src_left": src_left,
+            "src_top": src_top,
+            "src_width": src_width,
+            "src_height": src_height,
+        }
+    
+    @staticmethod
+    def _get_descale_args_pro(width: float | int, height: float | int, base_height: int = None, base_width: int = None):
+        if base_height is None:
+            height = round(height)
+            src_height = height
+            src_top = 0
+        else:
+            src_height = height
+            height = base_height - 2 * int((base_height - height) / 2)
+            src_top = (height - src_height) / 2
+        
+        if base_width is None:
+            width = round(width)
+            src_width = width
+            src_left= 0
+        else:
+            src_width = width
+            width = base_width - 2 * int((base_width - width) / 2)
+            src_left = (width - src_width) / 2
+        return {
+            "width": width,
+            "height": height,
+            "src_left": src_left,
+            "src_top": src_top,
+            "src_width": src_width,
+            "src_height": src_height,
+        }
+    
+    class Rescaler:
+        def __init__(self, kernel: str = "bicubic", upscaler: Callable | None = None, **kwargs: Any):
+            self.kernel = kernel
+            self.upscaler = upscaler
+            self.descale_args = kwargs
+        
+        def __call__(self, clip: vs.VideoNode, src_height: float | int, upscaler: Callable | None = None) -> Any:
+            base_height = clip.height if isinstance(src_height, float) else None
+            return self.rescale(clip, src_height, base_height, upscaler)
+        
+        def rescale(self, clip: vs.VideoNode, src_height: float | int, base_height: int | None = None, upscaler: Callable | None = None) -> vs.VideoNode:
+            W, H = clip.width, clip.height
+            src_width = W / H * src_height
+            descaled = self.descale(clip, src_width, src_height, base_height)
+            rescaled = self.upscale(descaled, W, H, upscaler)
+            return rescaled
+        
+        def rescale_pro(self, clip: vs.VideoNode, src_width: float | int = None, src_height: float | int = None, base_width: int | None = None,
+                        base_height: int | None = None, upscaler: Callable | None = None) -> vs.VideoNode:
+            
+            if ((src_height is None) and (src_width is None)):
+                raise TypeError("At least one of the 'src_height' and 'src_width' must be set.")
+            
+            descaled = self.descale_pro(clip, src_width, src_height, base_width, base_height)
+            rescaled = self.upscale(descaled, clip.width, clip.height, upscaler)
+            return rescaled
+        
+        def descale(self, clip: vs.VideoNode, width: float | int, height: float | int, base_height: int = None):
+            W, H = clip.width, clip.height
+            self.descale_args.update(rescale._get_descale_args(W, H, width, height, base_height))
+            return getattr(core.descale, f'De{self.kernel}')(clip, **self.descale_args.copy())
+        
+        def descale_pro(self, clip: vs.VideoNode, width: float | int = None, height: float | int = None, base_width: int = None, base_height: int = None):
+            if width is None:
+                width = clip.width
+            if height is None:
+                height = clip.height
+            self.descale_args.update(rescale._get_descale_args_pro(width, height, base_height, base_width))
+            return getattr(core.descale, f'De{self.kernel}')(clip, **self.descale_args.copy())
+        
+        def upscale(self, clip: vs.VideoNode, width: int, height: int, upscaler: Callable | None = None) -> vs.VideoNode:
+            kwargs = self.descale_args.copy()
+            del kwargs['width'], kwargs['height']
+            if upscaler is None:
+                return getattr(core.descale, self.kernel.capitalize())(clip, width, height, **kwargs)
+            else:
+                kwargs = {i:kwargs[i] for i in kwargs if i in {"src_left", "src_top", "src_width", "src_height"}}
+                return upscaler(clip, width, height, **kwargs)
+    
+    @staticmethod
+    def Bilinear(**kwargs: Any):
+        return rescale.Rescaler(kernel="bilinear", **kwargs)
+    
+    @staticmethod
+    def Bicubic(**kwargs: Any):
+        return rescale.Rescaler(kernel="bicubic", **kwargs)
+    
+    @staticmethod
+    def Lanczos(**kwargs: Any):
+        return rescale.Rescaler(kernel="lanczos", **kwargs)
+    
+    @staticmethod
+    def Spline16(**kwargs: Any):
+        return rescale.Rescaler(kernel="spline16", **kwargs)
+    
+    @staticmethod
+    def Spline36(**kwargs: Any):
+        return rescale.Rescaler(kernel="spline36", **kwargs)
+    
+    @staticmethod
+    def Spline64(**kwargs: Any):
+        return rescale.Rescaler(kernel="spline64", **kwargs)
