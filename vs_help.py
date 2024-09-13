@@ -17,7 +17,6 @@ Functions:
     DeHalo_alpha
     FineDehalo
     FineDehalo2
-    InsaneAA
     upscaler
     diff_mask
     apply_range
@@ -61,7 +60,7 @@ import vapoursynth as vs
 from vapoursynth import core
 from muvsfunc import rescale
 from typing import Any
-from math import sqrt, ceil
+from math import sqrt
 from functools import partial
 from inspect import signature
 from collections.abc import Callable
@@ -1231,71 +1230,6 @@ def FineDehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list[
         clip = core.std.Expr([mask_h, mask_v], 'x y max')
         if space == vs.YUV:
             clip = core.resize.Point(clip, format=orig.format.id)
-    
-    return clip
-
-def InsaneAA(clip: vs.VideoNode, ext_aa: vs.VideoNode = None, ext_mask: vs.VideoNode = None, desc_str: float = 0.3, mode: int = 1,
-              kernel: str = 'bilinear', b: float = 1/3, c: float = 1/3, taps: int = 3, dx: int = None, dy: int = 720,
-              dehalo: bool = False, masked: bool = False, frac: bool = True, **upscaler_args: Any) -> vs.VideoNode:
-    
-    func_name = 'InsaneAA'
-    
-    if not isinstance(clip, vs.VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
-    
-    clip = core.std.SetFieldBased(clip, 0)
-    
-    space = clip.format.color_family
-    
-    if space == vs.YUV:
-        orig = clip
-        clip = core.std.ShufflePlanes(clip, 0, vs.GRAY)
-        orig_gray = clip
-    elif space == vs.GRAY:
-        orig_gray = clip
-    else:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
-    if ext_aa is None:
-        w = clip.width
-        h = clip.height
-        
-        match kernel:
-            case 'bicubic':
-                rescaler = rescale.Bicubic(b, c)
-            case 'lanczos':
-                rescaler = rescale.Lanczos(taps)
-            case _:
-                rescaler = eval(f'rescale.{kernel.capitalize()}()')
-        
-        if dx is None:
-            dx = w / h * dy
-        
-        clip = rescaler.descale(clip, dx, dy, h if frac else None)
-        clip_sp = core.resize.Spline36(clip, **rescaler.descale_args)
-        clip = core.std.Merge(clip_sp, clip, desc_str)
-        
-        if dehalo:
-            clip = FineDehalo(clip, thmi=45, thlimi=60, thlima=120, mt_prewitt=True)
-        
-        clip = rescaler.upscale(clip, w, h, partial(upscaler, **upscaler_args))
-    elif isinstance(ext_aa, vs.VideoNode) and ext_aa.format.color_family == vs.GRAY:
-        clip = ext_aa
-    else:
-        raise ValueError(f'{func_name}: The external AA should be vs.GRAY')
-    
-    if masked:
-        if ext_mask is None:
-            ext_mask = core.std.Sobel(orig_gray, scale=2).std.Maximum()
-        elif isinstance(ext_mask, vs.VideoNode) and ext_mask.format.color_family == vs.GRAY:
-            pass
-        else:
-            raise ValueError(f'{func_name}: The external mask should be vs.GRAY')
-        
-        clip = core.std.MaskedMerge(orig_gray, clip, ext_mask)
-    
-    if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, orig], list(range(orig.format.num_planes)), space)
     
     return clip
 
