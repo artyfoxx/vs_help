@@ -55,13 +55,13 @@ Functions:
     Convolution
     CrazyPlaneStats
     out_of_range_search
-    rescale (float only)
+    rescaler (float only)
 '''
 
 import vapoursynth as vs
 from vapoursynth import core
 from typing import Any
-from math import sqrt
+from math import sqrt, ceil
 from functools import partial
 from inspect import signature
 from collections.abc import Callable
@@ -550,28 +550,16 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     bits = clip.format.bits_per_sample
     factor = 1 << bits - 8
     full = 256 * factor
-    w = clip.width
-    h = clip.height
-    
-    if dy is None:
-        dy = h * 2 // 3
     
     match kernel:
         case 'bicubic':
-            rescaler = rescale.Bicubic(b=b, c=c)
+            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, b=b, c=c)
         case 'lanczos':
-            rescaler = rescale.Lanczos(taps=taps)
+            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, taps=taps)
         case _:
-            rescaler = getattr(rescale, kernel.capitalize())()
+            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac)
     
-    if dx is None:
-        resc = rescaler.rescale(clip if bits == 32 else core.fmtc.bitdepth(clip, bits=32), dy, h if frac else None)
-    else:
-        resc = rescaler.descale(clip if bits == 32 else core.fmtc.bitdepth(clip, bits=32), dx, dy, h if frac else None)
-        resc = rescaler.upscale(resc, w, h)
-    
-    if bits != 32:
-        resc = core.fmtc.bitdepth(resc, bits=bits, dmode=1)
+    resc = core.fmtc.bitdepth(resc, bits=bits, dmode=1)
     
     mask = RemoveGrain(core.std.MakeDiff(clip, resc).hist.Luma(), rg)
     mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
@@ -3683,129 +3671,94 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     return clip
 
-class rescale:
+def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear', frac: bool = True,
+             upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
     
-    @staticmethod
-    def _get_descale_args(W: int, H: int, width: float | int, height: float | int, base_height: int = None):
-        if base_height is None:
-            width, height = round(width), round(height)
-            src_width, src_height = width, height
-            src_left, src_top = 0, 0
-        else:
-            base_width = round(W / H * base_height)
-            src_width = width
-            src_height = height
-            width = base_width - 2 * int((base_width - width) / 2)
-            height = base_height - 2 * int((base_height - height) / 2)
-            src_top = (height - src_height) / 2
-            src_left = (width - src_width) / 2
-        
-        return {
-            "width": width,
-            "height": height,
-            "src_left": src_left,
-            "src_top": src_top,
-            "src_width": src_width,
-            "src_height": src_height,
-        }
+    func_name = 'rescaler'
     
-    @staticmethod
-    def _get_descale_args_pro(width: float | int, height: float | int, base_height: int = None, base_width: int = None):
-        if base_height is None:
-            height = round(height)
-            src_height = height
-            src_top = 0
-        else:
-            src_height = height
-            height = base_height - 2 * int((base_height - height) / 2)
-            src_top = (height - src_height) / 2
-        
-        if base_width is None:
-            width = round(width)
-            src_width = width
-            src_left= 0
-        else:
-            src_width = width
-            width = base_width - 2 * int((base_width - width) / 2)
-            src_left = (width - src_width) / 2
-        return {
-            "width": width,
-            "height": height,
-            "src_left": src_left,
-            "src_top": src_top,
-            "src_width": src_width,
-            "src_height": src_height,
-        }
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    class Rescaler:
-        def __init__(self, kernel: str = "bicubic", upscaler: Callable | None = None, **kwargs: Any):
-            self.kernel = kernel
-            self.upscaler = upscaler
-            self.descale_args = kwargs
-        
-        def __call__(self, clip: vs.VideoNode, src_height: float | int, upscaler: Callable | None = None) -> Any:
-            base_height = clip.height if isinstance(src_height, float) else None
-            return self.rescale(clip, src_height, base_height, upscaler)
-        
-        def rescale(self, clip: vs.VideoNode, src_height: float | int, base_height: int | None = None, upscaler: Callable | None = None) -> vs.VideoNode:
-            W, H = clip.width, clip.height
-            src_width = W / H * src_height
-            descaled = self.descale(clip, src_width, src_height, base_height)
-            rescaled = self.upscale(descaled, W, H, upscaler)
-            return rescaled
-        
-        def rescale_pro(self, clip: vs.VideoNode, src_width: float | int = None, src_height: float | int = None, base_width: int | None = None,
-                        base_height: int | None = None, upscaler: Callable | None = None) -> vs.VideoNode:
-            
-            if ((src_height is None) and (src_width is None)):
-                raise TypeError("At least one of the 'src_height' and 'src_width' must be set.")
-            
-            descaled = self.descale_pro(clip, src_width, src_height, base_width, base_height)
-            rescaled = self.upscale(descaled, clip.width, clip.height, upscaler)
-            return rescaled
-        
-        def descale(self, clip: vs.VideoNode, width: float | int, height: float | int, base_height: int = None):
-            W, H = clip.width, clip.height
-            self.descale_args.update(rescale._get_descale_args(W, H, width, height, base_height))
-            return getattr(core.descale, f'De{self.kernel}')(clip, **self.descale_args.copy())
-        
-        def descale_pro(self, clip: vs.VideoNode, width: float | int = None, height: float | int = None, base_width: int = None, base_height: int = None):
-            if width is None:
-                width = clip.width
-            if height is None:
-                height = clip.height
-            self.descale_args.update(rescale._get_descale_args_pro(width, height, base_height, base_width))
-            return getattr(core.descale, f'De{self.kernel}')(clip, **self.descale_args.copy())
-        
-        def upscale(self, clip: vs.VideoNode, width: int, height: int, upscaler: Callable | None = None) -> vs.VideoNode:
-            kwargs = self.descale_args.copy()
-            del kwargs['width'], kwargs['height']
-            if upscaler is None:
-                return getattr(core.descale, self.kernel.capitalize())(clip, width, height, **kwargs)
-            else:
-                kwargs = {i:kwargs[i] for i in kwargs if i in {"src_left", "src_top", "src_width", "src_height"}}
-                return upscaler(clip, width, height, **kwargs)
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
     
-    @staticmethod
-    def Bilinear(**kwargs: Any):
-        return rescale.Rescaler(kernel="bilinear", **kwargs)
+    w = clip.width
+    h = clip.height
     
-    @staticmethod
-    def Bicubic(**kwargs: Any):
-        return rescale.Rescaler(kernel="bicubic", **kwargs)
+    match dx, dy:
+        case None, None:
+            dy = h * 2 // 3
+            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = dy
+            descale_args['src_top'] = 0
+        case None, int():
+            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = dy
+            descale_args['src_top'] = 0
+        case None, float():
+            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = dy if frac else round(dy)
+            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+        case int(), None:
+            descale_args['src_width'] = dx
+            descale_args['src_left'] = 0
+            descale_args['src_height'] = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+        case int(), int():
+            descale_args['src_width'] = dx
+            descale_args['src_left'] = 0
+            descale_args['src_height'] = dy
+            descale_args['src_top'] = 0
+        case int(), float():
+            descale_args['src_width'] = dx
+            descale_args['src_left'] = 0
+            descale_args['src_height'] = dy if frac else round(dy)
+            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+        case float(), None:
+            descale_args['src_width'] = dx if frac else round(dx)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+        case float(), int():
+            descale_args['src_width'] = dx if frac else round(dx)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = dy
+            descale_args['src_top'] = 0
+        case float(), float():
+            descale_args['src_width'] = dx if frac else round(dx)
+            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
+            descale_args['src_height'] = dy if frac else round(dy)
+            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+        case _, None | int() | float():
+            raise TypeError(f'{func_name}: invalid "dx"')
+        case _:
+            raise TypeError(f'{func_name}: invalid "dy"')
     
-    @staticmethod
-    def Lanczos(**kwargs: Any):
-        return rescale.Rescaler(kernel="lanczos", **kwargs)
+    if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
+        raise ValueError(f'{func_name}: invalid "kernel"')
     
-    @staticmethod
-    def Spline16(**kwargs: Any):
-        return rescale.Rescaler(kernel="spline16", **kwargs)
+    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
     
-    @staticmethod
-    def Spline36(**kwargs: Any):
-        return rescale.Rescaler(kernel="spline36", **kwargs)
+    match upscaler:
+        case None:
+            clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
+        case Callable():
+            clip = upscaler(clip, w, h, **{i:descale_args[i] for i in descale_args if i in {'src_left', 'src_top', 'src_width', 'src_height'}})
+        case _:
+            raise TypeError(f'{func_name}: invalid "upscaler"')
     
-    @staticmethod
-    def Spline64(**kwargs: Any):
-        return rescale.Rescaler(kernel="spline64", **kwargs)
+    return clip
