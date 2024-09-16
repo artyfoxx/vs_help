@@ -146,7 +146,7 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     m6 = core.akarin.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
     m7 = core.akarin.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
     
-    expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 0.0 1.0 clamp'
+    expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 0 1 clamp'
     
     cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.akarin.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
     m100 = core.akarin.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
@@ -2140,10 +2140,18 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     expr = (f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + '
             f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +')
     
-    if clip.format.sample_type != vs.INTEGER:
-        expr = f'{expr} 0.0 1.0 clamp'
+    chroma_shift = False
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = f'{expr} 0 1 clamp'
+        if num_p > 1:
+            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
+    
+    if chroma_shift:
+        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
