@@ -56,6 +56,7 @@ Functions:
     CrazyPlaneStats
     out_of_range_search
     rescaler (float only)
+    SCDetect
 '''
 
 import vapoursynth as vs
@@ -2437,9 +2438,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
             raise ValueError(f'{func_name}: invalid "planes"')
     
     if scenechange:
-        clip = core.std.PlaneStats(clip, shift_clip(clip, -1))
-        clip = core.akarin.PropExpr(clip, lambda: dict(_SceneChangeNext=f'x.PlaneStatsDiff {scenechange * factor / (256 * factor - 1)} > 1 0 ?'))
-        clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
+        clip = SCDetect(clip, scenechange)
     
     def get_smooth(n: int, f: list[vs.VideoFrame], clips: list[vs.VideoNode], core: vs.Core) -> vs.VideoNode:
         
@@ -2469,8 +2468,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
         clip = core.std.FrameEval(clip, partial(get_smooth, clips=clips, core=core), prop_src=clips)
     
     if scenechange:
-        clip = core.std.RemoveFrameProps(clip, ['PlaneStatsMin', 'PlaneStatsMax', 'PlaneStatsAverage',
-                                                'PlaneStatsDiff', '_SceneChangeNext', '_SceneChangePrev'])
+        clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
     
     return clip
 
@@ -3768,5 +3766,37 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             clip = upscaler(clip, w, h, **{i:descale_args[i] for i in descale_args if i in {'src_left', 'src_top', 'src_width', 'src_height'}})
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
+    
+    return clip
+
+def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> vs.VideoNode:
+    
+    func_name = 'SCDetect'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
+    if clip.format.color_family == vs.YUV:
+        pass
+    elif clip.format.color_family == vs.GRAY:
+        luma_only = True
+    else:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    factor = 1 << clip.format.bits_per_sample - 8
+    
+    if luma_only:
+        diff = CrazyPlaneStats(core.akarin.Expr([clip, shift_clip(clip, -1)], ['x y - abs'] + [''] * (num_p - 1)))
+        clip = core.akarin.PropExpr([clip, diff], lambda: dict(_SceneChangeNext=f'y.arithmetic_mean {thr * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
+    else:
+        diff = core.akarin.Expr([clip, shift_clip(clip, -1)], 'x y - abs')
+        diffs = [CrazyPlaneStats(i) for i in core.std.SplitPlanes(diff)]
+        clip = core.akarin.PropExpr([clip] + diffs, lambda: dict(_SceneChangeNext=f'y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max {thr * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
     return clip
