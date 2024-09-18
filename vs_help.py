@@ -1,15 +1,14 @@
 '''
-All functions support the following formats: GRAY and YUV 8 - 16 bit integer.
-Support for floating point sample type is added when needed. Such functions are marked separately.
+All functions support the following formats: GRAY and YUV 8 - 16 bit integer. Floating point sample type is not supported.
 
 Functions:
-    autotap3 (float support)
+    autotap3
     Lanczosplus
     bion_dehalo
     fix_border
     MaskDetail
     degrain_n
-    Destripe (float only)
+    Destripe
     daa
     average_fields
     znedi3aas
@@ -18,9 +17,9 @@ Functions:
     DeHalo_alpha
     FineDehalo
     FineDehalo2
-    upscaler (float support)
+    upscaler
     diff_mask
-    apply_range (float support)
+    apply_range
     titles_mask
     after_mask
     search_field_diffs
@@ -32,8 +31,8 @@ Functions:
     vinverse2
     sbr
     sbrV
-    Blur (float support)
-    Sharpen (float support)
+    Blur
+    Sharpen
     Clamp
     MinBlur
     DitherLumaRebuild
@@ -45,17 +44,17 @@ Functions:
     diff_transfer
     shift_clip
     ovr_comparator
-    RemoveGrain (float support)
-    Repair (float support)
-    TemporalRepair (float support)
-    Clense (float support)
-    BackwardClense (float support)
-    ForwardClense (float support)
-    VerticalCleaner (float support)
-    Convolution (float support)
+    RemoveGrain
+    Repair
+    TemporalRepair
+    Clense
+    BackwardClense
+    ForwardClense
+    VerticalCleaner
+    Convolution
     CrazyPlaneStats
     out_of_range_search
-    rescaler (float only)
+    rescaler
     SCDetect
 '''
 
@@ -84,6 +83,9 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -139,27 +141,27 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
     
-    m1 = core.akarin.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m2 = core.akarin.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m3 = core.akarin.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m4 = core.akarin.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m5 = core.akarin.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m6 = core.akarin.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
-    m7 = core.akarin.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
     
-    expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 0 1 clamp'
+    expr = f'x y - {thresh} *'
     
-    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.akarin.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m100 = core.akarin.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.akarin.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m101 = core.akarin.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.akarin.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m102 = core.akarin.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.akarin.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m103 = core.akarin.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.akarin.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m104 = core.akarin.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.akarin.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
     
     if space == vs.YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
@@ -548,19 +550,16 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    bits = clip.format.bits_per_sample
-    factor = 1 << bits - 8
+    factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor
     
     match kernel:
         case 'bicubic':
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, b=b, c=c)
+            resc = rescaler(clip, dx, dy, kernel, frac, b=b, c=c)
         case 'lanczos':
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, taps=taps)
+            resc = rescaler(clip, dx, dy, kernel, frac, taps=taps)
         case _:
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac)
-    
-    resc = core.fmtc.bitdepth(resc, bits=bits, dmode=1)
+            resc = rescaler(clip, dx, dy, kernel, frac)
     
     mask = RemoveGrain(core.std.MakeDiff(clip, resc).hist.Luma(), rg)
     mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
@@ -644,9 +643,6 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
-    
-    if clip.format.sample_type != vs.FLOAT:
-        raise TypeError(f'{func_name}: integer sample type is not supported')
     
     if dx is None:
         dx = clip.width
@@ -2114,19 +2110,13 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        clmp = ''
-    else:
-        clmp = ' 0 1 clamp'
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
     
     match planes:
         case None:
@@ -2151,12 +2141,9 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     side_v = (1 - 1 / 2 ** amountV) / 2
     
     expr = (f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + '
-            f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +{clmp}')
+            f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +')
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
-    
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -2770,25 +2757,15 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        full = 256 * factor - 1
-        half = 128 * factor
-        trnc = ' trunc'
-    else:
-        full = 1
-        half = 0.5
-        trnc = ''
-        roundoff = 3
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor - 1
     
     match mode:
         case int() if -1 <= mode <= 28:
@@ -2892,8 +2869,8 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
             # mode 20
             f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 9 /{rnd}',
             # mode 21
-            f'x x[-1,-1] x[1,1] + 2 /{trnc} x[0,-1] x[0,1] + 2 /{trnc} min x[1,-1] x[-1,1] + 2 /{trnc} min x[-1,0] x[1,0] + 2 /'
-            f'{trnc} min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max x[-1,0] x[1,0] + '
+            'x x[-1,-1] x[1,1] + 2 / trunc x[0,-1] x[0,1] + 2 / trunc min x[1,-1] x[-1,1] + 2 / trunc min x[-1,0] x[1,0] + 2 / '
+            f'trunc min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max x[-1,0] x[1,0] + '
             f'2 /{rnd} max clamp',
             # mode 22
             f'x[-1,-1] x[1,1] + 2 /{rnd} l1! x[0,-1] x[0,1] + 2 /{rnd} l2! x[1,-1] x[-1,1] + 2 /{rnd} l3! x[-1,0] x[1,0] + 2 '
@@ -2917,7 +2894,7 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
             f'x[0,1] < {full} x x[0,1] - ? min x x[1,1] < {full} x x[1,1] - ? min mn! x[-1,0] x < {full} x[-1,0] x - ? x[1,0] x '
             f'< {full} x[1,0] x - ? min x[-1,-1] x < {full} x[-1,-1] x - ? min x[0,-1] x < {full} x[0,-1] x - ? min x[1,-1] x < '
             f'{full} x[1,-1] x - ? min x[-1,1] x < {full} x[-1,1] x - ? min x[0,1] x < {full} x[0,1] x - ? min x[1,1] x < {full} '
-            f'x[1,1] x - ? min pl! x pl@ 2 /{trnc} mn@ pl@ - 0 max min + {full} min mn@ 2 /{trnc} pl@ mn@ - 0 max min - 0 max',
+            f'x[1,1] x - ? min pl! x pl@ 2 / trunc mn@ pl@ - 0 max min + {full} min mn@ 2 / trunc pl@ mn@ - 0 max min - 0 max',
             # mode 26
             'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
             'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max '
@@ -2938,7 +2915,7 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
             'x[-1,0] max min min x[-1,-1] x[1,1] max x[1,-1] x[-1,1] max min x[0,-1] x[0,1] max min x[-1,0] x[1,0] max min min '
             'upper! x lower@ upper@ min lower@ upper@ max clamp',
             # mode -1
-            f'{half}']
+            f'{128 * factor}']
     
     orig = clip
     
@@ -2946,9 +2923,6 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
     
     if not edges:
         clip = core.akarin.Expr([clip, orig], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
-    
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -2972,24 +2946,15 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
     if clip.num_frames != refclip.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        full = 256 * factor - 1
-        half = 128 * factor
-    else:
-        full = 1
-        half = 0.5
-        roundoff = 3
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            refclip = core.akarin.Expr(refclip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor - 1
     
     match mode:
         case int() if -1 <= mode <= 28:
@@ -3119,7 +3084,7 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
             '0 max max min y[1,-1] y[-1,1] max x - 0 max x y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max x - 0 max x '
             f'y[-1,0] y[1,0] min - 0 max max min minu! y x minu@ - 0 max x minu@ + {full} min clamp',
             # mode 25
-            f'{half}',
+            f'{128 * factor}',
             # mode 26
             'y[-1,-1] y[0,-1] min y[0,-1] y[1,-1] min max y[1,-1] y[1,0] min max y[1,0] y[1,1] min max y[0,1] y[1,1] min y[-1,1] '
             'y[0,1] min max y[-1,0] y[-1,1] min max y[-1,-1] y[-1,0] min max max lower! y[-1,-1] y[0,-1] max y[0,-1] y[1,-1] max '
@@ -3140,7 +3105,7 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
             'y[-1,0] max min min y[-1,-1] y[1,1] max y[1,-1] y[-1,1] max min y[0,-1] y[0,1] max min y[-1,0] y[1,0] max min min '
             'upper! x lower@ upper@ min y min lower@ upper@ max y max clamp',
             # mode -1
-            f'{half}']
+            f'{128 * factor}']
     
     orig = clip
     
@@ -3148,9 +3113,6 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
     
     if not edges:
         clip = core.akarin.Expr([clip, orig], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
-    
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -3167,6 +3129,9 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
     if clip.num_frames != refclip.num_frames:
         raise ValueError(f'{func_name}: The numbers of frames in the clips do not match')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
@@ -3174,16 +3139,7 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
         raise ValueError(f'{func_name}: invalid "mode"')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        full = (1 << clip.format.bits_per_sample) - 1
-    else:
-        full = 1
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            refclip = core.akarin.Expr(refclip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    full = (1 << clip.format.bits_per_sample) - 1
     
     match planes:
         case None:
@@ -3229,9 +3185,6 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
     if not edges and mode in {1, 2, 3}:
         clip = core.akarin.Expr([clip, orig], 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?')
     
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
-    
     return clip
 
 def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, next: vs.VideoNode | None = None, reduceflicker: bool = False,
@@ -3241,6 +3194,9 @@ def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, next: vs.Vi
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
@@ -3263,13 +3219,6 @@ def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, next: vs.Vi
         raise TypeError(f'{func_name}: invalid "reduceflicker"')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.FLOAT and num_p > 1:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-        previous = core.akarin.Expr(previous, ['', 'x 0.5 +'])
-        next = core.akarin.Expr(next, ['', 'x 0.5 +'])
-        chroma_shift = True
     
     match planes:
         case None:
@@ -3285,13 +3234,10 @@ def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, next: vs.Vi
     
     expr = 'x y z min max y z max min'
     
-    clip = clip[0] + core.akarin.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
+    clip = clip[0] + core.std.Expr([clip, previous, next], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
     
     if reduceflicker:
-        clip = clip[0:2] + core.akarin.Expr([orig, shift_clip(clip, 1), next], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
-    
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
+        clip = clip[0:2] + core.std.Expr([orig, shift_clip(clip, 1), next], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
     
     return clip
 
@@ -3302,19 +3248,14 @@ def BackwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) ->
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        full = (1 << clip.format.bits_per_sample) - 1
-    else:
-        full = 1
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    full = (1 << clip.format.bits_per_sample) - 1
     
     match planes:
         case None:
@@ -3330,9 +3271,6 @@ def BackwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) ->
     
     clip = clip[:2] + core.akarin.Expr([clip, shift_clip(clip, 1), shift_clip(clip, 2)], [expr if i in planes else '' for i in range(num_p)])[2:]
     
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
-    
     return clip
 
 def ForwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
@@ -3342,19 +3280,14 @@ def ForwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) -> 
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        full = (1 << clip.format.bits_per_sample) - 1
-    else:
-        full = 1
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    full = (1 << clip.format.bits_per_sample) - 1
     
     match planes:
         case None:
@@ -3370,9 +3303,6 @@ def ForwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) -> 
     
     clip = core.akarin.Expr([clip, shift_clip(clip, -1), shift_clip(clip, -2)], [expr if i in planes else '' for i in range(num_p)])[:-2] + clip[-2:]
     
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
-    
     return clip
 
 def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool = False) -> vs.VideoNode:
@@ -3382,19 +3312,14 @@ def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool =
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
+    if clip.format.sample_type != vs.INTEGER:
+        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    chroma_shift = False
-    
-    if clip.format.sample_type == vs.INTEGER:
-        full = (1 << clip.format.bits_per_sample) - 1
-    else:
-        full = 1
-        if num_p > 1:
-            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
+    full = (1 << clip.format.bits_per_sample) - 1
     
     match mode:
         case int() if 0 <= mode <= 2:
@@ -3426,9 +3351,6 @@ def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool =
                 'Y 1 <= Y height 2 - >= or y x ?']
         
         clip = core.akarin.Expr([clip, orig], [expr[i] for i in mode])
-    
-    if chroma_shift:
-        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -3763,61 +3685,61 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     match dx, dy:
         case None, None:
             dy = h * 2 // 3
-            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = dy
-            descale_args['src_top'] = 0
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
         case None, int():
-            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = dy
-            descale_args['src_top'] = 0
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
         case None, float():
-            descale_args['src_width'] = w * dy / h if frac else round(w * dy / h)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = dy if frac else round(dy)
-            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+            src_width = w * dy / h if frac else round(w * dy / h)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
         case int(), None:
-            descale_args['src_width'] = dx
-            descale_args['src_left'] = 0
-            descale_args['src_height'] = h * dx / w if frac else round(h * dx / w)
-            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+            src_width = dx
+            src_left = 0
+            src_height = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
         case int(), int():
-            descale_args['src_width'] = dx
-            descale_args['src_left'] = 0
-            descale_args['src_height'] = dy
-            descale_args['src_top'] = 0
+            src_width = dx
+            src_left = 0
+            src_height = dy
+            src_top = 0
         case int(), float():
-            descale_args['src_width'] = dx
-            descale_args['src_left'] = 0
-            descale_args['src_height'] = dy if frac else round(dy)
-            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+            src_width = dx
+            src_left = 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
         case float(), None:
-            descale_args['src_width'] = dx if frac else round(dx)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = h * dx / w if frac else round(h * dx / w)
-            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = h * dx / w if frac else round(h * dx / w)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
         case float(), int():
-            descale_args['src_width'] = dx if frac else round(dx)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = dy
-            descale_args['src_top'] = 0
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy
+            src_top = 0
         case float(), float():
-            descale_args['src_width'] = dx if frac else round(dx)
-            dx = ceil(descale_args['src_width'] / 2) * 2 if frac else descale_args['src_width']
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2 if frac else 0
-            descale_args['src_height'] = dy if frac else round(dy)
-            dy = ceil(descale_args['src_height'] / 2) * 2 if frac else descale_args['src_height']
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2 if frac else 0
+            src_width = dx if frac else round(dx)
+            dx = ceil(src_width / 2) * 2 if frac else src_width
+            src_left = (dx - src_width) / 2 if frac else 0
+            src_height = dy if frac else round(dy)
+            dy = ceil(src_height / 2) * 2 if frac else src_height
+            src_top = (dy - src_height) / 2 if frac else 0
         case _, None | int() | float():
             raise TypeError(f'{func_name}: invalid "dx"')
         case _:
@@ -3826,13 +3748,36 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
         raise ValueError(f'{func_name}: invalid "kernel"')
     
-    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
+    upscale_args = {}
+    
+    if descale_args:
+        match kernel:
+            case 'bicubic':
+                if 'b' in descale_args:
+                    upscale_args['filter_param_a'] = descale_args['b']
+                else:
+                    descale_args['b'] = upscale_args['filter_param_a'] = 0.0
+                
+                if 'c' in descale_args:
+                    upscale_args['filter_param_b'] = descale_args['c']
+                else:
+                    descale_args['c'] = upscale_args['filter_param_b'] = 0.5
+            case 'lanczos':
+                if 'taps' in descale_args:
+                    upscale_args['filter_param_a'] = descale_args['taps']
+                else:
+                    descale_args['taps'] = upscale_args['filter_param_a'] = 3
+        
+        if any((x := i) not in upscale_args for i in descale_args):
+            raise KeyError(f'{func_name}: Unsupported key {x} in descale_args')
+    
+    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **descale_args)
     
     match upscaler:
         case None:
-            clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
+            clip = getattr(core.resize, kernel.capitalize())(clip, w, h, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **upscale_args)
         case Callable():
-            clip = upscaler(clip, w, h, **{i:descale_args[i] for i in descale_args if i in {'src_left', 'src_top', 'src_width', 'src_height'}})
+            clip = upscaler(clip, w, h, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height)
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
     
