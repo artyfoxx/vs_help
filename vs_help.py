@@ -1,11 +1,14 @@
 '''
 All functions support the following formats: GRAY and YUV 8 - 16 bit integer.
 Support for floating point sample type is added when needed. Such functions are marked separately.
+Support for floating point sample type is intended for clips converted from the full range.
+For clips converted from a limited range, correct operation is not guaranteed.
+
 
 Functions:
     autotap3 (float support)
     Lanczosplus
-    bion_dehalo
+    bion_dehalo (float support)
     fix_border
     MaskDetail
     degrain_n
@@ -30,12 +33,12 @@ Functions:
     delcomb
     vinverse
     vinverse2
-    sbr
-    sbrV
+    sbr (float support)
+    sbrV (float support)
     Blur (float support)
     Sharpen (float support)
-    Clamp
-    MinBlur
+    Clamp (float support)
+    MinBlur (float support)
     DitherLumaRebuild
     ExpandMulti
     InpandMulti
