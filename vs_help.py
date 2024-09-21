@@ -286,9 +286,6 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     space = clip.format.color_family
     
     if space == vs.YUV:
@@ -299,25 +296,35 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    factor = 1 << clip.format.bits_per_sample - 8
-    half = 128 * factor
+    if clip.format.sample_type == vs.INTEGER:
+        factor = 1 << clip.format.bits_per_sample - 8
+        half = 128 * factor
+        expr0 = f'x {4 * factor} - 4 *'
+        expr1 = 'x y 1.2 * -'
+        expr2 = f'x y - {factor} - 128 *'
+        expr3 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
+    else:
+        expr0 = 'x 4 255 / - 4 * 0 1 clamp'
+        expr1 = 'x y 1.2 * - 0 1 clamp'
+        expr2 = 'x y - 1 255 / - 128 * 0 1 clamp'
+        expr3 = 'x y * 0 < 0 x abs y abs 2 * < x y 2 * ? ? -0.5 0.5 clamp'
     
     def get_mask(clip: vs.VideoNode, mask: int) -> vs.VideoNode:
         
         match mask:
             case 0:
-                m1 = core.std.Expr(Convolution(clip, 'min/max'), f'x {4 * factor} - 4 *')
+                m1 = core.akarin.Expr(Convolution(clip, 'min/max'), expr0)
                 m2 = core.std.Maximum(m1).std.Maximum()
                 m2 = core.std.Merge(m2, core.std.Maximum(m2)).std.Inflate()
-                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], 'x y 1.2 * -').std.Inflate()
+                m3 = core.akarin.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], expr1).std.Inflate()
             case 1:
-                m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0)], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
+                m1 = core.akarin.Expr([clip, UnsharpMask(clip, 40, 2, 0)], expr2).std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
-                m3 = RemoveGrain(core.std.Expr([m1, m2], 'y x -'), 21).std.Maximum()
+                m3 = RemoveGrain(core.akarin.Expr([m1, m2], 'y x -'), 21).std.Maximum()
             case 2:
-                m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0, 'gauss')], f'x y - {factor} - 128 *').std.Maximum().std.Inflate()
+                m1 = core.akarin.Expr([clip, UnsharpMask(clip, 40, 2, 0, 'gauss')], expr2).std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
-                m3 = RemoveGrain(core.std.Expr([m1, m2], 'y x -'), 21).std.Maximum()
+                m3 = RemoveGrain(core.akarin.Expr([m1, m2], 'y x -'), 21).std.Maximum()
         
         return m3
     
@@ -327,13 +334,13 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
         case 2:
             mask = get_mask(clip, 1)
         case 3:
-            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y min')
+            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y min')
         case 4:
-            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y max')
+            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 1)], 'x y max')
         case 5:
             mask = get_mask(clip, 2)
         case 6:
-            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y min')
+            mask = core.akarin.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y min')
         case _:
             raise ValueError(f'{func_name}: Please use 1...6 mask value')
     
@@ -347,7 +354,7 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
-    DD  = core.std.Expr([dh1D, med2D], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?')
+    DD  = core.akarin.Expr([dh1D, med2D], expr3)
     dh2 = core.std.MergeDiff(dh1, DD)
     
     clip = Clamp(clip, Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20)
@@ -2041,14 +2048,10 @@ def sbr(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNo
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    half = 128 << clip.format.bits_per_sample - 8
     
     match planes:
         case None:
@@ -2063,8 +2066,16 @@ def sbr(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNo
     rg11 = Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
-    rg11DD = Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
+    if clip.format.sample_type == vs.INTEGER:
+        half = 128 << clip.format.bits_per_sample - 8
+        expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+        rg11DD = Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
+    else:
+        expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
+        rg11DD = core.akarin.Expr(rg11D, ['x 0.5 +'] + [''] * (num_p - 1))
+        rg11DD = Convolution(rg11DD, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
+        rg11DD = core.akarin.Expr(rg11DD, ['x 0.5 -'] + [''] * (num_p - 1))
+    
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
@@ -2079,15 +2090,11 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    half = 128 << clip.format.bits_per_sample - 8
-    
+     
     match planes:
         case None:
             planes = list(range(num_p))
@@ -2101,8 +2108,16 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
     rg11 = Convolution(clip, [[1], [1, 2, 1]], planes=planes)
     rg11D = core.std.MakeDiff(clip, rg11, planes=planes)
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
-    rg11DD = Convolution(rg11D, [[1], [1, 2, 1]], planes=planes)
+    if clip.format.sample_type == vs.INTEGER:
+        half = 128 << clip.format.bits_per_sample - 8
+        expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+        rg11DD = Convolution(rg11D, [[1], [1, 2, 1]], planes=planes)
+    else:
+        expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
+        rg11DD = core.akarin.Expr(rg11D, ['x 0.5 +'] + [''] * (num_p - 1))
+        rg11DD = Convolution(rg11DD, [[1], [1, 2, 1]], planes=planes)
+        rg11DD = core.akarin.Expr(rg11DD, ['x 0.5 -'] + [''] * (num_p - 1))
+    
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
@@ -2178,15 +2193,12 @@ def Sharpen(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None
     return clip
 
 def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNode, overshoot: float = 0, undershoot: float = 0,
-             planes: int | list[int] | None = None) -> vs.VideoNode:
+          planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'Clamp'
     
     if any(not isinstance(clip, vs.VideoNode) for i in (clip, bright_limit, dark_limit)):
         raise TypeError(f'{func_name} all clips must be of the vs.VideoNode type')
-    
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     if clip.format.id != bright_limit.format.id or clip.format.id != dark_limit.format.id:
         raise ValueError(f'{func_name}: "clip", "bright_limit" and "dark_limit" must have the same format')
@@ -2201,7 +2213,18 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
         raise TypeError(f'{func_name}: invalid "undershoot"')
     
     num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
+    chroma_shift = False
+    
+    if clip.format.sample_type == vs.INTEGER:
+        factor = 1 << clip.format.bits_per_sample - 8
+        expr = f'x z {undershoot * factor} - y {overshoot * factor} + clamp'
+    else:
+        expr = f'x z {undershoot} 255 / - y {overshoot} 255 / + clamp 0 1 clamp'
+        if num_p > 1:
+            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
+            bright_limit = core.akarin.Expr(bright_limit, ['', 'x 0.5 +'])
+            dark_limit = core.akarin.Expr(dark_limit, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     match planes:
         case None:
@@ -2213,11 +2236,10 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    overshoot *= factor
-    undershoot *= factor
-    
-    expr = f'x z {undershoot} - y {overshoot} + clamp'
     clip = core.akarin.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
+    
+    if chroma_shift:
+        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -2228,14 +2250,16 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    half = 128 << clip.format.bits_per_sample - 8
+    
+    if clip.format.sample_type == vs.INTEGER:
+        half = 128 << clip.format.bits_per_sample - 8
+        expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+    else:
+        expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
     
     match planes:
         case None:
@@ -2262,6 +2286,9 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
             RG4D = core.ctmf.CTMF(clip, 2, planes=planes)
             RG4D = core.std.MakeDiff(clip, RG4D, planes=planes)
         case 3:
+            if clip.format.sample_type == vs.FLOAT:
+                raise TypeError(f'{func_name}: floating point sample type is not supported with radius=3')
+            
             RG11D = RemoveGrain(clip, [11 if i in planes else 0 for i in range(num_p)])
             RG11D = RemoveGrain(RG11D, [20 if i in planes else 0 for i in range(num_p)])
             RG11D = RemoveGrain(RG11D, [20 if i in planes else 0 for i in range(num_p)])
@@ -2272,9 +2299,7 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
         case _:
             raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
-    expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
     DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
-    
     clip = core.std.MakeDiff(clip, DD, planes=planes)
     
     return clip
@@ -2490,9 +2515,6 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
@@ -2504,6 +2526,19 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
     
     if not isinstance(threshold, int) or threshold < 0:
         raise TypeError(f'{func_name}: invalid "threshold"')
+    
+    num_p = clip.format.num_planes
+    
+    if clip.format.sample_type == vs.INTEGER:
+        threshold <<= clip.format.bits_per_sample - 8
+        clmp = ''
+    else:
+        threshold /= 255
+        clmp = ' 0 1 clamp'
+        roundoff = 3
+    
+    side = radius * 2 + 1
+    square = side ** 2
     
     match roundoff:
         case 0:
@@ -2517,20 +2552,15 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
         case _:
             raise ValueError(f'{func_name}: invalid "roundoff"')
     
-    num_p = clip.format.num_planes
-    threshold <<= clip.format.bits_per_sample - 8
-    side = radius * 2 + 1
-    square = side ** 2
-    
     match blur:
         case 'box':
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} * 128 /{rnd} x + x ?')
+                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ?{clmp}')
         case 'gauss':
             row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]
             matrix = [i * j for i in row for j in row]
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} * 128 /{rnd} x + x ?')
+                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ?{clmp}')
         case _:
             raise ValueError(f'{func_name}: invalid "blur"')
     
@@ -3453,14 +3483,19 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    full = (1 << clip.format.bits_per_sample) - 1
+    chroma_shift = False
+    
+    if clip.format.sample_type == vs.INTEGER:
+        clmp = ''
+    else:
+        clmp = ' 0 1 clamp'
+        if num_p > 1:
+            clip = core.akarin.Expr(clip, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     match planes:
         case None:
@@ -3476,8 +3511,8 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
         case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
             side_h, side_v = len(mode[0]), len(mode[1])
             mode = [j * i for i in mode[1] for j in mode[0]]
-        case [int(), *a] if all(isinstance(i, int) for i in a) and (side_h := int(sqrt(len(mode)))) ** 2 == len(mode) and side_h % 2 == 1:
-            side_v = side_h
+        case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2 == 1:
+            side_h = side_v
         case None:
             side_h = side_v = 3
             mode = [1, 1, 1, 1, 1, 1, 1, 1, 1]
@@ -3502,14 +3537,9 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             fix = ' -1 *'
             div = 1
         case 'min/max':
-            if total is None:
-                expr = 'x y -'
-            elif isinstance(total, float):
-                expr = f'x y - {total} /'
-            else:
-                raise TypeError(f'{func_name}: invalid "total"')
-            
-            return core.std.Expr([core.std.Maximum(clip, planes=planes), core.std.Minimum(clip, planes=planes)], [expr if i in planes else '' for i in range(num_p)])
+            expr = ('x[-1,-1] x[0,-1] max x[1,-1] max x[-1,0] max x max x[1,0] max x[-1,1] max x[0,1] max x[1,1] max '
+                    'x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min -')
+            div = 1
         case 'hprewitt':
             return core.std.Expr([Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
                                   Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
@@ -3545,10 +3575,16 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
         case _:
             raise TypeError(f'{func_name}: invalid "total"')
     
-    expr = (f'{' '.join(f'x[{j - (side_h // 2)},{i - (side_v // 2)}] {mode[i * side_h + j]} *' for i in range(side_v) for j in range(side_h))} '
-            f'{'+ ' * (len(mode) - 1)}{div} /{fix}')
+    if 'expr' in locals():
+        expr = f'{expr} {div} /{fix}{clmp}'
+    else:
+        expr = (f'{' '.join(f'x[{j - (side_h // 2)},{i - (side_v // 2)}] {mode[i * side_h + j]} *' for i in range(side_v) for j in range(side_h))} '
+                f'{'+ ' * (len(mode) - 1)}{div} /{fix}{clmp}')
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
+    
+    if chroma_shift:
+        clip = core.akarin.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
