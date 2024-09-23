@@ -9,7 +9,6 @@ Just a few vapoursynth function...
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
 * [vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
-* [vapoursynth-histogram](https://github.com/AmusementClub/vapoursynth-histogram)
 * [vapoursynth-mvtools](https://github.com/dubhater/vapoursynth-mvtools)
 * [vapoursynth-descale](https://github.com/Jaded-Encoding-Thaumaturgy/vapoursynth-descale)
 * [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
