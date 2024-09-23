@@ -10,7 +10,7 @@ Functions:
     Lanczosplus
     bion_dehalo (float support)
     fix_border
-    MaskDetail
+    MaskDetail (float only)
     degrain_n
     Destripe (float only)
     daa
@@ -76,7 +76,7 @@ from scipy import special
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> vs.VideoNode:
     '''
     Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor modifications.
-    In comparison with the original, processing accuracy has been doubled, support for 8-16 bit depth
+    In comparison with the original, processing accuracy has been doubled, support for 8-32 bit depth
     and crop parameters has been added, and dead code has been removed.
     
     dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
@@ -306,11 +306,13 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
         expr1 = 'x y 1.2 * -'
         expr2 = f'x y - {factor} - 128 *'
         expr3 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
+        isfloat = False
     else:
         expr0 = 'x 4 255 / - 4 * 1 min 0 max'
         expr1 = 'x y 1.2 * - 1 min 0 max'
         expr2 = 'x y - 1 255 / - 128 * 1 min 0 max'
         expr3 = 'x y * 0 < 0 x abs y abs 2 * < x y 2 * ? ? 0.5 min -0.5 max'
+        isfloat = True
     
     def get_mask(clip: vs.VideoNode, mask: int) -> vs.VideoNode:
         
@@ -357,8 +359,16 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     dh1D = core.std.MakeDiff(clip, dh1)
     tmp = sbr(dh1)
     med2D = core.std.MakeDiff(tmp, core.ctmf.CTMF(tmp, 2))
+    
+    if isfloat:
+        dh1D = core.std.Expr(dh1D, 'x 0.5 min -0.5 max')
+        med2D = core.std.Expr(med2D, 'x 0.5 min -0.5 max')
+    
     DD  = core.std.Expr([dh1D, med2D], expr3)
     dh2 = core.std.MergeDiff(dh1, DD)
+    
+    if isfloat:
+        dh2 = core.std.Expr(dh2, 'x 1 min 0 max')
     
     clip = Clamp(clip, Repair(clip, dh2, mode) if rep else dh2, clip, 0, 20)
     
@@ -541,8 +551,8 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
+    if clip.format.sample_type != vs.FLOAT:
+        raise TypeError(f'{func_name}: integer sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
     
@@ -558,22 +568,18 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    bits = clip.format.bits_per_sample
-    factor = 1 << bits - 8
-    full = 256 * factor
-    
     match kernel:
         case 'bicubic':
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, b=b, c=c)
+            resc = rescaler(clip, dx, dy, kernel, frac, b=b, c=c)
         case 'lanczos':
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac, taps=taps)
+            resc = rescaler(clip, dx, dy, kernel, frac, taps=taps)
         case _:
-            resc = rescaler(core.fmtc.bitdepth(clip, bits=32), dx, dy, kernel, frac)
+            resc = rescaler(clip, dx, dy, kernel, frac)
     
-    resc = core.fmtc.bitdepth(resc, bits=bits, dmode=1)
-    
-    mask = RemoveGrain(core.std.MakeDiff(clip, resc).hist.Luma(), rg)
-    mask = core.std.Expr(mask, f'x {cutoff * factor} < 0 x {gain} {full} x + {full} / * * ?')
+    expr = 'x y - 0.5 + 0 1 clamp 16 * var! var@ 1.0 % val! var@ trunc 1 bitand 1 = 1 val@ - val@ ?'
+    clip = core.akarin.Expr([clip, resc], expr)
+    clip = RemoveGrain(clip, rg)
+    clip = core.std.Expr(clip, f'x {cutoff} 255 / < 0 x {gain} 1 x + * * 1 min 0 max ?')
     
     if 'exp_n' not in after_args:
         after_args['exp_n'] = 2
@@ -593,15 +599,15 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
         if space == vs.YUV and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
             raise ValueError(f'{func_name}: "dx" or "dy" does not match the chroma subsampling of the output clip')
         
-        mask = core.resize.Bilinear(mask, dx, dy)
+        clip = core.resize.Bilinear(clip, dx, dy)
     
     if blur_more:
-        mask = RemoveGrain(mask, 12)
+        clip = RemoveGrain(clip, 12)
     
     if space == vs.YUV:
-        mask = core.resize.Point(mask, format=format_id)
+        clip = core.resize.Point(clip, format=format_id)
     
-    return mask
+    return clip
 
 def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> vs.VideoNode:
     '''
@@ -1477,10 +1483,10 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
     if clip.format.sample_type == vs.INTEGER:
         factor = 1 << clip.format.bits_per_sample - 8
         full = 256 * factor - 1
-        expr0 = f'x {128 * factor} / 0.86 {offset} + pow {full} *'
+        expr = f'x {128 * factor} / 0.86 {offset} + pow {full} *'
     else:
         full = 1
-        expr0 = f'x 2 * 0.86 {offset} + pow 1 min 0 max'
+        expr = f'x 2 * 0.86 {offset} + pow 1 min 0 max'
     
     match planes:
         case None:
@@ -1493,7 +1499,7 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
             raise ValueError(f'{func_name}: invalid "planes"')
     
     if boost:
-        clip = core.std.Expr(clip, expr0)
+        clip = core.std.Expr(clip, expr)
     
     if flatten > 0:
         expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
@@ -2077,16 +2083,22 @@ def sbr(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNo
         half = 128 << clip.format.bits_per_sample - 8
         expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
         rg11DD = Convolution(rg11D, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
+        isfloat = False
     else:
         expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
+        rg11D = core.std.Expr(rg11D, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(num_p)])
         rg11DD = core.std.Expr(rg11D, ['x 0.5 +'] + [''] * (num_p - 1))
         rg11DD = Convolution(rg11DD, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
         rg11DD = core.std.Expr(rg11DD, ['x 0.5 -'] + [''] * (num_p - 1))
+        isfloat = True
     
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, rg11DD, planes=planes)
+    
+    if isfloat:
+        clip = core.std.Expr(clip, ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1))
     
     return clip
 
@@ -2119,16 +2131,22 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
         half = 128 << clip.format.bits_per_sample - 8
         expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
         rg11DD = Convolution(rg11D, [[1], [1, 2, 1]], planes=planes)
+        isfloat = False
     else:
         expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
+        rg11D = core.std.Expr(rg11D, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(num_p)])
         rg11DD = core.std.Expr(rg11D, ['x 0.5 +'] + [''] * (num_p - 1))
         rg11DD = Convolution(rg11DD, [[1], [1, 2, 1]], planes=planes)
         rg11DD = core.std.Expr(rg11DD, ['x 0.5 -'] + [''] * (num_p - 1))
+        isfloat = True
     
     rg11DD = core.std.MakeDiff(rg11D, rg11DD, planes=planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
     clip = core.std.MakeDiff(clip, rg11DD, planes=planes)
+    
+    if isfloat:
+        clip = core.std.Expr(clip, ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1))
     
     return clip
 
@@ -2262,12 +2280,6 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
     
     num_p = clip.format.num_planes
     
-    if clip.format.sample_type == vs.INTEGER:
-        half = 128 << clip.format.bits_per_sample - 8
-        expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
-    else:
-        expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
-    
     match planes:
         case None:
             planes = list(range(num_p))
@@ -2306,8 +2318,21 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
         case _:
             raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
+    if clip.format.sample_type == vs.INTEGER:
+        half = 128 << clip.format.bits_per_sample - 8
+        expr = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?'
+        isfloat = False
+    else:
+        expr = 'x y * 0 < 0 x abs y abs < x y ? ?'
+        RG11D = core.std.Expr(RG11D, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(num_p)])
+        RG4D = core.std.Expr(RG4D, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(num_p)])
+        isfloat = True
+    
     DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
     clip = core.std.MakeDiff(clip, DD, planes=planes)
+    
+    if isfloat:
+        clip = core.std.Expr(clip, ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1))
     
     return clip
 
@@ -3497,14 +3522,6 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     num_p = clip.format.num_planes
     chroma_shift = False
     
-    if clip.format.sample_type == vs.INTEGER:
-        full = (1 << clip.format.bits_per_sample) - 1
-    else:
-        full = 1
-        if num_p > 1:
-            clip = core.std.Expr(clip, ['', 'x 0.5 +'])
-            chroma_shift = True
-    
     match planes:
         case None:
             planes = list(range(num_p))
@@ -3582,6 +3599,14 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             div = total
         case _:
             raise TypeError(f'{func_name}: invalid "total"')
+    
+    if clip.format.sample_type == vs.INTEGER:
+        full = (1 << clip.format.bits_per_sample) - 1
+    else:
+        full = 1
+        if num_p > 1:
+            clip = core.std.Expr(clip, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     if 'expr' in locals():
         expr = f'{expr} {div} /{fix} 0 {full} clamp'
