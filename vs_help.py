@@ -9,7 +9,7 @@ Functions:
     autotap3 (float support)
     Lanczosplus
     bion_dehalo (float support)
-    fix_border
+    fix_border (float support)
     MaskDetail (float only)
     degrain_n
     Destripe (float only)
@@ -56,7 +56,7 @@ Functions:
     ForwardClense (float support)
     VerticalCleaner (float support)
     Convolution (float support)
-    CrazyPlaneStats
+    CrazyPlaneStats (float support)
     out_of_range_search
     rescaler (float only)
     SCDetect
@@ -408,11 +408,16 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     space = clip.format.color_family
     num_p = clip.format.num_planes
+    chroma_shift = False
+    isfloat = False
+    
+    if clip.format.sample_type == vs.FLOAT:
+        isfloat = True
+        if num_p > 1:
+            clip = core.std.Expr(clip, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     if space == vs.YUV:
         clips = core.std.SplitPlanes(clip)
@@ -482,6 +487,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         
         if clamp:
             expr = f'{expr} x.minimum x.maximum clamp'
+        elif isfloat:
+            expr = f'{expr} 0 1 clamp'
         
         expr = f'{' '.join(f'{axis} {i} =' for i in target)} {'or ' * (len(target) - 1)}{expr} x ?'
         
@@ -531,6 +538,9 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     else:
         clip = clips[0]
+    
+    if chroma_shift:
+        clip = core.std.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
@@ -1921,7 +1931,7 @@ def delcomb(clip: vs.VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 
     
     filt = core.std.MaskedMerge(clip, filt, mask, planes=planes, first_plane=True)
     
-    clip = core.akarin.Select([clip, filt], core.std.PlaneStats(mask), f'x.PlaneStatsAverage {thr2 * factor / (256 * factor - 1)} > 1 0 ?')
+    clip = core.akarin.Select([clip, filt], CrazyPlaneStats(mask), f'x.arithmetic_mean {thr2 * factor / (256 * factor - 1)} > 1 0 ?')
     
     return clip
 
@@ -3633,14 +3643,25 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    full = (1 << clip.format.bits_per_sample) - 1
+    chroma_shift = False
+    
+    if not isinstance(plane, int) or plane < 0 or plane >= num_p:
+        raise ValueError(f'{func_name}: invalid "plane"')
+    
+    if clip.format.sample_type == vs.INTEGER:
+        full = (1 << clip.format.bits_per_sample) - 1
+        isfloat = False
+    else:
+        full = 1
+        isfloat = True
+        norm = False
+        if plane:
+            clip = core.std.Expr(clip, ['', 'x 0.5 +'])
+            chroma_shift = True
     
     match mode:
         case int() if 0 <= mode <= 7:
@@ -3657,9 +3678,6 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
             mode += [1]
         mode.sort()
     
-    if not isinstance(plane, int) or plane < 0 or plane >= num_p:
-        raise ValueError(f'{func_name}: invalid "plane"')
-    
     if not isinstance(norm, bool):
         raise TypeError(f'{func_name}: invalid "norm"')
     
@@ -3669,8 +3687,8 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
         
         matrix = np.asarray(f[plane])
         
-        fout.props['maximum'] = int(np.amax(matrix))
-        fout.props['minimum'] = int(np.amin(matrix))
+        fout.props['maximum'] = np.amax(matrix).astype(np.float64) if isfloat else int(np.amax(matrix))
+        fout.props['minimum'] = np.amin(matrix).astype(np.float64) if isfloat else int(np.amin(matrix))
         
         for i in mode:
             match i:
@@ -3687,13 +3705,13 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = matrix.size / np.sum(np.reciprocal(matrix, dtype=np.float64))
                     name = 'harmonic_mean'
                 case 4:
-                    avg = np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64) / np.mean(matrix, dtype=np.float64)
+                    avg = np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32), dtype=np.float64) / np.mean(matrix, dtype=np.float64)
                     name = 'contraharmonic_mean'
                 case 5:
-                    avg = np.sqrt(np.mean(np.square(matrix, dtype=np.uint32), dtype=np.float64))
+                    avg = np.sqrt(np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32), dtype=np.float64))
                     name = 'root_mean_square'
                 case 6:
-                    avg = np.cbrt(np.mean(matrix.astype(np.uint64) ** 3, dtype=np.float64))
+                    avg = np.cbrt(np.mean(matrix.astype(np.float64 if isfloat else np.uint64) ** 3, dtype=np.float64))
                     name = 'root_mean_cube'
                 case 7:
                     avg = np.median(matrix)
@@ -3702,11 +3720,14 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
             if norm:
                 avg /= full
             
-            fout.props[name] = avg
+            fout.props[name] = avg - 0.5 if chroma_shift else avg
         
         return fout
     
     clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=frame_stats)
+    
+    if chroma_shift:
+        clip = core.std.Expr(clip, ['', 'x 0.5 -'])
     
     return clip
 
