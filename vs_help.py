@@ -4,7 +4,6 @@ Support for floating point sample type is added when needed. Such functions are 
 Support for floating point sample type is intended for clips converted from the full range.
 For clips converted from a limited range, correct operation is not guaranteed.
 
-
 Functions:
     autotap3 (float support)
     Lanczosplus
@@ -46,7 +45,7 @@ Functions:
     UnsharpMask
     diff_tfm
     diff_transfer
-    shift_clip
+    shift_clip (float support)
     ovr_comparator
     RemoveGrain (float support)
     Repair (float support)
@@ -62,14 +61,14 @@ Functions:
     SCDetect
 '''
 
-import vapoursynth as vs
-from vapoursynth import core
 from typing import Any
 from math import sqrt, ceil
 from functools import partial
 from inspect import signature
 from collections.abc import Callable
 import re
+import vapoursynth as vs
+from vapoursynth import core
 import numpy as np
 from scipy import special
 
@@ -682,15 +681,15 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     
     second_args = {}
     
-    for i in descale_args:
-        if isinstance(descale_args[i], list):
-            if len(descale_args[i]) == 2:
-                second_args[i] = descale_args[i][1]
-                descale_args[i] = descale_args[i][0]
+    for key, value in descale_args.items():
+        if isinstance(value, list):
+            if len(value) == 2:
+                second_args[key] = value[1]
+                descale_args[key] = value[0]
             else:
-                raise ValueError(f'{func_name}: {i} length must be 2')
+                raise ValueError(f'{func_name}: {key} length must be 2')
         else:
-            second_args[i] = descale_args[i]
+            second_args[key] = value
     
     clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(tff).std.SetFieldBased(0)
     fields = [clip[::2], clip[1::2]]
@@ -1522,14 +1521,14 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
         for i in range(1, -flatten + 1):
             clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     
-    after_dict = dict(exp_n='Maximum', inp_n='Minimum', def_n='Deflate', inf_n='Inflate')
+    after_dict = {'exp_n': 'Maximum', 'inp_n': 'Minimum', 'def_n': 'Deflate', 'inf_n': 'Inflate'}
     
-    for i in after_args:
-        if i in after_dict:
-            for _ in range(after_args[i]):
-                clip = getattr(core.std, after_dict[i])(clip, planes=planes)
+    for key, value in after_args.items():
+        if key in after_dict:
+            for _ in range(value):
+                clip = getattr(core.std, after_dict[key])(clip, planes=planes)
         else:
-            raise KeyError(f'{func_name}: Unsupported key {i} in after_args')
+            raise KeyError(f'{func_name}: Unsupported key {key} in after_args')
     
     if borders:
         if len(borders) < 4:
@@ -1707,12 +1706,13 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
                                 for k in frames]
             
             if res:
-                with open(output, 'w') as file:
+                with open(output, 'w', encoding='utf-8') as file:
                     if set(mode) <= set(range(8, 12)):
                         file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<22} {'div':<8} thr2\n')
                     else:
                         file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<{tab}} div\n')
                     
+                    # pylint: disable=expression-not-assigned
                     file.writelines(res) if len(mode) == 1 else file.writelines(sorted(res))
             else:
                 raise ValueError(f'{func_name}: there is no result, check the settings')
@@ -2223,6 +2223,7 @@ def Sharpen(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None
     if amountH < -1.58 or amountV < -1.58 or amountH > 1 or amountV > 1:
         raise ValueError(f'{func_name}: the "amount" allowable range is from -1.58 to +1.0 ')
     
+    # pylint: disable=invalid-unary-operand-type
     clip = Blur(clip, -amountH, -amountV, planes)
     
     return clip
@@ -2514,6 +2515,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     if scenechange:
         clip = SCDetect(clip, scenechange)
     
+    # pylint: disable=unused-argument
     def get_smooth(n: int, f: list[vs.VideoFrame], clips: list[vs.VideoNode], core: vs.Core) -> vs.VideoNode:
         
         drop_frames = set()
@@ -2650,10 +2652,10 @@ def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, 
             raise ValueError(f'{func_name}: invalid "planes"')
     
     with clip.get_frame(0) as frame:
-            if frame.props.get('_FieldBased') in {1, 2}:
-                order = frame.props['_FieldBased'] - 1
-            else:
-                raise KeyError(f'{func_name}: cannot determine field order')
+        if frame.props.get('_FieldBased') in {1, 2}:
+            order = frame.props['_FieldBased'] - 1
+        else:
+            raise KeyError(f'{func_name}: cannot determine field order')
     
     clip_d = core.tivtc.TFM(clip, order=order, ovr=ovr_d, **tfm_args)
     clip_c = core.tivtc.TFM(clip, order=order, ovr=ovr_c, **tfm_args)
@@ -2791,7 +2793,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     frames_d = [None] * num_f
     frames_c = [None] * num_f
     
-    with open(ovr_d, 'r') as file:
+    with open(ovr_d, 'r', encoding='utf-8') as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -2804,7 +2806,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
             elif (res := re.search(r'(\d+) (\w)', line)) is not None:
                 frames_d[int(res.group(1))] = res.group(2)
     
-    with open(ovr_c, 'r') as file:
+    with open(ovr_c, 'r', encoding='utf-8') as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -3028,13 +3030,12 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
     
     return clip
 
-def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> vs.VideoNode:
+def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = False) -> vs.VideoNode:
     '''
-    Implementation of RgTools.Repair with clip edge processing and bank rounding.
+    Implementation of RgTools.Repair with clip edge processing.
     Supported modes: -1...28
     
-    By default, the reference Repair is imitated, no edge processing is done (edges=False),
-    arithmetic rounding is used (roundoff=1).
+    By default, the reference Repair is imitated, no edge processing is done (edges=False).
     '''
     
     func_name = 'Repair'
@@ -3061,7 +3062,6 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
     else:
         full = 1
         half = 0.5
-        roundoff = 3
         if num_p > 1:
             clip = core.std.Expr(clip, ['', 'x 0.5 +'])
             refclip = core.std.Expr(refclip, ['', 'x 0.5 +'])
@@ -3077,18 +3077,6 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
     
     if not isinstance(edges, bool):
         raise TypeError(f'{func_name}: invalid "edges"')
-    
-    match roundoff:
-        case 0:
-            rnd = ' trunc'
-        case 1:
-            rnd = ' 0.5 + trunc'
-        case 2:
-            rnd = ' round'
-        case 3:
-            rnd = ''
-        case _:
-            raise ValueError(f'{func_name}: invalid "roundoff"')
     
     expr = ['',
             # mode 1
@@ -3310,6 +3298,7 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
     
     return clip
 
+# pylint: disable=redefined-builtin
 def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, next: vs.VideoNode | None = None, reduceflicker: bool = False,
            planes: int | list[int] | None = None) -> vs.VideoNode:
     
@@ -3546,6 +3535,7 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
         case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
             side_h, side_v = len(mode[0]), len(mode[1])
             mode = [j * i for i in mode[1] for j in mode[0]]
+        # pylint: disable=used-before-assignment
         case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2 == 1:
             side_h = side_v
         case None:
@@ -3681,6 +3671,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     if not isinstance(norm, bool):
         raise TypeError(f'{func_name}: invalid "norm"')
     
+    # pylint: disable=unused-argument
     def frame_stats(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         
         fout = f.copy()
@@ -3827,7 +3818,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
                 res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {l:>{out}} {i[0]:>5}\n' for j, k, l in zip(*i[2], i[3])]
             
             if res:
-                with open(output, 'w') as file:
+                with open(output, 'w', encoding='utf-8') as file:
                     file.write(f'{'frame':>{dig}} {'x':>{w}} {'y':>{h}} {'out':>{out}} plane\n')
                     file.writelines(res)
             else:
@@ -3846,6 +3837,9 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.FLOAT:
+        raise TypeError(f'{func_name}: integer sample type is not supported')
     
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
@@ -3925,7 +3919,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
         case None:
             clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
         case Callable():
-            clip = upscaler(clip, w, h, **{i:descale_args[i] for i in descale_args if i in {'src_left', 'src_top', 'src_width', 'src_height'}})
+            clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in {'src_left', 'src_top', 'src_width', 'src_height'}})
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
     
@@ -3960,5 +3954,49 @@ def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> v
         diffs = [CrazyPlaneStats(i) for i in core.std.SplitPlanes(diff)]
         clip = core.akarin.PropExpr([clip] + diffs, lambda: dict(_SceneChangeNext=f'y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max {thr * factor / (256 * factor - 1)} > 1 0 ?'))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
+    
+    return clip
+
+def chroma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT and any(planes):
+        clip = core.std.Expr(clip, ['x 0.5 + 1 min 0 max' if i in planes and i else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def chroma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT and any(planes):
+        clip = core.std.Expr(clip, ['x 0.5 - 0.5 min -0.5 max' if i in planes and i else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def luma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT and 0 in planes:
+        clip = core.std.Expr(clip, ['x 0.5 + 1 min 0 max'] + [''] * (clip.format.num_planes - 1))
+    
+    return clip
+
+def luma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT and 0 in planes:
+        clip = core.std.Expr(clip, ['x 0.5 - 0.5 min -0.5 max'] + [''] * (clip.format.num_planes - 1))
+    
+    return clip
+
+def diff_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        clip = core.std.Expr(clip, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        num_p = clip.format.num_planes
+        expr = ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1)
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
