@@ -445,8 +445,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
             
             return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]), mean, norm=False)
         
-        if not isinstance(shift, int) or shift < -20 or shift > 20:
-            raise ValueError(f'{func_name}: "shift" must be "int" and -20 <= "shift" <= 20')
+        if not isinstance(shift, int):
+            raise ValueError(f'{func_name}: "shift" must be "int"')
         
         if isfloat:
             shift /= 255
@@ -842,9 +842,9 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
             raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
     match shift:
-        case int() if -20 <= shift <= 20:
+        case int():
             shift = [shift * factor] * num_p
-        case list() if 0 < len(shift) <= num_p and all(isinstance(i, int) and -20 <= i <= 20 for i in shift):
+        case list() if 0 < len(shift) <= num_p and all(isinstance(i, int) for i in shift):
             shift = [i * factor for i in shift]
             if len(shift) < num_p:
                 shift += [shift[-1]] * (num_p - len(shift))
