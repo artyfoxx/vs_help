@@ -12,7 +12,7 @@ Just a few vapoursynth function...
 * [vapoursynth-mvtools](https://github.com/dubhater/vapoursynth-mvtools)
 * [vapoursynth-descale](https://github.com/Jaded-Encoding-Thaumaturgy/vapoursynth-descale)
 * [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
-* [fmtconv](https://github.com/EleonoreMizo/fmtconv)
+* [fmtconv](https://github.com/AmusementClub/fmtconv)
 * [vapoursynth-frfun7](https://github.com/dubhater/vapoursynth-frfun7)
 * [vapoursynth-awarpsharp2](https://github.com/dubhater/vapoursynth-awarpsharp2)
 * [vapoursynth-tivtc](https://github.com/dubhater/vapoursynth-tivtc)
