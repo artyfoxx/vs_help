@@ -2437,7 +2437,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     if scenechange:
         clip = SCDetect(clip, scenechange)
     
-    # pylint: disable=unused-argument
+    # pylint: disable=unused-argument, redefined-outer-name
     def get_smooth(n: int, f: list[vs.VideoFrame], clips: list[vs.VideoNode], core: vs.Core) -> vs.VideoNode:
         
         drop_frames = set()
@@ -3526,6 +3526,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = avg_g = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
                     name = 'geometric_mean'
                 case 2:
+                    #pylint: disable=no-member
                     avg = np.pi * (avg_a + avg_g) / special.ellipk(np.square(avg_a - avg_g) / np.square(avg_a + avg_g)) / 4
                     name = 'arithmetic_geometric_mean'
                 case 3:
@@ -3664,8 +3665,9 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     return clip
 
-def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear', frac: bool = True,
-             upscaler: Callable | None = None, src_res: bool = False, **descale_args: Any) -> vs.VideoNode:
+# pylint: disable=redefined-outer-name
+def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | list[float] | None = None, kernel: str = 'bilinear',
+             mode: int = 1, upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
     
     func_name = 'rescaler'
     
@@ -3680,105 +3682,128 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     
     w = clip.width
     h = clip.height
-    crop = {'src_left', 'src_top', 'src_width', 'src_height'}
+    crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
     
-    if descale_args and (x := crop & set(descale_args.keys())):
-        raise ValueError(f'{func_name}: Unsupported keys {x} in descale_args')
+    if descale_args and (x := crop_keys & set(descale_args.keys())):
+        raise ValueError(f'{func_name}: Unsupported key(s) {x} in descale_args')
     
-    if src_res:
+    if not isinstance(mode, int):
+        raise TypeError(f'{func_name}: invalid mode')
+    
+    if mode & 2:
         if dx is None:
-            raise TypeError(f'{func_name}: invalid "dx" for src_res mode')
+            raise TypeError(f'{func_name}: invalid "dx" for studio resolution mode')
         if dy is None:
-            raise TypeError(f'{func_name}: invalid "dy" for src_res mode')
+            raise TypeError(f'{func_name}: invalid "dy" for studio resolution mode')
         if w != 1920 or h != 1080:
-            raise ValueError(f'{func_name}: Unsupported resolution for src_res mode')
-        up_w = 1088 * 16 / 9 if frac else 1934
+            raise ValueError(f'{func_name}: Unsupported resolution for studio resolution mode')
+        up_w = 1088 * 16 / 9 if mode & 1 else 1934
         dx = dx - (up_w - 1920) * dx / up_w
         dy = dy - 8 * dy / 1088
-        frac = True
-    
-    match dx, dy, frac:
-        case None, None, True:
-            dy = h * 2 // 3
-            descale_args['src_width'] = w * dy / h
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-        case None, None, False:
-            dy = h * 2 // 3
-            dx = round(w * dy / h)
-        case None, int(), True:
-            descale_args['src_width'] = w * dy / h
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-        case None, int(), False:
-            dx = round(w * dy / h)
-        case None, float(), True:
-            descale_args['src_width'] = w * dy / h
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-            descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
-        case None, float(), False:
-            dx = round(w * dy / h)
-            dy = round(dy)
-        case int(), None, True:
-            descale_args['src_height'] = h * dx / w
-            dy = ceil(descale_args['src_height'] / 2) * 2
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
-        case int(), None, False:
-            dy = round(h * dx / w)
-        case int(), int(), bool():
-            pass
-        case int(), float(), True:
-            descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
-        case int(), float(), False:
-            dy = round(dy)
-        case float(), None, True:
-            descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-            descale_args['src_height'] = h * dx / w
-            dy = ceil(descale_args['src_height'] / 2) * 2
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
-        case float(), None, False:
-            dy = round(h * dx / w)
-            dx = round(dx)
-        case float(), int(), True:
-            descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-        case float(), int(), False:
-            dx = round(dx)
-        case float(), float(), True:
-            descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
-            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-            descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
-            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
-        case float(), float(), False:
-            dx = round(dx)
-            dy = round(dy)
-        case _, None | int() | float(), bool():
-            raise TypeError(f'{func_name}: invalid "dx"')
-        case None | int() | float(), _, bool():
-            raise TypeError(f'{func_name}: invalid "dy"')
-        case _:
-            raise TypeError(f'{func_name}: invalid "frac"')
+        mode |= 1
     
     if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
         raise ValueError(f'{func_name}: invalid "kernel"')
     
-    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
+    match dx, dy, mode & 1:
+        case None, None, 1:
+            dy = h * 2 // 3
+            descale_args['src_width'] = w * dy / h
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+        case None, None, 0:
+            dy = h * 2 // 3
+            dx = round(w * dy / h)
+        case None, int(), 1:
+            descale_args['src_width'] = w * dy / h
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+        case None, int(), 0:
+            dx = round(w * dy / h)
+        case None, float(), 1:
+            descale_args['src_width'] = w * dy / h
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+            descale_args['src_height'] = dy
+            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
+        case None, float(), 0:
+            dx = round(w * dy / h)
+            dy = round(dy)
+        case int(), None, 1:
+            descale_args['src_height'] = h * dx / w
+            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
+        case int(), None, 0:
+            dy = round(h * dx / w)
+        case int(), int(), _:
+            pass
+        case int(), float(), 1:
+            descale_args['src_height'] = dy
+            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
+        case int(), float(), 0:
+            dy = round(dy)
+        case float(), None, 1:
+            descale_args['src_width'] = dx
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+            descale_args['src_height'] = h * dx / w
+            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
+        case float(), None, 0:
+            dy = round(h * dx / w)
+            dx = round(dx)
+        case float(), int(), 1:
+            descale_args['src_width'] = dx
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+        case float(), int(), 0:
+            dx = round(dx)
+        case float(), float(), 1:
+            descale_args['src_width'] = dx
+            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_left'] = (dx - descale_args['src_width']) / 2
+            descale_args['src_height'] = dy
+            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_top'] = (dy - descale_args['src_height']) / 2
+        case float(), float(), 0:
+            dx = round(dx)
+            dy = round(dy)
+        case None, [float(), tail], 1 if all(isinstance(i, float) for i in tail):
+            num_f = clip.num_frames
+            fmax = max(dy)
+            mx = ceil(w * fmax / h / 2) * 2
+            my = ceil(fmax / 2) * 2
+            if len(dy) < num_f:
+                dy += [dy[-1]] * (num_f - len(dy))
+            rescale_args = [{}] * num_f
+            for i in range(num_f):
+                rescale_args[i]['src_width'] = w * dy[i] / h
+                rescale_args[i]['src_left'] = (mx - rescale_args[i]['src_width']) / 2
+                rescale_args[i]['src_height'] = dy[i]
+                rescale_args[i]['src_top'] = (my - rescale_args[i]['src_height']) / 2
+        case None | int() | float(), _:
+            raise TypeError(f'{func_name}: invalid "dy"')
+        case _:
+            raise TypeError(f'{func_name}: invalid "dx"')
+    
+    if 'rescale_args' in locals():
+        clip = core.std.FrameEval(clip, lambda n, clip=clip: getattr(core.descale, f'De{kernel}')(clip, mx, my, **descale_args, **rescale_args[n]))
+    else:
+        clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
     
     match upscaler:
         case None:
-            clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
+            if 'rescale_args' in locals():
+                clip = core.std.FrameEval(clip, lambda n, clip=clip: getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args, **rescale_args[n]))
+            else:
+                clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
         case Callable():
-            clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop})
+            if 'rescale_args' in locals():
+                clip = upscaler(clip, w, h, list_of_args=rescale_args)
+            else:
+                clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
     
