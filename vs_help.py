@@ -68,6 +68,7 @@ from inspect import signature
 from collections.abc import Callable
 import re
 import vapoursynth as vs
+# pylint: disable=no-name-in-module
 from vapoursynth import core
 import numpy as np
 from scipy import special
@@ -1234,8 +1235,7 @@ def FineDehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list[
     
     return clip
 
-def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, src_left: float | None = None, src_top: float | None = None,
-             src_width: float | None = None, src_height: float | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> vs.VideoNode:
+def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> vs.VideoNode:
     
     func_name = 'upscaler'
     
@@ -1255,22 +1255,6 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, s
     
     if dy is None:
         dy = h * 2
-    
-    if src_left is None:
-        src_left = 0
-    
-    if src_top is None:
-        src_top = 0
-    
-    if src_width is None:
-        src_width = w
-    elif src_width <= 0:
-        src_width += w - src_left
-    
-    if src_height is None:
-        src_height = h
-    elif src_height <= 0:
-        src_height += h - src_top
     
     if dx > w * 2 or dy > h * 2:
         raise ValueError(f'{func_name}: upscale size is too big')
@@ -1308,6 +1292,11 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, s
         return clip
     
     if mode:
+        crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
+        crop_args = {key: value * 2 for key, value in upscaler_args.items() if key in crop_keys}
+        upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
+        crop_args = {key: value - 0.5 if key in {'src_left', 'src_top'} else value for key, value in crop_args.items()}
+        
         match order:
             case 0:
                 clip = edi3_aa(clip, mode, True, **upscaler_args)
@@ -1318,10 +1307,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, s
             case _:
                 raise ValueError(f'{func_name}: Please use 0...2 order value')
         
-        clip = autotap3(clip, dx, dy, src_left=src_left * 2 - 0.5, src_top=src_top * 2 - 0.5, src_width=src_width * 2, src_height=src_height * 2)
+        clip = autotap3(clip, dx, dy, **crop_args)
     else:
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
-        clip = getattr(core.resize, kernel)(clip, dx, dy, src_left=src_left, src_top=src_top, src_width=src_width, src_height=src_height, **upscaler_args)
+        clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
     
     return clip
 
