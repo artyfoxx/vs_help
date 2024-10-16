@@ -72,6 +72,9 @@ import vapoursynth as vs
 from vapoursynth import core
 import numpy as np
 from scipy import special
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> vs.VideoNode:
     '''
@@ -3882,5 +3885,91 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
         num_p = clip.format.num_planes
         expr = ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1)
         clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
+              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1,
+              output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
+              **descale_args: Any) -> vs.VideoNode:
+    
+    func_name = 'getnative'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
+    
+    if clip.format.sample_type != vs.FLOAT:
+        raise TypeError(f'{func_name}: integer sample type is not supported')
+    
+    if clip.format.color_family != vs.GRAY:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if frames is None:
+        frames = [0, clip.num_frames]
+    
+    match output:
+        case None:
+            output = f'getnative_frame(s)_{frames}.txt' if isinstance(frames, int) else f'getnative_dx_{dx}_dy_{dy}.txt'
+        case str():
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "output"')
+    
+    match dx, dy, kernel, frames:
+        case None | int() | float(), None | int() | float(), [str(), a], int() if all(isinstance(i, str) for i in a):
+            frange = kernel
+            clip = clip[frames] * len(frange)
+            descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
+                            else [value] * len(frange) for key, value in descale_args.items()}
+            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None} for i in range(len(frange))]
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], mode, **descale_args[n]))
+        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), int():
+            frange = np.arange(*dy, dtype=np.float64)
+            clip = clip[frames] * len(frange)
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, mode, **descale_args))
+        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), int():
+            frange = np.arange(*dx, dtype=np.float64)
+            clip = clip[frames] * len(frange)
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, mode, **descale_args))
+        case None | int() | float(), None | int() | float(), str(), [int(), int()]:
+            frange = list(range(*frames))
+            resc = rescaler(clip[frames[0]:frames[1]], dx, dy, kernel, mode, **descale_args)
+        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, None, thr, crop, mean, **descale_args) for i in range(*frames)])
+        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, None, thr, crop, mean, **descale_args) for i in range(*frames)])
+        case _:
+            raise TypeError(f'{func_name}: unsupported combination of parameters')
+    
+    clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+    
+    if crop:
+        clip = core.std.Crop(clip, crop, crop, crop, crop)
+    
+    clip = CrazyPlaneStats(clip, mean)
+    
+    result = np.zeros(len(frange), dtype=np.float64)
+    means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
+             'root_mean_square', 'root_mean_cube', 'median']
+    
+    def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
+        
+        nonlocal result
+        result[n] = f.props[means[mean]] + 1e-20
+        
+        if n == len(frange) - 1:
+            diff = np.divide(result, np.gradient(result))
+            res = [f'{i} {j:.20f} {abs(k):.20f}\n' for i, j, k in zip(frange, result, diff)]
+            with open(output, 'w', encoding='utf-8') as file:
+                file.writelines(res)
+            plt.figure(figsize=(16, 9))
+            plt.plot(frange, result)
+            plt.grid()
+            plt.savefig(output.replace('.txt', '.png'))
+            plt.close()
+        
+        return clip
+    
+    clip = core.std.FrameEval(clip, partial(get_native, clip=clip), prop_src=clip)
     
     return clip

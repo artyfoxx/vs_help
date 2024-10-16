@@ -18,3 +18,4 @@ Just a few vapoursynth function...
 * [vapoursynth-tivtc](https://github.com/dubhater/vapoursynth-tivtc)
 * [numpy](https://github.com/numpy/numpy)
 * [scipy](https://github.com/scipy/scipy)
+* [matplotlib](https://github.com/matplotlib/matplotlib)
