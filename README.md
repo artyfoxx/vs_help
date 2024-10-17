@@ -1,5 +1,5 @@
 # vs_help
-Just a few vapoursynth function...
+Just a few vapoursynth function...  
 For internal use. Documented rather fragmentarily.
 # Dependencies
 ## General
