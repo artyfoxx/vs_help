@@ -1,5 +1,6 @@
-'''
+"""
 All functions support the following formats: GRAY and YUV 8 - 16 bit integer.
+
 Support for floating point sample type is added when needed. Such functions are marked separately.
 Support for floating point sample type is intended for clips converted from the full range.
 For clips converted from a limited range, correct operation is not guaranteed.
@@ -59,33 +60,33 @@ Functions:
     out_of_range_search
     rescaler (float only)
     SCDetect
-'''
+    getnative
+"""
 
-from typing import Any
-from math import sqrt, ceil
+import re
+from collections.abc import Callable
 from functools import partial
 from inspect import signature
-from collections.abc import Callable
-import re
-import vapoursynth as vs
-# pylint: disable=no-name-in-module
-from vapoursynth import core
+from math import ceil, sqrt
+from typing import Any
+
 import numpy as np
+import vapoursynth as vs
 from scipy import special
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')
+from vapoursynth import core
+
 
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> vs.VideoNode:
-    '''
+    """
     Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    
     In comparison with the original, processing accuracy has been doubled, support for 8-32 bit depth
     and crop parameters has been added, and dead code has been removed.
     
-    dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
+    dx and dy are the desired resolution.
+    The other parameters are not documented in any way and are selectedusing the poke method.
     Cropping options are added as **kwargs. The key names are the same as in VapourSynth-resize.
-    '''
-    
+    """
     func_name = 'autotap3'
     
     if not isinstance(clip, vs.VideoNode):
@@ -96,14 +97,27 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     w = clip.width
     h = clip.height
     
-    if dx is None:
-        dx = w * 2
+    match dx:
+        case None:
+            dx = w * 2
+        case int():
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "dx"')
     
-    if dy is None:
-        dy = h * 2
+    match dy:
+        case None:
+            dy = h * 2
+        case int():
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "dy"')
     
-    if dx == w and dy == h:
-        return core.resize.Spline36(clip, **crop_args)
+    if not isinstance(mtaps3, int) or mtaps3 <= 0 or mtaps3 > 128:
+        raise TypeError(f'{func_name}: invalid "mtaps3"')
+    
+    if not isinstance(thresh, int) or thresh <= 0 or thresh > 256:
+        raise TypeError(f'{func_name}: invalid "thresh"')
     
     back_args = {}
     
@@ -127,6 +141,9 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         if any((x := i) not in back_args for i in crop_args):
             raise KeyError(f'{func_name}: Unsupported key {x} in crop_args')
     
+    if dx == w and dy == h:
+        return core.resize.Spline36(clip, **crop_args)
+    
     space = clip.format.color_family
     
     if space == vs.YUV:
@@ -145,30 +162,36 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
     
-    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
-    
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
-    cp1 = core.std.MaskedMerge(Blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
-    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args))
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    temp = core.std.MaskedMerge(Blur(t1, 1.42), t2, mask)
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    temp = core.std.MaskedMerge(temp, t3, mask)
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    temp = core.std.MaskedMerge(temp, t4, mask)
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    temp = core.std.MaskedMerge(temp, t5, mask)
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    temp = core.std.MaskedMerge(temp, t6, mask)
+    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+                          core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')],
+                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    clip = core.std.MaskedMerge(temp, t7, mask)
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)],
+                                      list(range(orig.format.num_planes)), space)
     
     return clip
 
@@ -176,16 +199,17 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
                  athresh: int = 256, sharp1: float = 1, sharp2: float = 4, blur1: float = 0.33, blur2: float = 1.25,
                  mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1, ltaps: int = 1, preblur: bool = False, depth: int = 2,
                  wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> vs.VideoNode:
-    '''
+    """
     An upscaler based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    
     In comparison with the original, the mathematics for non-multiple resolutions has been improved, support for 8-16 bit depth
     has been added, dead code and unnecessary calculations have been removed.
     All dependent parameters have been recalculated from AWarpSharp to AWarpSharp2.
     It comes with autotap3, ported just for completion.
     
-    dx and dy are the desired resolution. The other parameters are not documented in any way and are selected using the poke method.
-    '''
-    
+    dx and dy are the desired resolution.
+    The other parameters are not documented in any way and are selected using the poke method.
+    """
     func_name = 'Lanczosplus'
     
     if not isinstance(clip, vs.VideoNode):
@@ -228,8 +252,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
-    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else 
-                                                 core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits), 
+    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else
+                                                 core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits),
                                                  x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
@@ -269,7 +293,7 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     return clip
 
 def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> vs.VideoNode:
-    '''
+    """
     Dehalo by bion, ported from AviSynth version with minor additions.
     
     Args:
@@ -285,8 +309,7 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
             4 - the roughest.
             1 and 2 - somewhere in the middle.
         m: show the mask instead of the clip or not.
-    '''
-    
+    """
     func_name = 'bion_dehalo'
     
     if not isinstance(clip, vs.VideoNode):
@@ -374,7 +397,7 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     return clip
 
 def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) -> vs.VideoNode:
-    '''
+    """
     A simple functions for fix brightness artifacts at the borders of the frame.
     
     All values are set as positional list arguments. The list have the following format:
@@ -396,8 +419,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     
     Example:
         clip = fix_border(clip, ['X', 0, 1, 50], ['X', 1919, 1918, 50], ['Y', 0, 1, 50], ['Y', 1079, 1078, 50])
-    '''
-    
+    """
     func_name = 'fix_border'
     
     if not isinstance(clip, vs.VideoNode):
@@ -415,7 +437,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         isfloat = True
     
     if space == vs.YUV:
-        planes = list(set(i[6] if len(i) > 6 else 0 for i in args))
+        planes = list({i[6] if len(i) > 6 else 0 for i in args})
         clips = core.std.SplitPlanes(chroma_up(clip, planes))
     elif space == vs.GRAY:
         clips = [clip]
@@ -524,25 +546,22 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         else:
             raise ValueError(f'{func_name}: invalid plane = {i[6]}')
     
-    if space == vs.YUV:
-        clip = chroma_down(core.std.ShufflePlanes(clips, [0] * num_p, space), planes)
-    else:
-        clip = clips[0]
+    clip = chroma_down(core.std.ShufflePlanes(clips, [0] * num_p, space), planes) if space == vs.YUV else clips[0]
     
     return clip
 
 def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
                taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> vs.VideoNode:
-    '''
+    """
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
+    
     Has nothing to do with the port by MonoS.
     It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
     "down = True" is added for backward compatibility and does not support fractional resolutions.
     Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
-    '''
-    
+    """
     func_name = 'MaskDetail'
     
     if not isinstance(clip, vs.VideoNode):
@@ -607,15 +626,15 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     return clip
 
 def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> vs.VideoNode:
-    '''
-    Just an alias for mv.Degrain
+    """
+    Just an alias for mv.Degrain.
+    
     The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
     If you do not set anything, the default settings of MVTools itself apply.
     Function dictionaries are set in order: Super, Analyze, Degrain, Recalculate.
     Recalculate is optional, but you can specify several of them (as many as you want).
     If you need to specify settings for only one function, the rest of the dictionaries are served empty.
-    '''
-    
+    """
     func_name = 'degrain_n'
     
     if not isinstance(clip, vs.VideoNode):
@@ -647,12 +666,12 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
     return clip
 
 def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear', tff: bool = True, **descale_args: Any) -> vs.VideoNode:
-    '''
+    """
     Simplified Destripe from YomikoR without unnecessary frills.
+    
     The internal Descale functions are unloaded as usual.
     The function values that differ for the upper and lower fields are indicated in the list.
-    '''
-    
+    """
     func_name = 'Destripe'
     
     if not isinstance(clip, vs.VideoNode):
@@ -692,10 +711,7 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     return clip
 
 def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None = None, **znedi3_args: Any) -> vs.VideoNode:
-    '''
-    daa by Didée, ported from AviSynth version with minor additions.
-    '''
-    
+    """daa by Didée, ported from AviSynth version with minor additions."""
     func_name = 'daa'
     
     if not isinstance(clip, vs.VideoNode):
@@ -739,12 +755,12 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
 
 def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, shift: int | list[int] = 0,
                    mode: int = 0, mean: int = 0) -> vs.VideoNode:
-    '''
+    """
     Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
+    
     Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
     Apparently it depends on the source.
-    '''
-    
+    """
     func_name = 'average_fields'
     
     if not isinstance(clip, vs.VideoNode):
@@ -874,10 +890,7 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
 
 def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, planes: int | list[int] | None = None,
               **nnedi3_args: Any) -> vs.VideoNode:
-    '''
-    nnedi2aas by Didée, ported from AviSynth version with minor additions.
-    '''
-    
+    """nnedi2aas by Didée, ported from AviSynth version with minor additions."""
     func_name = 'nnedi3aas'
     
     if not isinstance(clip, vs.VideoNode):
@@ -922,8 +935,9 @@ def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, p
     return clip
 
 def dehalo_mask(clip: vs.VideoNode, expand: float = 0.5, iterations: int = 2, brz: int = 255, shift: int = 8) -> vs.VideoNode:
-    '''
+    """
     Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
+    
     Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
     
     Args:
@@ -932,8 +946,7 @@ def dehalo_mask(clip: vs.VideoNode, expand: float = 0.5, iterations: int = 2, br
         iterations: Protects parallel lines and corners that are usually damaged by YAHR.
         brz: Adjusts the internal line thickness.
         shift: Corrective shift for fine-tuning iterations
-    '''
-    
+    """
     func_name = 'dehalo_mask'
     
     if not isinstance(clip, vs.VideoNode):
@@ -993,10 +1006,7 @@ def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: flo
     
     space = clip.format.color_family
     
-    if mt_prewitt:
-        clip = Convolution(clip, 'prewitt', total=1 / scale)
-    else:
-        clip = core.std.Prewitt(clip, scale=scale)
+    clip = Convolution(clip, 'prewitt', total=1 / scale) if mt_prewitt else core.std.Prewitt(clip, scale=scale)
     
     clip = Binarize(clip, thr)
     
@@ -1064,7 +1074,9 @@ def DeHalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     
     factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor
-    m4 = lambda var: max(int(var / 4 + 0.5) * 4, 16)
+    
+    def m4(var: float) -> int:
+        return max(int(var / 4 + 0.5) * 4, 16)
     
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry)).resize.Bicubic(w, h, filter_param_a=1, filter_param_b=0)
     are = Convolution(clip, 'min/max')
@@ -1092,7 +1104,7 @@ def DeHalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
 
 def FineDehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
                 thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, mt_prewitt = False) -> vs.VideoNode:
+                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, mt_prewitt: bool = False) -> vs.VideoNode:
     
     func_name = 'FineDehalo'
     
@@ -1136,10 +1148,7 @@ def FineDehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi:
         xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
         dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
-    if mt_prewitt:
-        edges = Convolution(clip, 'prewitt')
-    else:
-        edges = core.std.Prewitt(clip)
+    edges = Convolution(clip, 'prewitt') if mt_prewitt else core.std.Prewitt(clip)
     
     strong = core.std.Expr(edges, f'x {thmi} - {thma - thmi} / {full} *')
     large = ExpandMulti(strong, sw=rx_i, sh=ry_i)
@@ -1515,7 +1524,7 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
 
 def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2.0,
                        norm: bool = True, frames: list[int] | None = None, output: str | None = None, plane: int = 0, mean: int = 0) -> vs.VideoNode:
-    '''
+    """
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
     The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference is calculated
@@ -1561,8 +1570,7 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
             the file name is "field_diffs.txt".
         
         plane: the position of the planar for calculating the absolute normalized difference. The default is "0" (luminance planar).
-    '''
-    
+    """
     func_name = 'search_field_diffs'
     
     if not isinstance(clip, vs.VideoNode):
@@ -1683,7 +1691,6 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
                     else:
                         file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<{tab}} div\n')
                     
-                    # pylint: disable=expression-not-assigned
                     file.writelines(res) if len(mode) == 1 else file.writelines(sorted(res))
             else:
                 raise ValueError(f'{func_name}: there is no result, check the settings')
@@ -2163,7 +2170,6 @@ def Sharpen(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None
     if amountH < -1.58 or amountV < -1.58 or amountH > 1 or amountV > 1:
         raise ValueError(f'{func_name}: the "amount" allowable range is from -1.58 to +1.0 ')
     
-    # pylint: disable=invalid-unary-operand-type
     clip = Blur(clip, -amountH, -amountV, planes)
     
     return clip
@@ -2333,10 +2339,7 @@ def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold=float"')
     
     if sw > 0 and sh > 0:
-        if mode == 'losange' or (mode == 'ellipse' and sw % 3 != 1):
-            mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
-        else:
-            mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or mode == 'ellipse' and sw % 3 != 1 else [1, 1, 1, 1, 1, 1, 1, 1]
     elif sw > 0:
         mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
     elif sh > 0:
@@ -2374,10 +2377,7 @@ def InpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold=float"')
     
     if sw > 0 and sh > 0:
-        if mode == 'losange' or (mode == 'ellipse' and sw % 3 != 1):
-            mode_m = [0, 1, 0, 1, 1, 0, 1, 0]
-        else:
-            mode_m = [1, 1, 1, 1, 1, 1, 1, 1]
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or mode == 'ellipse' and sw % 3 != 1 else [1, 1, 1, 1, 1, 1, 1, 1]
     elif sw > 0:
         mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
     elif sh > 0:
@@ -2440,7 +2440,6 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     if scenechange:
         clip = SCDetect(clip, scenechange)
     
-    # pylint: disable=unused-argument, redefined-outer-name
     def get_smooth(n: int, f: list[vs.VideoFrame], clips: list[vs.VideoNode], core: vs.Core) -> vs.VideoNode:
         
         drop_frames = set()
@@ -2456,7 +2455,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
                     drop_frames.update(range(i + 1, scope))
                     break
         
-        expr = f'{' '.join(f'src{radius} src{i} - abs {thr} > src{radius} src{i} ?' if radius != i else 
+        expr = f'{' '.join(f'src{radius} src{i} - abs {thr} > src{radius} src{i} ?' if radius != i else
                f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
         clip = core.akarin.Expr(clips, [expr if i in planes else f'src{radius}' for i in range(num_p)])
         
@@ -2474,11 +2473,11 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     return clip
 
 def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box', roundoff: int = 0) -> vs.VideoNode:
-    '''
+    """
     Implementation of UnsharpMask with the ability to select the blur type (box or gauss) and rounding mode.
-    By default, it perfectly imitates UnsharpMask from the WarpSharp package to AviSynth.
-    '''
     
+    By default, it perfectly imitates UnsharpMask from the WarpSharp package to AviSynth.
+    """
     func_name = 'UnsharpMask'
     
     if not isinstance(clip, vs.VideoNode):
@@ -2527,7 +2526,7 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side))} '
                     f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ? 0 {full} clamp')
         case 'gauss':
-            row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]
+            row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]  # noqa: F821, F841
             matrix = [i * j for i in row for j in row]
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *' for i in range(side) for j in range(side))} '
                     f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ? 0 {full} clamp')
@@ -2539,7 +2538,7 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
     return clip
 
 def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, diff_proc: Callable[..., vs.VideoNode] | None = None,
-             planes: int | list[int] | None = None, **tfm_args) -> vs.VideoNode:
+             planes: int | list[int] | None = None, **tfm_args: Any) -> vs.VideoNode:
     
     func_name = 'diff_tfm'
     
@@ -2615,7 +2614,7 @@ def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, 
         case _:
             raise TypeError(f'{func_name} invalid "diff_proc"')
     
-    clip = core.std.Expr([nc_clip_d] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    clip = core.std.Expr([nc_clip_d, *diff], ['x y z - +' if i in planes else '' for i in range(num_p)])
     
     if set(planes) != set(range(num_p)):
         clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
@@ -2666,7 +2665,7 @@ def diff_transfer(clip: vs.VideoNode, nc_clip: vs.VideoNode, target: vs.VideoNod
         case _:
             raise TypeError(f'{func_name} invalid "diff_proc"')
     
-    clip = core.std.Expr([target] + diff, ['x y z - +' if i in planes else '' for i in range(num_p)])
+    clip = core.std.Expr([target, *diff], ['x y z - +' if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -2760,14 +2759,14 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     return result
 
 def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> vs.VideoNode:
-    '''
+    """
     Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
+    
     Supported modes: -1...28
     
     By default, the reference RemoveGrain is imitated, no edge processing is done (edges=False),
     arithmetic rounding is used (roundoff=1).
-    '''
-    
+    """
     func_name = 'RemoveGrain'
     
     if not isinstance(clip, vs.VideoNode):
@@ -2809,130 +2808,133 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
         case _:
             raise ValueError(f'{func_name}: invalid "roundoff"')
     
-    expr = ['',
-            # mode 1
-            'x x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x[-1,-1] x[0,-1] max '
-            'x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max clamp',
-            # mode 2
-            'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop swap6 drop5 clamp',
-            # mode 3
-            'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop2 swap5 drop3 swap drop clamp',
-            # mode 4
-            'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop3 swap4 drop swap2 drop2 clamp',
-            # mode 5
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-            'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs d1! x c2@ - abs d2! x c3@ - '
-            'abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 6
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-            f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs 2 * mal1@ mil1@ - + {full} '
-            f'min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * mal3@ mil3@ - + {full} min d3! x c4@ - abs '
-            f'2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
-            'c3@ c1@ ? ? ?',
-            # mode 7
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-            f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - + {full} min '
-            f'd1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ - + {full} min d3! x c4@ - abs mal4@ mil4@ '
-            f'- + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 8
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-            f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - 2 * + {full} '
-            f'min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs mal3@ mil3@ - 2 * + {full} min d3! x c4@ - abs '
-            f'mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
-            'c3@ c1@ ? ? ?',
-            # mode 9
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - d1! '
-            'mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ mal4@ '
-            'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
-            # mode 10
-            'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
-            'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min mind! mind@ '
-            'd7@ = x[0,1] mind@ d8@ = x[1,1] mind@ d6@ = x[-1,1] mind@ d2@ = x[0,-1] mind@ d3@ = x[1,-1] mind@ d1@ = x[-1,-1] '
-            'mind@ d5@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
-            # mode 11
-            f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
-            # mode 12
-            f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
-            # mode 13
-            'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 '
-            f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
-            # mode 14
-            'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 '
-            f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
-            # mode 15
-            f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
-            'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
-            'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
-            'min x[-1,-1] x[1,1] max clamp ? ? x ?',
-            # mode 16
-            f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
-            'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
-            'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
-            'min x[-1,-1] x[1,1] max clamp ? ? x ?',
-            # mode 17
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mil1@ mil2@ max mil3@ '
-            'max mil4@ max lower! mal1@ mal2@ min mal3@ min mal4@ min upper! x lower@ upper@ min lower@ upper@ max clamp',
-            # mode 18
-            'x x[-1,-1] - abs x x[1,1] - abs max d1! x x[0,-1] - abs x x[0,1] - abs max d2! x x[1,-1] - abs x x[-1,1] - abs max '
-            'd3! x x[-1,0] - abs x x[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x x[-1,0] x[1,0] min '
-            'x[-1,0] x[1,0] max clamp mind@ d2@ = x x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = x x[1,-1] x[-1,1] '
-            'min x[1,-1] x[-1,1] max clamp x x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? ?',
-            # mode 19
-            f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 8 /{rnd}',
-            # mode 20
-            f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 9 /{rnd}',
-            # mode 21
-            f'x x[-1,-1] x[1,1] + 2 /{trnc} x[0,-1] x[0,1] + 2 /{trnc} min x[1,-1] x[-1,1] + 2 /{trnc} min x[-1,0] x[1,0] + 2 /'
-            f'{trnc} min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max x[-1,0] x[1,0] + '
-            f'2 /{rnd} max clamp',
-            # mode 22
-            f'x[-1,-1] x[1,1] + 2 /{rnd} l1! x[0,-1] x[0,1] + 2 /{rnd} l2! x[1,-1] x[-1,1] + 2 /{rnd} l3! x[-1,0] x[1,0] + 2 '
-            f'/{rnd} l4! x l1@ l2@ min l3@ min l4@ min l1@ l2@ max l3@ max l4@ max clamp',
-            # mode 23
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
-            'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x x mal1@ - ld1@ min x mal2@ - ld2@ min max x mal3@ - ld3@ '
-            'min max x mal4@ - ld4@ min max 0 max - 0 max mil1@ x - ld1@ min mil2@ x - ld2@ min max mil3@ x - ld3@ min max mil4@ '
-            f'x - ld4@ min max 0 max + {full} min',
-            # mode 24
-            'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-            'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
-            'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x mal1@ - 0 max u1! x mal2@ - 0 max u2! x mal3@ - 0 max '
-            'u3! x mal4@ - 0 max u4! mil1@ x - 0 max d1! mil2@ x - 0 max d2! mil3@ x - 0 max d3! mil4@ x - 0 max d4! x u1@ ld1@ '
-            'u1@ - min u2@ ld2@ u2@ - min max u3@ ld3@ u3@ - min max u4@ ld4@ u4@ - min max 0 max - 0 max d1@ ld1@ d1@ - min d2@ '
-            f'ld2@ d2@ - min max d3@ ld3@ d3@ - min max d4@ ld4@ d4@ - min max 0 max + {full} min',
-            # mode 25
-            f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? min x x[-1,-1] < {full} x x[-1,-1] - ? min x '
-            f'x[0,-1] < {full} x x[0,-1] - ? min x x[1,-1] < {full} x x[1,-1] - ? min x x[-1,1] < {full} x x[-1,1] - ? min x '
-            f'x[0,1] < {full} x x[0,1] - ? min x x[1,1] < {full} x x[1,1] - ? min mn! x[-1,0] x < {full} x[-1,0] x - ? x[1,0] x '
-            f'< {full} x[1,0] x - ? min x[-1,-1] x < {full} x[-1,-1] x - ? min x[0,-1] x < {full} x[0,-1] x - ? min x[1,-1] x < '
-            f'{full} x[1,-1] x - ? min x[-1,1] x < {full} x[-1,1] x - ? min x[0,1] x < {full} x[0,1] x - ? min x[1,1] x < {full} '
-            f'x[1,1] x - ? min pl! x pl@ 2 /{trnc} mn@ pl@ - 0 max min + {full} min mn@ 2 /{trnc} pl@ mn@ - 0 max min - 0 max',
-            # mode 26
-            'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
-            'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max '
-            'min x[1,-1] x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min '
-            'x[-1,-1] x[-1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp',
-            # mode 27
-            'x[-1,-1] x[1,1] min x[-1,-1] x[0,-1] min max x[0,1] x[1,1] min max x[0,-1] x[0,1] min max x[0,-1] x[1,-1] min '
-            'x[-1,1] x[0,1] min max x[1,-1] x[-1,1] min max x[1,-1] x[1,0] min max max x[-1,0] x[-1,1] min x[-1,0] x[1,0] min '
-            'max x[1,0] x[1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[1,1] max x[-1,-1] x[0,-1] max min x[0,1] '
-            'x[1,1] max min x[0,-1] x[0,1] max min x[0,-1] x[1,-1] max x[-1,1] x[0,1] max min x[1,-1] x[-1,1] max min x[1,-1] '
-            'x[1,0] max min min x[-1,0] x[-1,1] max x[-1,0] x[1,0] max min x[1,0] x[1,1] max min x[-1,-1] x[-1,0] max min min '
-            'upper! x lower@ upper@ min lower@ upper@ max clamp',
-            # mode 28
-            'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
-            'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max x[-1,-1] x[1,1] min x[1,-1] x[-1,1] min max '
-            'x[0,-1] x[0,1] min max x[-1,0] x[1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max min x[1,-1] '
-            'x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min x[-1,-1] '
-            'x[-1,0] max min min x[-1,-1] x[1,1] max x[1,-1] x[-1,1] max min x[0,-1] x[0,1] max min x[-1,0] x[1,0] max min min '
-            'upper! x lower@ upper@ min lower@ upper@ max clamp']
+    expr = [
+        # mode 0
+        '',
+        # mode 1
+        'x x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x[-1,-1] x[0,-1] max '
+        'x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max clamp',
+        # mode 2
+        'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop swap6 drop5 clamp',
+        # mode 3
+        'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop2 swap5 drop3 swap drop clamp',
+        # mode 4
+        'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop3 swap4 drop swap2 drop2 clamp',
+        # mode 5
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
+        'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs d1! x c2@ - abs d2! x c3@ - '
+        'abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 6
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
+        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs 2 * mal1@ mil1@ - + {full} '
+        f'min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * mal3@ mil3@ - + {full} min d3! x c4@ - abs '
+        f'2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
+        'c3@ c1@ ? ? ?',
+        # mode 7
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
+        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - + {full} min '
+        f'd1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ - + {full} min d3! x c4@ - abs mal4@ mil4@ '
+        f'- + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 8
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
+        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - 2 * + {full} '
+        f'min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs mal3@ mil3@ - 2 * + {full} min d3! x c4@ - abs '
+        f'mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
+        'c3@ c1@ ? ? ?',
+        # mode 9
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - d1! '
+        'mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ mal4@ '
+        'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
+        # mode 10
+        'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
+        'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min mind! mind@ '
+        'd7@ = x[0,1] mind@ d8@ = x[1,1] mind@ d6@ = x[-1,1] mind@ d2@ = x[0,-1] mind@ d3@ = x[1,-1] mind@ d1@ = x[-1,-1] '
+        'mind@ d5@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
+        # mode 11
+        f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
+        # mode 12
+        f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
+        # mode 13
+        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 '
+        f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+        # mode 14
+        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 '
+        f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+        # mode 15
+        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
+        'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
+        'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
+        'min x[-1,-1] x[1,1] max clamp ? ? x ?',
+        # mode 16
+        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
+        'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
+        'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
+        'min x[-1,-1] x[1,1] max clamp ? ? x ?',
+        # mode 17
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mil1@ mil2@ max mil3@ '
+        'max mil4@ max lower! mal1@ mal2@ min mal3@ min mal4@ min upper! x lower@ upper@ min lower@ upper@ max clamp',
+        # mode 18
+        'x x[-1,-1] - abs x x[1,1] - abs max d1! x x[0,-1] - abs x x[0,1] - abs max d2! x x[1,-1] - abs x x[-1,1] - abs max '
+        'd3! x x[-1,0] - abs x x[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x x[-1,0] x[1,0] min '
+        'x[-1,0] x[1,0] max clamp mind@ d2@ = x x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = x x[1,-1] x[-1,1] '
+        'min x[1,-1] x[-1,1] max clamp x x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? ?',
+        # mode 19
+        f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 8 /{rnd}',
+        # mode 20
+        f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 9 /{rnd}',
+        # mode 21
+        f'x x[-1,-1] x[1,1] + 2 /{trnc} x[0,-1] x[0,1] + 2 /{trnc} min x[1,-1] x[-1,1] + 2 /{trnc} min x[-1,0] x[1,0] + 2 /'
+        f'{trnc} min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max x[-1,0] x[1,0] + '
+        f'2 /{rnd} max clamp',
+        # mode 22
+        f'x[-1,-1] x[1,1] + 2 /{rnd} l1! x[0,-1] x[0,1] + 2 /{rnd} l2! x[1,-1] x[-1,1] + 2 /{rnd} l3! x[-1,0] x[1,0] + 2 '
+        f'/{rnd} l4! x l1@ l2@ min l3@ min l4@ min l1@ l2@ max l3@ max l4@ max clamp',
+        # mode 23
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
+        'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x x mal1@ - ld1@ min x mal2@ - ld2@ min max x mal3@ - ld3@ '
+        'min max x mal4@ - ld4@ min max 0 max - 0 max mil1@ x - ld1@ min mil2@ x - ld2@ min max mil3@ x - ld3@ min max mil4@ '
+        f'x - ld4@ min max 0 max + {full} min',
+        # mode 24
+        'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
+        'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x mal1@ - 0 max u1! x mal2@ - 0 max u2! x mal3@ - 0 max '
+        'u3! x mal4@ - 0 max u4! mil1@ x - 0 max d1! mil2@ x - 0 max d2! mil3@ x - 0 max d3! mil4@ x - 0 max d4! x u1@ ld1@ '
+        'u1@ - min u2@ ld2@ u2@ - min max u3@ ld3@ u3@ - min max u4@ ld4@ u4@ - min max 0 max - 0 max d1@ ld1@ d1@ - min d2@ '
+        f'ld2@ d2@ - min max d3@ ld3@ d3@ - min max d4@ ld4@ d4@ - min max 0 max + {full} min',
+        # mode 25
+        f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? min x x[-1,-1] < {full} x x[-1,-1] - ? min x '
+        f'x[0,-1] < {full} x x[0,-1] - ? min x x[1,-1] < {full} x x[1,-1] - ? min x x[-1,1] < {full} x x[-1,1] - ? min x '
+        f'x[0,1] < {full} x x[0,1] - ? min x x[1,1] < {full} x x[1,1] - ? min mn! x[-1,0] x < {full} x[-1,0] x - ? x[1,0] x '
+        f'< {full} x[1,0] x - ? min x[-1,-1] x < {full} x[-1,-1] x - ? min x[0,-1] x < {full} x[0,-1] x - ? min x[1,-1] x < '
+        f'{full} x[1,-1] x - ? min x[-1,1] x < {full} x[-1,1] x - ? min x[0,1] x < {full} x[0,1] x - ? min x[1,1] x < {full} '
+        f'x[1,1] x - ? min pl! x pl@ 2 /{trnc} mn@ pl@ - 0 max min + {full} min mn@ 2 /{trnc} pl@ mn@ - 0 max min - 0 max',
+        # mode 26
+        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
+        'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max '
+        'min x[1,-1] x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min '
+        'x[-1,-1] x[-1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp',
+        # mode 27
+        'x[-1,-1] x[1,1] min x[-1,-1] x[0,-1] min max x[0,1] x[1,1] min max x[0,-1] x[0,1] min max x[0,-1] x[1,-1] min '
+        'x[-1,1] x[0,1] min max x[1,-1] x[-1,1] min max x[1,-1] x[1,0] min max max x[-1,0] x[-1,1] min x[-1,0] x[1,0] min '
+        'max x[1,0] x[1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[1,1] max x[-1,-1] x[0,-1] max min x[0,1] '
+        'x[1,1] max min x[0,-1] x[0,1] max min x[0,-1] x[1,-1] max x[-1,1] x[0,1] max min x[1,-1] x[-1,1] max min x[1,-1] '
+        'x[1,0] max min min x[-1,0] x[-1,1] max x[-1,0] x[1,0] max min x[1,0] x[1,1] max min x[-1,-1] x[-1,0] max min min '
+        'upper! x lower@ upper@ min lower@ upper@ max clamp',
+        # mode 28
+        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
+        'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max x[-1,-1] x[1,1] min x[1,-1] x[-1,1] min max '
+        'x[0,-1] x[0,1] min max x[-1,0] x[1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max min x[1,-1] '
+        'x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min x[-1,-1] '
+        'x[-1,0] max min min x[-1,-1] x[1,1] max x[1,-1] x[-1,1] max min x[0,-1] x[0,1] max min x[-1,0] x[1,0] max min min '
+        'upper! x lower@ upper@ min lower@ upper@ max clamp'
+    ]
     
     orig = clip
     
@@ -2946,13 +2948,13 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
     return clip
 
 def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = False) -> vs.VideoNode:
-    '''
+    """
     Implementation of RgTools.Repair with clip edge processing.
+    
     Supported modes: -1...28
     
     By default, the reference Repair is imitated, no edge processing is done (edges=False).
-    '''
-    
+    """
     func_name = 'Repair'
     
     if any(not isinstance(i, vs.VideoNode) for i in (clip, refclip)):
@@ -2982,131 +2984,134 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int | list[int] = 2,
     if not isinstance(edges, bool):
         raise TypeError(f'{func_name}: invalid "edges"')
     
-    expr = ['',
-            # mode 1
-            'x y[-1,-1] y[0,-1] min y[1,-1] y[-1,0] min min y[1,0] y[-1,1] min y[0,1] y[1,1] min min min y min y[-1,-1] y[0,-1] '
-            'max y[1,-1] y[-1,0] max max y[1,0] y[-1,1] max y[0,1] y[1,1] max max max y max clamp',
-            # mode 2
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop swap7 drop6 clamp',
-            # mode 3
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop2 swap6 drop4 swap drop clamp',
-            # mode 4
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop3 swap5 drop2 swap2 drop2 clamp',
-            # mode 5
-            'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
-            'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
-            'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
-            'c4! x c1@ - abs d1! x c2@ - abs d2! x c3@ - abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = '
-            'c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 6
-            'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
-            'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
-            'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
-            f'c4! x c1@ - abs 2 * mal1@ mil1@ - + {full} min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * '
-            f'mal3@ mil3@ - + {full} min d3! x c4@ - abs 2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! '
-            'mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 7
-            'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
-            'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
-            'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
-            f'c4! x c1@ - abs mal1@ mil1@ - + {full} min d1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ '
-            f'- + {full} min d3! x c4@ - abs mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ '
-            'mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 8
-            'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
-            'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
-            'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
-            f'c4! x c1@ - abs mal1@ mil1@ - 2 * + {full} min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs '
-            f'mal3@ mil3@ - 2 * + {full} min d3! x c4@ - abs mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min '
-            'mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
-            # mode 9
-            'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
-            'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
-            'y[1,0] min y min mil4! mal1@ mil1@ - d1! mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min '
-            'd4@ min mind! mind@ d4@ = x mil4@ mal4@ clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x '
-            'mil1@ mal1@ clamp ? ? ?',
-            # mode 10
-            'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
-            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! x y - abs dy! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min '
-            'dy@ min mind! mind@ d7@ = y[0,1] mind@ d8@ = y[1,1] mind@ d6@ = y[-1,1] mind@ d2@ = y[0,-1] mind@ d3@ = y[1,-1] '
-            'mind@ d1@ = y[-1,-1] mind@ d5@ = y[1,0] mind@ dy@ = y y[-1,0] ? ? ? ? ? ? ? ?',
-            # mode 11
-            'x y[-1,-1] y[0,-1] min y[1,-1] y[-1,0] min min y[1,0] y[-1,1] min y[0,1] y[1,1] min min min y min y[-1,-1] y[0,-1] '
-            'max y[1,-1] y[-1,0] max max y[1,0] y[-1,1] max y[0,1] y[1,1] max max max y max clamp',
-            # mode 12
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop y min swap6 drop5 y max clamp',
-            # mode 13
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop2 y min swap5 drop3 y max swap drop clamp',
-            # mode 14
-            'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop3 y min swap4 drop y max swap2 drop2 clamp',
-            # mode 15
-            'y[-1,-1] y[1,1] max mal1! y[-1,-1] y[1,1] min mil1! y[0,-1] y[0,1] max mal2! y[0,-1] y[0,1] min mil2! y[1,-1] '
-            'y[-1,1] max mal3! y[1,-1] y[-1,1] min mil3! y[-1,0] y[1,0] max mal4! y[-1,0] y[1,0] min mil4! y y mil1@ mal1@ clamp '
-            '- abs d1! y y mil2@ mal2@ clamp - abs d2! y y mil3@ mal3@ clamp - abs d3! y y mil4@ mal4@ clamp - abs d4! d1@ d2@ '
-            'min d3@ min d4@ min mind! mind@ d4@ = x mil4@ y min mal4@ y max clamp mind@ d2@ = x mil2@ y min mal2@ y max clamp '
-            'mind@ d3@ = x mil3@ y min mal3@ y max clamp x mil1@ y min mal1@ y max clamp ? ? ?',
-            # mode 16
-            'y[-1,-1] y[1,1] max mal1! y[-1,-1] y[1,1] min mil1! y[0,-1] y[0,1] max mal2! y[0,-1] y[0,1] min mil2! y[1,-1] '
-            'y[-1,1] max mal3! y[1,-1] y[-1,1] min mil3! y[-1,0] y[1,0] max mal4! y[-1,0] y[1,0] min mil4! y y mil1@ mal1@ clamp '
-            f'- abs 2 * mal1@ mil1@ - + {full} min d1! y y mil2@ mal2@ clamp - abs 2 * mal2@ mil2@ - + {full} min d2! y y mil3@ '
-            f'mal3@ clamp - abs 2 * mal3@ mil3@ - + {full} min d3! y y mil4@ mal4@ clamp - abs 2 * mal4@ mil4@ - + {full} min '
-            'd4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ y min mal4@ y max clamp mind@ d2@ = x mil2@ y min mal2@ y '
-            'max clamp mind@ d3@ = x mil3@ y min mal3@ y max clamp x mil1@ y min mal1@ y max clamp ? ? ?',
-            # mode 17
-            'y[-1,-1] y[1,1] min y[0,-1] y[0,1] min max y[1,-1] y[-1,1] min y[-1,0] y[1,0] min max max lower! y[-1,-1] y[1,1] '
-            'max y[0,-1] y[0,1] max min y[1,-1] y[-1,1] max y[-1,0] y[1,0] max min min upper! x lower@ upper@ min y min lower@ '
-            'upper@ max y max clamp',
-            # mode 18
-            'y y[-1,-1] - abs y y[1,1] - abs max d1! y y[0,-1] - abs y y[0,1] - abs max d2! y y[1,-1] - abs y y[-1,1] - abs max '
-            'd3! y y[-1,0] - abs y y[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x y[-1,0] y[1,0] min y min '
-            'y[-1,0] y[1,0] max y max clamp mind@ d2@ = x y[0,-1] y[0,1] min y min y[0,-1] y[0,1] max y max clamp mind@ d3@ = x '
-            'y[1,-1] y[-1,1] min y min y[1,-1] y[-1,1] max y max clamp x y[-1,-1] y[1,1] min y min y[-1,-1] y[1,1] max y max '
-            'clamp ? ? ?',
-            # mode 19
-            'y y[-1,-1] - abs y y[0,-1] - abs min y y[1,-1] - abs min y y[-1,0] - abs min y y[1,0] - abs min y y[-1,1] - abs min '
-            f'y y[0,1] - abs min y y[1,1] - abs min mind! x y mind@ - 0 max y mind@ + {full} min clamp',
-            # mode 20
-            'y y[-1,-1] - abs d1! y y[0,-1] - abs d2! y y[1,-1] - abs d3! y y[-1,0] - abs d4! y y[1,0] - abs d5! y y[-1,1] - abs '
-            'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
-            'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max mind2@ d3@ clamp mind3@ d4@ clamp mind4@ d5@ '
-            f'clamp mind5@ d6@ clamp mind6@ d7@ clamp mind7@ d8@ clamp maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
-            # mode 21
-            'y[-1,-1] y[1,1] max y - 0 max y y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max y - 0 max y y[0,-1] y[0,1] min - '
-            '0 max max min y[1,-1] y[-1,1] max y - 0 max y y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max y - 0 max y '
-            f'y[-1,0] y[1,0] min - 0 max max min minu! x y minu@ - 0 max y minu@ + {full} min clamp',
-            # mode 22
-            'x y[-1,-1] - abs x y[0,-1] - abs min x y[1,-1] - abs min x y[-1,0] - abs min x y[1,0] - abs min x y[-1,1] - abs min '
-            f'x y[0,1] - abs min x y[1,1] - abs min mind! y x mind@ - 0 max x mind@ + {full} min clamp',
-            # mode 23
-            'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
-            'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
-            'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max mind2@ d3@ clamp mind3@ d4@ clamp mind4@ d5@ '
-            f'clamp mind5@ d6@ clamp mind6@ d7@ clamp mind7@ d8@ clamp maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
-            # mode 24
-            'y[-1,-1] y[1,1] max x - 0 max x y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max x - 0 max x y[0,-1] y[0,1] min - '
-            '0 max max min y[1,-1] y[-1,1] max x - 0 max x y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max x - 0 max x '
-            f'y[-1,0] y[1,0] min - 0 max max min minu! y x minu@ - 0 max x minu@ + {full} min clamp',
-            # mode 25
-            '',
-            # mode 26
-            'y[-1,-1] y[0,-1] min y[0,-1] y[1,-1] min max y[1,-1] y[1,0] min max y[1,0] y[1,1] min max y[0,1] y[1,1] min y[-1,1] '
-            'y[0,1] min max y[-1,0] y[-1,1] min max y[-1,-1] y[-1,0] min max max lower! y[-1,-1] y[0,-1] max y[0,-1] y[1,-1] max '
-            'min y[1,-1] y[1,0] max min y[1,0] y[1,1] max min y[0,1] y[1,1] max y[-1,1] y[0,1] max min y[-1,0] y[-1,1] max min '
-            'y[-1,-1] y[-1,0] max min min upper! x lower@ upper@ min y min lower@ upper@ max y max clamp',
-            # mode 27
-            'y[-1,-1] y[1,1] min y[-1,-1] y[0,-1] min max y[0,1] y[1,1] min max y[0,-1] y[0,1] min max y[0,-1] y[1,-1] min '
-            'y[-1,1] y[0,1] min max y[1,-1] y[-1,1] min max y[1,-1] y[1,0] min max max y[-1,0] y[-1,1] min y[-1,0] y[1,0] min '
-            'max y[1,0] y[1,1] min max y[-1,-1] y[-1,0] min max max lower! y[-1,-1] y[1,1] max y[-1,-1] y[0,-1] max min y[0,1] '
-            'y[1,1] max min y[0,-1] y[0,1] max min y[0,-1] y[1,-1] max y[-1,1] y[0,1] max min y[1,-1] y[-1,1] max min y[1,-1] '
-            'y[1,0] max min min y[-1,0] y[-1,1] max y[-1,0] y[1,0] max min y[1,0] y[1,1] max min y[-1,-1] y[-1,0] max min min '
-            'upper! x lower@ upper@ min y min lower@ upper@ max y max clamp',
-            # mode 28
-            'y[-1,-1] y[0,-1] min y[0,-1] y[1,-1] min max y[1,-1] y[1,0] min max y[1,0] y[1,1] min max y[0,1] y[1,1] min y[-1,1] '
-            'y[0,1] min max y[-1,0] y[-1,1] min max y[-1,-1] y[-1,0] min max max y[-1,-1] y[1,1] min y[1,-1] y[-1,1] min max '
-            'y[0,-1] y[0,1] min max y[-1,0] y[1,0] min max max lower! y[-1,-1] y[0,-1] max y[0,-1] y[1,-1] max min y[1,-1] '
-            'y[1,0] max min y[1,0] y[1,1] max min y[0,1] y[1,1] max y[-1,1] y[0,1] max min y[-1,0] y[-1,1] max min y[-1,-1] '
-            'y[-1,0] max min min y[-1,-1] y[1,1] max y[1,-1] y[-1,1] max min y[0,-1] y[0,1] max min y[-1,0] y[1,0] max min min '
-            'upper! x lower@ upper@ min y min lower@ upper@ max y max clamp']
+    expr = [
+        # mode 0
+        '',
+        # mode 1
+        'x y[-1,-1] y[0,-1] min y[1,-1] y[-1,0] min min y[1,0] y[-1,1] min y[0,1] y[1,1] min min min y min y[-1,-1] y[0,-1] '
+        'max y[1,-1] y[-1,0] max max y[1,0] y[-1,1] max y[0,1] y[1,1] max max max y max clamp',
+        # mode 2
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop swap7 drop6 clamp',
+        # mode 3
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop2 swap6 drop4 swap drop clamp',
+        # mode 4
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y y[1,0] y[-1,1] y[0,1] y[1,1] sort9 drop3 swap5 drop2 swap2 drop2 clamp',
+        # mode 5
+        'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
+        'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
+        'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
+        'c4! x c1@ - abs d1! x c2@ - abs d2! x c3@ - abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = '
+        'c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 6
+        'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
+        'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
+        'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
+        f'c4! x c1@ - abs 2 * mal1@ mil1@ - + {full} min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * '
+        f'mal3@ mil3@ - + {full} min d3! x c4@ - abs 2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! '
+        'mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 7
+        'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
+        'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
+        'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
+        f'c4! x c1@ - abs mal1@ mil1@ - + {full} min d1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ '
+        f'- + {full} min d3! x c4@ - abs mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ '
+        'mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 8
+        'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
+        'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
+        'y[1,0] min y min mil4! x mil1@ mal1@ clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp '
+        f'c4! x c1@ - abs mal1@ mil1@ - 2 * + {full} min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs '
+        f'mal3@ mil3@ - 2 * + {full} min d3! x c4@ - abs mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min '
+        'mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        # mode 9
+        'y[-1,-1] y[1,1] max y max mal1! y[-1,-1] y[1,1] min y min mil1! y[0,-1] y[0,1] max y max mal2! y[0,-1] y[0,1] min y '
+        'min mil2! y[1,-1] y[-1,1] max y max mal3! y[1,-1] y[-1,1] min y min mil3! y[-1,0] y[1,0] max y max mal4! y[-1,0] '
+        'y[1,0] min y min mil4! mal1@ mil1@ - d1! mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min '
+        'd4@ min mind! mind@ d4@ = x mil4@ mal4@ clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x '
+        'mil1@ mal1@ clamp ? ? ?',
+        # mode 10
+        'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
+        'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! x y - abs dy! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min '
+        'dy@ min mind! mind@ d7@ = y[0,1] mind@ d8@ = y[1,1] mind@ d6@ = y[-1,1] mind@ d2@ = y[0,-1] mind@ d3@ = y[1,-1] '
+        'mind@ d1@ = y[-1,-1] mind@ d5@ = y[1,0] mind@ dy@ = y y[-1,0] ? ? ? ? ? ? ? ?',
+        # mode 11
+        'x y[-1,-1] y[0,-1] min y[1,-1] y[-1,0] min min y[1,0] y[-1,1] min y[0,1] y[1,1] min min min y min y[-1,-1] y[0,-1] '
+        'max y[1,-1] y[-1,0] max max y[1,0] y[-1,1] max y[0,1] y[1,1] max max max y max clamp',
+        # mode 12
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop y min swap6 drop5 y max clamp',
+        # mode 13
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop2 y min swap5 drop3 y max swap drop clamp',
+        # mode 14
+        'x y[-1,-1] y[0,-1] y[1,-1] y[-1,0] y[1,0] y[-1,1] y[0,1] y[1,1] sort8 drop3 y min swap4 drop y max swap2 drop2 clamp',
+        # mode 15
+        'y[-1,-1] y[1,1] max mal1! y[-1,-1] y[1,1] min mil1! y[0,-1] y[0,1] max mal2! y[0,-1] y[0,1] min mil2! y[1,-1] '
+        'y[-1,1] max mal3! y[1,-1] y[-1,1] min mil3! y[-1,0] y[1,0] max mal4! y[-1,0] y[1,0] min mil4! y y mil1@ mal1@ clamp '
+        '- abs d1! y y mil2@ mal2@ clamp - abs d2! y y mil3@ mal3@ clamp - abs d3! y y mil4@ mal4@ clamp - abs d4! d1@ d2@ '
+        'min d3@ min d4@ min mind! mind@ d4@ = x mil4@ y min mal4@ y max clamp mind@ d2@ = x mil2@ y min mal2@ y max clamp '
+        'mind@ d3@ = x mil3@ y min mal3@ y max clamp x mil1@ y min mal1@ y max clamp ? ? ?',
+        # mode 16
+        'y[-1,-1] y[1,1] max mal1! y[-1,-1] y[1,1] min mil1! y[0,-1] y[0,1] max mal2! y[0,-1] y[0,1] min mil2! y[1,-1] '
+        'y[-1,1] max mal3! y[1,-1] y[-1,1] min mil3! y[-1,0] y[1,0] max mal4! y[-1,0] y[1,0] min mil4! y y mil1@ mal1@ clamp '
+        f'- abs 2 * mal1@ mil1@ - + {full} min d1! y y mil2@ mal2@ clamp - abs 2 * mal2@ mil2@ - + {full} min d2! y y mil3@ '
+        f'mal3@ clamp - abs 2 * mal3@ mil3@ - + {full} min d3! y y mil4@ mal4@ clamp - abs 2 * mal4@ mil4@ - + {full} min '
+        'd4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ y min mal4@ y max clamp mind@ d2@ = x mil2@ y min mal2@ y '
+        'max clamp mind@ d3@ = x mil3@ y min mal3@ y max clamp x mil1@ y min mal1@ y max clamp ? ? ?',
+        # mode 17
+        'y[-1,-1] y[1,1] min y[0,-1] y[0,1] min max y[1,-1] y[-1,1] min y[-1,0] y[1,0] min max max lower! y[-1,-1] y[1,1] '
+        'max y[0,-1] y[0,1] max min y[1,-1] y[-1,1] max y[-1,0] y[1,0] max min min upper! x lower@ upper@ min y min lower@ '
+        'upper@ max y max clamp',
+        # mode 18
+        'y y[-1,-1] - abs y y[1,1] - abs max d1! y y[0,-1] - abs y y[0,1] - abs max d2! y y[1,-1] - abs y y[-1,1] - abs max '
+        'd3! y y[-1,0] - abs y y[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x y[-1,0] y[1,0] min y min '
+        'y[-1,0] y[1,0] max y max clamp mind@ d2@ = x y[0,-1] y[0,1] min y min y[0,-1] y[0,1] max y max clamp mind@ d3@ = x '
+        'y[1,-1] y[-1,1] min y min y[1,-1] y[-1,1] max y max clamp x y[-1,-1] y[1,1] min y min y[-1,-1] y[1,1] max y max '
+        'clamp ? ? ?',
+        # mode 19
+        'y y[-1,-1] - abs y y[0,-1] - abs min y y[1,-1] - abs min y y[-1,0] - abs min y y[1,0] - abs min y y[-1,1] - abs min '
+        f'y y[0,1] - abs min y y[1,1] - abs min mind! x y mind@ - 0 max y mind@ + {full} min clamp',
+        # mode 20
+        'y y[-1,-1] - abs d1! y y[0,-1] - abs d2! y y[1,-1] - abs d3! y y[-1,0] - abs d4! y y[1,0] - abs d5! y y[-1,1] - abs '
+        'd6! y y[0,1] - abs d7! y y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
+        'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max mind2@ d3@ clamp mind3@ d4@ clamp mind4@ d5@ '
+        f'clamp mind5@ d6@ clamp mind6@ d7@ clamp mind7@ d8@ clamp maxd! x y maxd@ - 0 max y maxd@ + {full} min clamp',
+        # mode 21
+        'y[-1,-1] y[1,1] max y - 0 max y y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max y - 0 max y y[0,-1] y[0,1] min - '
+        '0 max max min y[1,-1] y[-1,1] max y - 0 max y y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max y - 0 max y '
+        f'y[-1,0] y[1,0] min - 0 max max min minu! x y minu@ - 0 max y minu@ + {full} min clamp',
+        # mode 22
+        'x y[-1,-1] - abs x y[0,-1] - abs min x y[1,-1] - abs min x y[-1,0] - abs min x y[1,0] - abs min x y[-1,1] - abs min '
+        f'x y[0,1] - abs min x y[1,1] - abs min mind! y x mind@ - 0 max x mind@ + {full} min clamp',
+        # mode 23
+        'x y[-1,-1] - abs d1! x y[0,-1] - abs d2! x y[1,-1] - abs d3! x y[-1,0] - abs d4! x y[1,0] - abs d5! x y[-1,1] - abs '
+        'd6! x y[0,1] - abs d7! x y[1,1] - abs d8! d1@ d2@ min mind2! mind2@ d3@ min mind3! mind3@ d4@ min mind4! mind4@ d5@ '
+        'min mind5! mind5@ d6@ min mind6! mind6@ d7@ min mind7! d1@ d2@ max mind2@ d3@ clamp mind3@ d4@ clamp mind4@ d5@ '
+        f'clamp mind5@ d6@ clamp mind6@ d7@ clamp mind7@ d8@ clamp maxd! y x maxd@ - 0 max x maxd@ + {full} min clamp',
+        # mode 24
+        'y[-1,-1] y[1,1] max x - 0 max x y[-1,-1] y[1,1] min - 0 max max y[0,-1] y[0,1] max x - 0 max x y[0,-1] y[0,1] min - '
+        '0 max max min y[1,-1] y[-1,1] max x - 0 max x y[1,-1] y[-1,1] min - 0 max max min y[-1,0] y[1,0] max x - 0 max x '
+        f'y[-1,0] y[1,0] min - 0 max max min minu! y x minu@ - 0 max x minu@ + {full} min clamp',
+        # mode 25
+        '',
+        # mode 26
+        'y[-1,-1] y[0,-1] min y[0,-1] y[1,-1] min max y[1,-1] y[1,0] min max y[1,0] y[1,1] min max y[0,1] y[1,1] min y[-1,1] '
+        'y[0,1] min max y[-1,0] y[-1,1] min max y[-1,-1] y[-1,0] min max max lower! y[-1,-1] y[0,-1] max y[0,-1] y[1,-1] max '
+        'min y[1,-1] y[1,0] max min y[1,0] y[1,1] max min y[0,1] y[1,1] max y[-1,1] y[0,1] max min y[-1,0] y[-1,1] max min '
+        'y[-1,-1] y[-1,0] max min min upper! x lower@ upper@ min y min lower@ upper@ max y max clamp',
+        # mode 27
+        'y[-1,-1] y[1,1] min y[-1,-1] y[0,-1] min max y[0,1] y[1,1] min max y[0,-1] y[0,1] min max y[0,-1] y[1,-1] min '
+        'y[-1,1] y[0,1] min max y[1,-1] y[-1,1] min max y[1,-1] y[1,0] min max max y[-1,0] y[-1,1] min y[-1,0] y[1,0] min '
+        'max y[1,0] y[1,1] min max y[-1,-1] y[-1,0] min max max lower! y[-1,-1] y[1,1] max y[-1,-1] y[0,-1] max min y[0,1] '
+        'y[1,1] max min y[0,-1] y[0,1] max min y[0,-1] y[1,-1] max y[-1,1] y[0,1] max min y[1,-1] y[-1,1] max min y[1,-1] '
+        'y[1,0] max min min y[-1,0] y[-1,1] max y[-1,0] y[1,0] max min y[1,0] y[1,1] max min y[-1,-1] y[-1,0] max min min '
+        'upper! x lower@ upper@ min y min lower@ upper@ max y max clamp',
+        # mode 28
+        'y[-1,-1] y[0,-1] min y[0,-1] y[1,-1] min max y[1,-1] y[1,0] min max y[1,0] y[1,1] min max y[0,1] y[1,1] min y[-1,1] '
+        'y[0,1] min max y[-1,0] y[-1,1] min max y[-1,-1] y[-1,0] min max max y[-1,-1] y[1,1] min y[1,-1] y[-1,1] min max '
+        'y[0,-1] y[0,1] min max y[-1,0] y[1,0] min max max lower! y[-1,-1] y[0,-1] max y[0,-1] y[1,-1] max min y[1,-1] '
+        'y[1,0] max min y[1,0] y[1,1] max min y[0,1] y[1,1] max y[-1,1] y[0,1] max min y[-1,0] y[-1,1] max min y[-1,-1] '
+        'y[-1,0] max min min y[-1,-1] y[1,1] max y[1,-1] y[-1,1] max min y[0,-1] y[0,1] max min y[-1,0] y[1,0] max min min '
+        'upper! x lower@ upper@ min y min lower@ upper@ max y max clamp'
+    ]
     
     orig = clip
     
@@ -3151,32 +3156,35 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    expr = ['x a z min y min a z max y max clamp',
-            # mode 1
-            'x y y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 '
-            'max max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 '
-            'max max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max - 0 max z min a min a[-1,-1] '
-            'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
-            'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
-            f'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max y + {full} min z max a max clamp',
-            # mode 2
-            'y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 max '
-            'max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 max '
-            'max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max y a z min - 0 max max a[-1,-1] '
-            'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
-            'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
-            'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max a z max y - 0 max max max ulmax! x y '
-            f'ulmax@ - 0 max y ulmax@ + {full} min clamp',
-            # mode 3
-            'y[-1,-1] a[-1,-1] - abs y[-1,0] a[-1,0] - abs max y[-1,1] a[-1,1] - abs max y[1,-1] a[1,-1] - abs max y[1,0] a[1,0] '
-            '- abs max y[1,1] a[1,1] - abs max y[0,-1] a[0,-1] - abs max y[0,1] a[0,1] - abs max y a - abs max y[-1,-1] z[-1,-1] '
-            '- abs y[-1,0] z[-1,0] - abs max y[-1,1] z[-1,1] - abs max y[1,-1] z[1,-1] - abs max y[1,0] z[1,0] - abs max y[1,1] '
-            'z[1,1] - abs max y[0,-1] z[0,-1] - abs max y[0,1] z[0,1] - abs max y z - abs max min pmax! x y pmax@ - 0 max y '
-            f'pmax@ + {full} min clamp',
-            # mode 4
-            f'a z max max_np! a z min min_np! y min_np@ - 0 max 2 * {full} min min_np@ + {full} min max_np@ min reg5! max_np@ '
-            f'max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x reg3@ reg5@ '
-            'clamp ?']
+    expr = [
+        # mode 0
+        'x a z min y min a z max y max clamp',
+        # mode 1
+        'x y y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 '
+        'max max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 '
+        'max max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max - 0 max z min a min a[-1,-1] '
+        'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
+        'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
+        f'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max y + {full} min z max a max clamp',
+        # mode 2
+        'y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 max '
+        'max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 max '
+        'max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max y a z min - 0 max max a[-1,-1] '
+        'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
+        'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
+        'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max a z max y - 0 max max max ulmax! x y '
+        f'ulmax@ - 0 max y ulmax@ + {full} min clamp',
+        # mode 3
+        'y[-1,-1] a[-1,-1] - abs y[-1,0] a[-1,0] - abs max y[-1,1] a[-1,1] - abs max y[1,-1] a[1,-1] - abs max y[1,0] a[1,0] '
+        '- abs max y[1,1] a[1,1] - abs max y[0,-1] a[0,-1] - abs max y[0,1] a[0,1] - abs max y a - abs max y[-1,-1] z[-1,-1] '
+        '- abs y[-1,0] z[-1,0] - abs max y[-1,1] z[-1,1] - abs max y[1,-1] z[1,-1] - abs max y[1,0] z[1,0] - abs max y[1,1] '
+        'z[1,1] - abs max y[0,-1] z[0,-1] - abs max y[0,1] z[0,1] - abs max y z - abs max min pmax! x y pmax@ - 0 max y '
+        f'pmax@ + {full} min clamp',
+        # mode 4
+        f'a z max max_np! a z min min_np! y min_np@ - 0 max 2 * {full} min min_np@ + {full} min max_np@ min reg5! max_np@ '
+        f'max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x reg3@ reg5@ '
+        'clamp ?'
+    ]
     
     orig = clip
     
@@ -3328,12 +3336,15 @@ def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool =
     if not isinstance(edges, bool):
         raise TypeError(f'{func_name}: invalid "edges"')
     
-    expr = ['',
-            # mode 1
-            'x[0,-1] x[0,1] min x max x[0,-1] x[0,1] max min',
-            # mode 2
-            'x x[0,-1] x[0,1] min x[0,-1] x[0,-2] x[0,-1] - 0 max - 0 max x[0,1] x[0,2] x[0,1] - 0 max - 0 max max min x[0,-1] '
-            f'x[0,-2] - 0 max x[0,-1] + {full} min x[0,1] x[0,2] - 0 max x[0,1] + {full} min min x[0,-1] max x[0,1] max clamp']
+    expr = [
+        # mode 0
+        '',
+        # mode 1
+        'x[0,-1] x[0,1] min x max x[0,-1] x[0,1] max min',
+        # mode 2
+        'x x[0,-1] x[0,1] min x[0,-1] x[0,-2] x[0,-1] - 0 max - 0 max x[0,1] x[0,2] x[0,1] - 0 max - 0 max max min x[0,-1] '
+        f'x[0,-2] - 0 max x[0,-1] + {full} min x[0,1] x[0,2] - 0 max x[0,1] + {full} min min x[0,-1] max x[0,1] max clamp'
+    ]
     
     orig = clip
     
@@ -3353,7 +3364,7 @@ def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool =
 
 def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | None = None, saturate: int | None = None,
                 total: float | None = None, planes: int | list[int] | None = None) -> vs.VideoNode:
-    '''
+    """
     An unnatural hybrid of std.Convolution, mt_convolution and mt_edge.
     
     All named modes from mt_edge are present. The kernel can also be specified as two flat matrices or a square matrix.
@@ -3362,8 +3373,7 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     The default value of saturate is 1.
     The default value of total is the sum of the absolute values of the resulting matrix.
     For named modes, the default values are changed to obtain the desired result, but they can be overridden by specifying them explicitly.
-    '''
-    
+    """
     func_name = 'Convolution'
     
     if not isinstance(clip, vs.VideoNode):
@@ -3389,7 +3399,6 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
         case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
             side_h, side_v = len(mode[0]), len(mode[1])
             mode = [j * i for i in mode[1] for j in mode[0]]
-        # pylint: disable=used-before-assignment
         case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2 == 1:
             side_h = side_v
         case None:
@@ -3465,12 +3474,12 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     return clip
 
 def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
-    '''
+    """
     Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
     root mean square, root mean cube and median, depending on the mode.
-    The result is written to the frame properties with the corresponding name.
-    '''
     
+    The result is written to the frame properties with the corresponding name.
+    """  # noqa: D205
     func_name = 'CrazyPlaneStats'
     
     if not isinstance(clip, vs.VideoNode):
@@ -3510,7 +3519,6 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     if not isinstance(norm, bool):
         raise TypeError(f'{func_name}: invalid "norm"')
     
-    # pylint: disable=unused-argument
     def frame_stats(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         
         fout = f.copy()
@@ -3529,7 +3537,6 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = avg_g = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
                     name = 'geometric_mean'
                 case 2:
-                    #pylint: disable=no-member
                     avg = np.pi * (avg_a + avg_g) / special.ellipk(np.square(avg_a - avg_g) / np.square(avg_a + avg_g)) / 4
                     name = 'arithmetic_geometric_mean'
                 case 3:
@@ -3562,10 +3569,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
 
 def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int | None = None, output: str | None = None,
                         planes: int | list[int] | None = None) -> vs.VideoNode:
-    '''
-    Searches for pixel values outside the specified range. The found values are written to a text file.
-    '''
-    
+    """Searches for pixel values outside the specified range. The found values are written to a text file."""
     func_name = 'out_of_range_search'
     
     if not isinstance(clip, vs.VideoNode):
@@ -3653,7 +3657,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
             out = max(len(str(full)), 3)
             
             for i in out_of_range:
-                res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {l:>{out}} {i[0]:>5}\n' for j, k, l in zip(*i[2], i[3])]
+                res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {L:>{out}} {i[0]:>5}\n' for j, k, L in zip(*i[2], i[3])]
             
             if res:
                 with open(output, 'w', encoding='utf-8') as file:
@@ -3668,7 +3672,6 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     return clip
 
-# pylint: disable=redefined-outer-name
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | list[float] | None = None, kernel: str = 'bilinear',
              mode: int = 1, upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
     
@@ -3839,7 +3842,7 @@ def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> v
     else:
         diff = core.std.Expr([clip, shift_clip(clip, -1)], 'x y - abs')
         diffs = [CrazyPlaneStats(i) for i in core.std.SplitPlanes(diff)]
-        clip = core.akarin.PropExpr([clip] + diffs, lambda: dict(_SceneChangeNext=f'y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max {thr * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.akarin.PropExpr([clip, *diffs], lambda: dict(_SceneChangeNext=f'y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max {thr * factor / (256 * factor - 1)} > 1 0 ?'))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
     return clip
@@ -3892,6 +3895,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1,
               output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
               **descale_args: Any) -> vs.VideoNode:
+    
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    mpl.use('Agg')
     
     func_name = 'getnative'
     
@@ -3958,8 +3965,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         result[n] = f.props[means[mean]] + 1e-20
         
         if n == len(frange) - 1:
-            diff = np.divide(result, np.gradient(result))
-            res = [f'{i} {j:.20f} {abs(k):.20f}\n' for i, j, k in zip(frange, result, diff)]
+            res = [f'{i} {j:.20f}\n' for i, j in zip(frange, result)]
             with open(output, 'w', encoding='utf-8') as file:
                 file.writelines(res)
             plt.figure(figsize=(16, 9))
