@@ -164,29 +164,35 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     temp = core.std.MaskedMerge(Blur(t1, 1.42), t2, mask)
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     temp = core.std.MaskedMerge(temp, t3, mask)
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     temp = core.std.MaskedMerge(temp, t4, mask)
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     temp = core.std.MaskedMerge(temp, t5, mask)
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     temp = core.std.MaskedMerge(temp, t6, mask)
-    mask = core.std.Expr([core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-                          core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')],
-                          expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    mask = core.std.Expr([
+        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
+        core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')],
+        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
     clip = core.std.MaskedMerge(temp, t7, mask)
     
     if space == vs.YUV:
@@ -202,8 +208,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     """
     An upscaler based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor modifications.
     
-    In comparison with the original, the mathematics for non-multiple resolutions has been improved, support for 8-16 bit depth
-    has been added, dead code and unnecessary calculations have been removed.
+    In comparison with the original, the mathematics for non-multiple resolutions has been improved,
+    support for 8-16 bit depth has been added, dead code and unnecessary calculations have been removed.
     All dependent parameters have been recalculated from AWarpSharp to AWarpSharp2.
     It comes with autotap3, ported just for completion.
     
@@ -252,14 +258,15 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
-    m2 = core.resize.Lanczos(core.resize.Lanczos(core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else
-                                                 core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits),
-                                                 x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
+    m2 = (core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else
+          core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits))
+    m2 = core.resize.Lanczos(core.resize.Lanczos(m2, x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
     d3 = core.resize.Lanczos(core.resize.Lanczos(d, w, h, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
-    d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'), core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
+    d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'),
+                              core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
     
     e = autotap3(core.std.MaskedMerge(d5, clip, m1), dx, dy, mtaps3, athresh)
@@ -271,7 +278,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     fd12 = core.resize.Lanczos(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, filter_param_a=mtaps2)
     fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a=mtaps2)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
-    m12 = core.resize.Lanczos(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), filter_param_a=mtaps2).resize.Lanczos(dx, dy, filter_param_a=mtaps2)
+    m12 = core.resize.Lanczos(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), filter_param_a=mtaps2)
+    m12 = core.resize.Lanczos(m12, dx, dy, filter_param_a=mtaps2)
     
     e2 = core.resize.Lanczos(core.resize.Lanczos(e, w, h, filter_param_a=ltaps), dx, dy, filter_param_a=ltaps)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
@@ -279,7 +287,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     
-    e3 = core.std.MaskedMerge(core.std.Expr([e, e2], f'y x - {blur2} * x +'), core.std.Expr([e, e2], f'x y - {sharp2} * x +'), m12)
+    e3 = core.std.MaskedMerge(core.std.Expr([e, e2], f'y x - {blur2} * x +'),
+                              core.std.Expr([e, e2], f'x y - {sharp2} * x +'), m12)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
     e3 = core.warp.AWarpSharp2(e3, thresh=wthresh, blur=wblur, depth=depth)
@@ -288,7 +297,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     clip = core.std.MaskedMerge(d4, e3, m2)
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy)], list(range(orig.format.num_planes)), space)
+        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy)],
+                                      list(range(orig.format.num_planes)), space)
     
     return clip
 
@@ -300,7 +310,8 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
         mode: Repair mode from dehaloed clip.
             1, 5, 11 - the weakest, artifacts will not cause.
             2, 3, 4 - bad modes, eat innocent parts, can't be used.
-            10 - almost like mode = 1, 5, 11, but with a spread around the edges. I think it's a little better for noisy sources.
+            10 - almost like mode = 1, 5, 11, but with a spread around the edges.
+            I think it's a little better for noisy sources.
             14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
         rep: use Repair to clamp result clip or not.
         rg: use RemoveGrain and Repair to merge with blurred clip or not.
@@ -345,7 +356,8 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
                 m1 = core.std.Expr(Convolution(clip, 'min/max'), expr0)
                 m2 = core.std.Maximum(m1).std.Maximum()
                 m2 = core.std.Merge(m2, core.std.Maximum(m2)).std.Inflate()
-                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], expr1).std.Inflate()
+                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)],
+                                   expr1).std.Inflate()
             case 1:
                 m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0)], expr2).std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
@@ -444,8 +456,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    def correction(clip: vs.VideoNode, axis: str, target: int | list[int], donor: int | list[int], limit: int, curve: int,
-                   shift: int, mean: int, clamp: bool) -> vs.VideoNode:
+    def correction(clip: vs.VideoNode, axis: str, target: int | list[int], donor: int | list[int], limit: int,
+                   curve: int, shift: int, mean: int, clamp: bool) -> vs.VideoNode:
         
         def stats_x(clip: vs.VideoNode, x: int | list[int], w: int, mean: int) -> vs.VideoNode:
             
@@ -457,7 +469,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
                 case _:
                     raise TypeError(f'{func_name}: invalid "x" = {x}')
             
-            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]), mean, norm=False)
+            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
+                                   mean, norm=False)
         
         def stats_y(clip: vs.VideoNode, y: int | list[int], h: int, mean: int) -> vs.VideoNode:
             
@@ -469,7 +482,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
                 case _:
                     raise TypeError(f'{func_name}: invalid "y" = {y}')
             
-            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]), mean, norm=False)
+            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
+                                   mean, norm=False)
         
         if not isinstance(shift, int):
             raise ValueError(f'{func_name}: "shift" must be "int"')
@@ -504,18 +518,23 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
             case 'X':
                 w = clip.width
                 clip = core.akarin.PropExpr([clip, stats_x(clip, target, w, mean), stats_x(clip, donor, w, mean)],
-                                            lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}', maximum='z.maximum', minimum='z.minimum'))
+                                            lambda: dict(target_avg=f'y.{means[mean]}',
+                                                         donor_avg=f'z.{means[mean]}',
+                                                         maximum='z.maximum', minimum='z.minimum'))
             case 'Y':
                 h = clip.height
                 clip = core.akarin.PropExpr([clip, stats_y(clip, target, h, mean), stats_y(clip, donor, h, mean)],
-                                            lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}', maximum='z.maximum', minimum='z.minimum'))
+                                            lambda: dict(target_avg=f'y.{means[mean]}',
+                                                         donor_avg=f'z.{means[mean]}',
+                                                         maximum='z.maximum', minimum='z.minimum'))
             case _:
                 raise ValueError(f'{func_name}: invalid "axis"')
         
         if isinstance(target, int):
             target = [target]
         
-        expr = f'{' '.join(f'{axis} {i} =' for i in target)} {'or ' * (len(target) - 1)}{expr} {shift} - 0 {full} clamp x ?'
+        expr = (f'{' '.join(f'{axis} {i} =' for i in target)} '
+                f'{'or ' * (len(target) - 1)}{expr} {shift} - 0 {full} clamp x ?')
         clip = core.akarin.Expr(clip, expr)
         clip = core.std.RemoveFrameProps(clip, ['target_avg', 'donor_avg', 'maximum', 'minimum'])
         
@@ -629,8 +648,8 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
     """
     Just an alias for mv.Degrain.
     
-    The parameters of individual functions are set as dictionaries. Unloading takes place sequentially, separated by commas.
-    If you do not set anything, the default settings of MVTools itself apply.
+    The parameters of individual functions are set as dictionaries. Unloading takes place sequentially,
+    separated by commas. If you do not set anything, the default settings of MVTools itself apply.
     Function dictionaries are set in order: Super, Analyze, Degrain, Recalculate.
     Recalculate is optional, but you can specify several of them (as many as you want).
     If you need to specify settings for only one function, the rest of the dictionaries are served empty.
@@ -857,7 +876,8 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
             if len(curve) < num_p:
                 curve += [curve[-1]] * (num_p - len(curve))
             elif len(curve) > num_p:
-                raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, or "curve" must be "int"')
+                raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, '
+                                 'or "curve" must be "int"')
         case _:
             raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
     
@@ -922,9 +942,10 @@ def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, p
     
     if clamp > 0:
         shrpD = core.std.MakeDiff(dbl, Clamp(dbl, RemoveGrain(dbl, [rg if i in planes else 0 for i in range(num_p)]),
-                                  dbl, 0, clamp, planes=planes), planes=planes)
+                                             dbl, 0, clamp, planes=planes), planes=planes)
     else:
-        shrpD = core.std.MakeDiff(dbl, RemoveGrain(dbl, [rg if i in planes else 0 for i in range(num_p)]), planes=planes)
+        shrpD = core.std.MakeDiff(dbl, RemoveGrain(dbl, [rg if i in planes else 0 for i in range(num_p)]),
+                                  planes=planes)
     
     DD = Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
@@ -1081,7 +1102,9 @@ def DeHalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry)).resize.Bicubic(w, h, filter_param_a=1, filter_param_b=0)
     are = Convolution(clip, 'min/max')
     ugly = Convolution(halos, 'min/max')
-    so = core.std.Expr([ugly, are], f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+    so = core.std.Expr(
+        [ugly, are],
+        f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
@@ -1145,7 +1168,8 @@ def FineDehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi:
         bb = RemoveGrain(dehaloed, 11)
         bb2 = Repair(bb, Repair(bb, core.ctmf.CTMF(bb, 2), 1), 1)
         xd = core.std.MakeDiff(bb, bb2).std.Expr(f'x {half} - 2.49 * {contra} * {half} +')
-        xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)], f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
+        xdd = core.std.Expr([xd, core.std.MakeDiff(clip, dehaloed)],
+                            f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs < x y ? ?')
         dehaloed = core.std.MergeDiff(dehaloed, xdd)
     
     edges = Convolution(clip, 'prewitt') if mt_prewitt else core.std.Prewitt(clip)
@@ -1286,15 +1310,20 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 clip = core.std.Transpose(clip)
                 clip = core.eedi3m.EEDI3(clip, field=1, dh=True, **upscaler_args)
             case 3:
-                eedi3_args = {i:upscaler_args[i] for i in signature(core.eedi3m.EEDI3).parameters if i in upscaler_args}
-                znedi3_args = {i:upscaler_args[i] for i in signature(core.znedi3.nnedi3).parameters if i in upscaler_args}
+                eedi3_keys = signature(core.eedi3m.EEDI3).parameters.keys()
+                znedi3_keys = signature(core.znedi3.nnedi3).parameters.keys()
+                
+                eedi3_args = {key: value for key, value in upscaler_args.items() if key in eedi3_keys}
+                znedi3_args = {key: value for key, value in upscaler_args.items() if key in znedi3_keys}
                 
                 if any((x := i) not in eedi3_args and x not in znedi3_args for i in upscaler_args):
                     raise KeyError(f'{func_name}: Unsupported key {x} in upscaler_args')
                 
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True, sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
+                clip = core.eedi3m.EEDI3(clip, field=1, dh=True,
+                                         sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
                 clip = core.std.Transpose(clip)
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True, sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
+                clip = core.eedi3m.EEDI3(clip, field=1, dh=True,
+                                         sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
             case _:
                 raise ValueError(f'{func_name}: Please use 0...3 mode value')
         
@@ -1315,7 +1344,8 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             case 1:
                 clip = edi3_aa(clip, mode, False, **upscaler_args)
             case 2:
-                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args), edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
+                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
+                                      edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
             case _:
                 raise ValueError(f'{func_name}: Please use 0...2 order value')
         
@@ -1527,20 +1557,22 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     """
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
-    The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference is calculated
-    for them using two different algorithms.
+    The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference
+    is calculated for them using two different algorithms.
     
     Args:
         mode: function operation mode.
             0 and 1 - search for frames with absolute normalized difference above the specified threshold.
             2 and 3 - search for the absolute normalized difference change above the specified threshold.
-            4 and 5 - search for single anomalies of absolute normalized difference changes above the specified threshold
-            (n/p frame is skipped). Of the two possible values, the larger is compared with the threshold.
-            The minimum ratio between the anomaly value and the change in adjacent, non-abnormal frames is specified by the div parameter.
-            6 and 7 - search for double anomalies of absolute normalized difference changes above the specified threshold
-            (both n/p frames are skipped). Of the four possible values, the largest is compared with the threshold.
-            The minimum ratio between the anomaly value and the change in adjacent, non-abnormal frames is specified by the div parameter.
-            In this case, the spread of the values of two abnormal frames must be strictly greater than the abnormal value.
+            4 and 5 - search for single anomalies of absolute normalized difference changes above the specified
+            threshold (n/p frame is skipped). Of the two possible values, the larger is compared with the threshold.
+            The minimum ratio between the anomaly value and the change in adjacent, non-abnormal frames is specified
+            by the div parameter.
+            6 and 7 - search for double anomalies of absolute normalized difference changes above the specified
+            threshold (both n/p frames are skipped). Of the four possible values, the largest is compared with the
+            threshold. The minimum ratio between the anomaly value and the change in adjacent, non-abnormal frames
+            is specified by the div parameter. In this case, the spread of the values of two abnormal frames must be
+            strictly greater than the abnormal value.
             8 and 9 - debug mode for mode 4 and 5.
             10 and 11 - debug mode for mode 6 and 7.
             
@@ -1550,26 +1582,29 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
             and the average normalized value is calculated for the resulting clip.
             It is well suited for detecting temporal anomalies.
             
-            You can specify several modes as a list, in which case the result will be sorted by frame number, and within one frame by mode.
-            Normal and debug modes cannot be mixed in one list. The default is "0".
+            You can specify several modes as a list, in which case the result will be sorted by frame number,
+            and within one frame by mode. Normal and debug modes cannot be mixed in one list. The default is "0".
         
         thr: the threshold for triggering the mode, it does not work for debug modes.
             You can specify several as a list, they will positionally correspond to the modes.
-            If the thr list is less than the list of modes, the last thr value will work for all remaining modes. The default is "0.001".
+            If the thr list is less than the list of modes, the last thr value will work for all remaining modes.
+            The default is "0.001".
         
         div: sets the minimum ratio between the anomaly value and the change in neighboring, non-abnormal frames.
-            It is relevant for modes 4...7. You can specify several as a list, they will positionally correspond to the modes.
-            If the div list is less than the list of modes, the last div value will work for all remaining modes. The default is "2.0".
+            It is relevant for modes 4...7. You can specify several as a list, they will positionally correspond to the
+            modes. If the div list is less than the list of modes, the last div value will work for all remaining modes.
+            The default is "2.0".
         
         norm: normalization to absolute normalized values of the difference between 0 and 1. The default is "True".
         
         frames: a list of frames to check. The default is "all frames".
         
         output: path and name of the output file.
-            By default, the file is created in the same directory where the application used for the analysis pass is located,
-            the file name is "field_diffs.txt".
+            By default, the file is created in the same directory where the application used for the analysis pass is
+            located, the file name is "field_diffs.txt".
         
-        plane: the position of the planar for calculating the absolute normalized difference. The default is "0" (luminance planar).
+        plane: the position of the planar for calculating the absolute normalized difference.
+            The default is "0" (luminance planar).
     """
     func_name = 'search_field_diffs'
     
@@ -1594,7 +1629,8 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     
     match output:
         case None:
-            output = f'field_diffs_mode({'_'.join(f'{i}' for i in mode)})_thr({'_'.join(f'{i}' for i in thr) if isinstance(thr, list) else thr}).txt'
+            output = (f'field_diffs_mode({'_'.join(f'{i}' for i in mode)})_'
+                      f'thr({'_'.join(f'{i}' for i in thr) if isinstance(thr, list) else thr}).txt')
         case str():
             pass
         case _:
