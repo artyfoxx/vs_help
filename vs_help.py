@@ -72,7 +72,6 @@ from typing import Any
 
 import numpy as np
 import vapoursynth as vs
-from scipy import special
 from vapoursynth import core
 
 
@@ -3516,6 +3515,8 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     
     The result is written to the frame properties with the corresponding name.
     """  # noqa: D205
+    from scipy import special
+    
     func_name = 'CrazyPlaneStats'
     
     if not isinstance(clip, vs.VideoNode):
@@ -3928,12 +3929,14 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
     return clip
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
-              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1,
+              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1, sigma: int = 0,
               output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
               **descale_args: Any) -> vs.VideoNode:
     
     import matplotlib as mpl
     import matplotlib.pyplot as plt
+    from scipy.ndimage import gaussian_filter
+    from scipy.signal import argrelextrema
     mpl.use('Agg')
     
     func_name = 'getnative'
@@ -3957,6 +3960,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             pass
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
+    
+    if not isinstance(sigma, int) or sigma < 0:
+        raise TypeError(f'{func_name}: invalid "sigma"')
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), [str(), a], int() if all(isinstance(i, str) for i in a):
@@ -3998,12 +4004,20 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
         nonlocal result
-        result[n] = f.props[means[mean]] + 1e-20
+        result[n] = f.props[means[mean]]
         
         if n == len(frange) - 1:
-            res = [f'{i} {j:.20f}\n' for i, j in zip(frange, result)]
+            if sigma:
+                result = gaussian_filter(result, sigma)
+            
+            min_index = argrelextrema(result, np.less)[0]
+            min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
+            res = [f'{i} {j:.20f}{k}\n' for i, j, k in zip(frange, result, min_label)]
+            
             with open(output, 'w', encoding='utf-8') as file:
+                file.write('param    avg diff\n')
                 file.writelines(res)
+            
             plt.figure(figsize=(16, 9))
             plt.plot(frange, result)
             plt.grid()
