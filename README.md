@@ -1,6 +1,7 @@
 # vs_help
 Just a few vapoursynth function...  
-For internal use. Documented rather fragmentarily.
+Written for internal use, but if it is useful to someone else, I will be glad.
+Documented rather fragmentarily.
 # Dependencies
 ## General
 * [VapourSynth](https://www.vapoursynth.com/) >= R58
