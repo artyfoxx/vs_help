@@ -351,8 +351,8 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
                 m1 = core.std.Expr(Convolution(clip, 'min/max'), expr0)
                 m2 = core.std.Maximum(m1).std.Maximum()
                 m2 = core.std.Merge(m2, core.std.Maximum(m2)).std.Inflate()
-                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)],
-                                   expr1).std.Inflate()
+                m3 = core.std.Expr([core.std.Merge(m2, core.std.Maximum(m2)), core.std.Deflate(m1)], expr1)
+                m3 = core.std.Inflate(m3)
             case 1:
                 m1 = core.std.Expr([clip, UnsharpMask(clip, 40, 2, 0)], expr2).std.Maximum().std.Inflate()
                 m2 = core.std.Maximum(m1).std.Maximum()
@@ -435,14 +435,6 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     space = clip.format.color_family
     num_p = clip.format.num_planes
     
-    if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        full = 256 * factor - 1
-        isfloat = False
-    else:
-        full = 1
-        isfloat = True
-    
     if space == vs.YUV:
         planes = list({i[6] if len(i) > 6 else 0 for i in args})
         clips = core.std.SplitPlanes(chroma_up(clip, planes))
@@ -454,39 +446,16 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     def correction(clip: vs.VideoNode, axis: str, target: int | list[int], donor: int | list[int], limit: int,
                    curve: int, shift: int, mean: int, clamp: bool) -> vs.VideoNode:
         
-        def stats_x(clip: vs.VideoNode, x: int | list[int], w: int, mean: int) -> vs.VideoNode:
-            
-            match x:
-                case int() if 0 <= x < w:
-                    x = [x]
-                case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
-                    pass
-                case _:
-                    raise TypeError(f'{func_name}: invalid "x" = {x}')
-            
-            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
-                                   mean, norm=False)
-        
-        def stats_y(clip: vs.VideoNode, y: int | list[int], h: int, mean: int) -> vs.VideoNode:
-            
-            match y:
-                case int() if 0 <= y < h:
-                    y = [y]
-                case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
-                    pass
-                case _:
-                    raise TypeError(f'{func_name}: invalid "y" = {y}')
-            
-            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
-                                   mean, norm=False)
-        
         if not isinstance(shift, int):
             raise ValueError(f'{func_name}: "shift" must be "int"')
         
-        if isfloat:
-            shift /= 255
-        else:
+        if clip.format.sample_type == vs.INTEGER:
+            factor = 1 << clip.format.bits_per_sample - 8
             shift *= factor
+            full = 256 * factor - 1
+        else:
+            shift /= 255
+            full = 1
         
         match abs(curve):
             case 0:
@@ -509,19 +478,51 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         
         orig = clip
         
+        def stats_x(clip: vs.VideoNode, x: int | list[int], w: int, mean: int) -> vs.VideoNode:
+            
+            match x:
+                case int() if 0 <= x < w:
+                    x = [x]
+                case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
+                    pass
+                case _:
+                    raise TypeError(f'{func_name}: invalid "x" = {x}')
+            
+            return CrazyPlaneStats(
+                core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
+                mean, norm=False
+            )
+        
+        def stats_y(clip: vs.VideoNode, y: int | list[int], h: int, mean: int) -> vs.VideoNode:
+            
+            match y:
+                case int() if 0 <= y < h:
+                    y = [y]
+                case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
+                    pass
+                case _:
+                    raise TypeError(f'{func_name}: invalid "y" = {y}')
+            
+            return CrazyPlaneStats(
+                core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
+                mean, norm=False
+            )
+        
         match axis:
             case 'X':
                 w = clip.width
-                clip = core.akarin.PropExpr([clip, stats_x(clip, target, w, mean), stats_x(clip, donor, w, mean)],
-                                            lambda: dict(target_avg=f'y.{means[mean]}',
-                                                         donor_avg=f'z.{means[mean]}',
-                                                         maximum='z.maximum', minimum='z.minimum'))
+                clip = core.akarin.PropExpr(
+                    [clip, stats_x(clip, target, w, mean), stats_x(clip, donor, w, mean)],
+                    lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
+                                 maximum='z.maximum', minimum='z.minimum')
+                )
             case 'Y':
                 h = clip.height
-                clip = core.akarin.PropExpr([clip, stats_y(clip, target, h, mean), stats_y(clip, donor, h, mean)],
-                                            lambda: dict(target_avg=f'y.{means[mean]}',
-                                                         donor_avg=f'z.{means[mean]}',
-                                                         maximum='z.maximum', minimum='z.minimum'))
+                clip = core.akarin.PropExpr(
+                    [clip, stats_y(clip, target, h, mean), stats_y(clip, donor, h, mean)],
+                    lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
+                                 maximum='z.maximum', minimum='z.minimum')
+                )
             case _:
                 raise ValueError(f'{func_name}: invalid "axis"')
         
@@ -558,7 +559,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         if i[6] in set(range(num_p)):
             clips[i[6]] = correction(clips[i[6]], *i[:6], *i[7:])
         else:
-            raise ValueError(f'{func_name}: invalid plane = {i[6]}')
+            raise ValueError(f'{func_name}: invalid plane {i[6]}')
     
     clip = chroma_down(core.std.ShufflePlanes(clips, [0] * num_p, space), planes) if space == vs.YUV else clips[0]
     
