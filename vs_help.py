@@ -1697,7 +1697,7 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
                                 for k in frames]
             
             if res:
-                with open(output, 'w', encoding='utf-8') as file:
+                with open(output, 'w') as file:
                     if set(mode) <= set(range(8, 12)):
                         file.write(f'{'frame':>{dig}} mode {'diff':<22} {'thr':<22} {'div':<8} thr2\n')
                     else:
@@ -2729,7 +2729,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     frames_d = [None] * num_f
     frames_c = [None] * num_f
     
-    with open(ovr_d, 'r', encoding='utf-8') as file:
+    with open(ovr_d, 'r') as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -2742,7 +2742,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
             elif (res := re.search(r'(\d+) (\w)', line)) is not None:
                 frames_d[int(res.group(1))] = res.group(2)
     
-    with open(ovr_c, 'r', encoding='utf-8') as file:
+    with open(ovr_c, 'r') as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -3674,7 +3674,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
                 res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {L:>{out}} {i[0]:>5}\n' for j, k, L in zip(*i[2], i[3])]
             
             if res:
-                with open(output, 'w', encoding='utf-8') as file:
+                with open(output, 'w') as file:
                     file.write(f'{'frame':>{dig}} {'x':>{w}} {'y':>{h}} {'out':>{out}} plane\n')
                     file.writelines(res)
             else:
@@ -3949,17 +3949,21 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                             else [value] * len(frange) for key, value in descale_args.items()}
             descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None} for i in range(len(frange))]
             resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], mode, **descale_args[n]))
+            param = 'kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), int():
             frange = np.arange(*dy, dtype=np.float64)
             clip = clip[frames] * len(frange)
             resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, mode, **descale_args))
+            param = 'dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), int():
             frange = np.arange(*dx, dtype=np.float64)
             clip = clip[frames] * len(frange)
             resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, mode, **descale_args))
+            param = 'dx'
         case None | int() | float(), None | int() | float(), str(), [int(), int()]:
             frange = list(range(*frames))
             resc = rescaler(clip[frames[0]:frames[1]], dx, dy, kernel, mode, **descale_args)
+            param = 'frame'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
             return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, None, thr, crop, mean, **descale_args) for i in range(*frames)])
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
@@ -3984,19 +3988,38 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         result[n] = f.props[means[mean]]
         
         if n == len(frange) - 1:
+            match frange[0]:
+                case str():
+                    sfrange = frange
+                case int():
+                    sfrange = [str(i) for i in frange]
+                case float():
+                    step = dx[2] if isinstance(dx, list) else dy[2]
+                    if isinstance(step, float):
+                        sfrange = [f'{i:.{len(str(step).split('.')[1])}f}' for i in frange]
+                    else:
+                        sfrange = [str(int(i)) for i in frange]
+            
+            dig = max(max(len(i) for i in sfrange), len(param))
+            
             if sigma:
                 result = gaussian_filter(result, sigma)
             
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
-            res = [f'{i} {j:.20f}{k}\n' for i, j, k in zip(frange, result, min_label)]
+            res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
             
-            with open(output, 'w', encoding='utf-8') as file:
-                file.write('param    avg diff\n')
-                file.writelines(res)
+            if res:
+                with open(output, 'w') as file:
+                    file.write(f'{param:<{dig}} abs diff\n')
+                    file.writelines(res)
+            else:
+                raise ValueError(f'{func_name}: there is no result, check the settings')
             
             plt.figure(figsize=(16, 9))
             plt.plot(frange, result)
+            plt.xlabel(param)
+            plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
             plt.savefig(output.replace('.txt', '.png'))
             plt.close()
