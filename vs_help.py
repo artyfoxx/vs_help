@@ -161,38 +161,34 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
     t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
     
+    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
+    
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    temp = core.std.MaskedMerge(Blur(t1, 1.42), t2, mask)
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    temp = core.std.MaskedMerge(temp, t3, mask)
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    temp = core.std.MaskedMerge(temp, t4, mask)
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    temp = core.std.MaskedMerge(temp, t5, mask)
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    temp = core.std.MaskedMerge(temp, t6, mask)
-    mask = core.std.Expr([
-        core.std.Expr([clip, core.resize.Bilinear(temp, w, h, **back_args)], 'x y - abs'),
-        core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')],
-        expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-    clip = core.std.MaskedMerge(temp, t7, mask)
+    cp0 = Blur(t1, 1.42)
+    m100 = core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    cp1 = core.std.MaskedMerge(cp0, t2, m100)
+    m101 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
+    m101 = core.std.Expr([m101, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    cp2 = core.std.MaskedMerge(cp1, t3, m101)
+    m102 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
+    m102 = core.std.Expr([m102, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    cp3 = core.std.MaskedMerge(cp2, t4, m102)
+    m103 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
+    m103 = core.std.Expr([m103, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    cp4 = core.std.MaskedMerge(cp3, t5, m103)
+    m104 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
+    m104 = core.std.Expr([m104, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    cp5 = core.std.MaskedMerge(cp4, t6, m104)
+    m105 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
+    m105 = core.std.Expr([m105, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
+    clip = core.std.MaskedMerge(cp5, t7, m105)
     
     if space == vs.YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)],
