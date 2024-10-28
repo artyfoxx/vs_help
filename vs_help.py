@@ -3906,7 +3906,7 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
     return clip
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
-              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1, sigma: int = 0,
+              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', mode: int = 1, sigma: int = 0, mark: bool = False,
               output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
               **descale_args: Any) -> vs.VideoNode:
     
@@ -3978,7 +3978,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     clip = CrazyPlaneStats(clip, mean)
     
-    result = np.zeros(len(frange), dtype=np.float64)
+    result = np.full(len(frange), np.nan, dtype=np.float64)
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median']
     
@@ -3987,7 +3987,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         nonlocal result
         result[n] = f.props[means[mean]]
         
-        if n == len(frange) - 1:
+        if not np.any(np.isnan(result)):
             match frange[0]:
                 case str():
                     sfrange = frange
@@ -4022,6 +4022,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             plt.xlabel(param)
             plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
+            if mark:
+                plt.scatter(frange[min_index], result[min_index], marker='x')
+                for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
+                    plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                 rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             plt.savefig(output.replace('.txt', '.png'))
             plt.close()
         
