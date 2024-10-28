@@ -3996,7 +3996,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 case float():
                     step = dx[2] if isinstance(dx, list) else dy[2]
                     if isinstance(step, float):
-                        sfrange = [f'{i:.{len(str(step).split('.')[1])}f}' for i in frange]
+                        step = len(str(step).split('.')[1])
+                        sfrange = [f'{i:.{step}f}' for i in frange]
                     else:
                         sfrange = [str(int(i)) for i in frange]
             
