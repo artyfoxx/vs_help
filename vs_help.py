@@ -565,19 +565,15 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     
     return clip
 
-def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
-               gain: float = 0.75, blur_more: bool = False, kernel: str = 'bilinear', b: float = 0, c: float = 0.5,
-               taps: int = 3, frac: bool = True, down: bool = False, **after_args: Any) -> vs.VideoNode:
+def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
+               gain: float = 0.75, exp_n: int = 2, inf_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear', mode: int = 1, **descale_args: Any) -> vs.VideoNode:
     """
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
     
-    Has nothing to do with the port by MonoS.
-    It is based on the rescale class from muvsfunc, therefore it supports fractional resolutions
+    It is based on the internal rescale function, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
-    "down = True" is added for backward compatibility and does not support fractional resolutions.
-    Also, this option is incompatible with using odd resolutions when there is chroma subsampling in the source.
     """
-    func_name = 'MaskDetail'
+    func_name = 'mask_detail'
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
@@ -591,8 +587,6 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     
     if space == vs.YUV:
         format_id = clip.format.id
-        sub_w = clip.format.subsampling_w
-        sub_h = clip.format.subsampling_h
         clip = core.std.ShufflePlanes(clip, 0, vs.GRAY)
     elif space == vs.GRAY:
         pass
@@ -601,36 +595,22 @@ def MaskDetail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = N
     
     match kernel:
         case 'bicubic':
-            resc = rescaler(clip, dx, dy, kernel, frac, b=b, c=c)
+            resc = rescaler(clip, dx, dy, kernel, mode, **descale_args)
         case 'lanczos':
-            resc = rescaler(clip, dx, dy, kernel, frac, taps=taps)
+            resc = rescaler(clip, dx, dy, kernel, mode, **descale_args)
         case _:
-            resc = rescaler(clip, dx, dy, kernel, frac)
+            resc = rescaler(clip, dx, dy, kernel, mode)
     
     expr = 'x y - 0.5 + 0 1 clamp 16 * var! var@ 1.0 % val! var@ trunc 1 bitand 1 = 1 val@ - val@ ?'
     clip = core.akarin.Expr([clip, resc], expr)
     clip = RemoveGrain(clip, rg)
     clip = core.std.Expr(clip, f'x {cutoff} 255 / < 0 x {gain} 1 x + * * 1 min 0 max ?')
     
-    if 'exp_n' not in after_args:
-        after_args['exp_n'] = 2
+    for _ in range(exp_n):
+        clip = core.std.Maximum(clip)
     
-    if 'inf_n' not in after_args:
-        after_args['inf_n'] = 1
-    
-    clip = after_mask(clip, **after_args)
-    
-    if down:
-        if dx is None:
-            raise ValueError(f'{func_name}: if "down" is "True", then "dx" can\'t be "None"')
-        
-        if not isinstance(dx, int) or not isinstance(dy, int):
-            raise ValueError(f'{func_name}: if "down" is "True", then "dx" and "dy" must be "int"')
-        
-        if space == vs.YUV and (dx >> sub_w << sub_w != dx or dy >> sub_h << sub_h != dy):
-            raise ValueError(f'{func_name}: "dx" or "dy" does not match the chroma subsampling of the output clip')
-        
-        clip = core.resize.Bilinear(clip, dx, dy)
+    for _ in range(inf_n):
+        clip = core.std.Inflate(clip)
     
     if blur_more:
         clip = RemoveGrain(clip, 12)
