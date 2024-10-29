@@ -1649,7 +1649,7 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     
     def dump_diffs(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal diffs
+        nonlocal diffs, counter
         
         diffs[0][n] = abs(f.props['avg0'] - f.props['avg1'])
         diffs[1][n] = f.props['avg2']
@@ -3649,7 +3649,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     def get_search(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal out_of_range
+        nonlocal out_of_range, counter
         
         for i in planes:
             matrix = np.asarray(f[i])
@@ -3982,16 +3982,19 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     clip = CrazyPlaneStats(clip, mean)
     
-    result = np.full(len(frange), np.nan, dtype=np.float64)
+    result = np.zeros(len(frange), dtype=np.float64)
+    counter = np.full(len(frange), np.False_, dtype=np.bool_)
+    
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median']
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal result
+        nonlocal result, counter
         result[n] = f.props[means[mean]]
+        counter[n] = np.True_
         
-        if not np.any(np.isnan(result)):
+        if np.all(counter):
             match frange[0]:
                 case str():
                     sfrange = frange
