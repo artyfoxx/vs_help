@@ -1644,7 +1644,8 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
         case _:
             raise TypeError(f'{func_name}: "frames" must be None or list[0 <= int < num_frames]')
     
-    diffs = np.full((2, num_f), np.nan, dtype=np.float64)
+    diffs = np.zeros((2, num_f), dtype=np.float64)
+    counter = np.full(num_f, np.False_, dtype=np.bool_)
     
     def dump_diffs(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
@@ -1652,8 +1653,9 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
         
         diffs[0][n] = abs(f.props['avg0'] - f.props['avg1'])
         diffs[1][n] = f.props['avg2']
+        counter[n] = np.True_
         
-        if not np.any(np.isnan(diffs)):
+        if np.all(counter):
             res = []
             
             dig = max(len(str(num_f)), 5)
