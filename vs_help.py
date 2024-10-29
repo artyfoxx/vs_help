@@ -3645,7 +3645,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
             raise TypeError(f'{func_name}: invalid "output"')
     
     out_of_range = [None] * num_f * len(planes)
-    counter = np.full(num_f * len(planes), np.False_, dtype=np.bool_)
+    counter = np.full(num_f, np.False_, dtype=np.bool_)
     
     def get_search(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
@@ -3665,7 +3665,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
             if temp[0].size:
                 out_of_range[n * len(planes) + i - min(planes)] = [i, n, temp, matrix[temp]]
             
-            counter[n * len(planes) + i - min(planes)] = np.True_
+        counter[n] = np.True_
         
         if np.all(counter):
             
