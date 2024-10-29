@@ -3642,7 +3642,8 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
     
-    out_of_range = []
+    out_of_range = [None] * num_f * len(planes)
+    counter = np.full(num_f * len(planes), np.False_, dtype=np.bool_)
     
     def get_search(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
@@ -3660,18 +3661,19 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
                     temp = np.where((matrix < lower) | (matrix > upper))
             
             if temp[0].size:
-                out_of_range += [[i, n, temp, matrix[temp]]]
+                out_of_range[n * len(planes) + i - min(planes)] = [i, n, temp, matrix[temp]]
+            
+            counter[n * len(planes) + i - min(planes)] = np.True_
         
-        if n == num_f - 1:
-            res = []
+        if np.all(counter):
             
             dig = max(len(str(num_f)), 5)
             w = len(str(clip.width))
             h = len(str(clip.height))
             out = max(len(str(full)), 3)
             
-            for i in out_of_range:
-                res += [f'{i[1]:>{dig}} {k:>{w}} {j:>{h}} {L:>{out}} {i[0]:>5}\n' for j, k, L in zip(*i[2], i[3])]
+            res = [f'{x[1]:>{dig}} {j:>{w}} {i:>{h}} {k:>{out}} {x[0]:>5}\n' for x in out_of_range if x is not None
+                   for i, j, k in zip(*x[2], x[3])]
             
             if res:
                 with open(output, 'w') as file:
