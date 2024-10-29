@@ -3969,9 +3969,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             resc = rescaler(clip[frames[0]:frames[1]], dx, dy, kernel, mode, **descale_args)
             param = 'frame'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, sigma, None, thr, crop, mean, **descale_args) for i in range(*frames)])
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, sigma, None, thr, crop, mean, **descale_args) for i in range(*frames)])
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, mode, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
     
