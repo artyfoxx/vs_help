@@ -3690,7 +3690,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     
     return clip
 
-def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | list[float] | None = None, kernel: str = 'bilinear',
+def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
              mode: int = 1, upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
     
     func_name = 'rescaler'
@@ -3794,40 +3794,18 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | list[float
         case float(), float(), 0:
             dx = round(dx)
             dy = round(dy)
-        case None, [float(), tail], 1 if all(isinstance(i, float) for i in tail):
-            num_f = clip.num_frames
-            fmax = max(dy)
-            mx = ceil(w * fmax / h / 2) * 2
-            my = ceil(fmax / 2) * 2
-            if len(dy) < num_f:
-                dy += [dy[-1]] * (num_f - len(dy))
-            rescale_args = [{}] * num_f
-            for i in range(num_f):
-                rescale_args[i]['src_width'] = w * dy[i] / h
-                rescale_args[i]['src_left'] = (mx - rescale_args[i]['src_width']) / 2
-                rescale_args[i]['src_height'] = dy[i]
-                rescale_args[i]['src_top'] = (my - rescale_args[i]['src_height']) / 2
         case None | int() | float(), _:
             raise TypeError(f'{func_name}: invalid "dy"')
         case _:
             raise TypeError(f'{func_name}: invalid "dx"')
     
-    if 'rescale_args' in locals():
-        clip = core.std.FrameEval(clip, lambda n, clip=clip: getattr(core.descale, f'De{kernel}')(clip, mx, my, **descale_args, **rescale_args[n]))
-    else:
-        clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
+    clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
     
     match upscaler:
         case None:
-            if 'rescale_args' in locals():
-                clip = core.std.FrameEval(clip, lambda n, clip=clip: getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args, **rescale_args[n]))
-            else:
-                clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
+            clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
         case Callable():
-            if 'rescale_args' in locals():
-                clip = upscaler(clip, w, h, list_of_args=rescale_args)
-            else:
-                clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
+            clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
     
