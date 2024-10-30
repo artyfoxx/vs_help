@@ -3814,6 +3814,10 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
                              b='a1', c='a2', taps='taps')
             fmtc_args = {fmtc_keys[key]: value for key, value in descale_args.items() if key in fmtc_keys}
             clip = core.fmtc.resample(clip, w, h, kernel=kernel, **fmtc_args)
+        case Callable(), 8:
+            fmtc_keys = dict(src_left='sx', src_top='sy', src_width='sw', src_height='sh')
+            fmtc_args = {fmtc_keys[key]: value for key, value in descale_args.items() if key in fmtc_keys}
+            clip = upscaler(clip, w, h, **fmtc_args)
         case Callable(), _:
             clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
         case _:
