@@ -3801,10 +3801,20 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     
     clip = getattr(core.descale, f'De{kernel}')(clip, dx, dy, **descale_args)
     
-    match upscaler:
-        case None:
+    match upscaler, mode & 12:
+        case None, 0:
             clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
-        case Callable():
+        case None, 4:
+            resize_keys = dict(src_left='src_left', src_top='src_top', src_width='src_width', src_height='src_height',
+                               b='filter_param_a', c='filter_param_b', taps='filter_param_a')
+            resize_args = {resize_keys[key]: value for key, value in descale_args.items() if key in resize_keys}
+            clip = getattr(core.resize, kernel.capitalize())(clip, w, h, **resize_args)
+        case None, 8:
+            fmtc_keys = dict(src_left='sx', src_top='sy', src_width='sw', src_height='sh',
+                             b='a1', c='a2', taps='taps')
+            fmtc_args = {fmtc_keys[key]: value for key, value in descale_args.items() if key in fmtc_keys}
+            clip = core.fmtc.resample(clip, w, h, kernel=kernel, **fmtc_args)
+        case Callable(), _:
             clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
