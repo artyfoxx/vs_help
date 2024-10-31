@@ -3443,15 +3443,23 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
                     'x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min -')
             div = 1
         case 'hprewitt':
-            return core.std.Expr([Convolution(clip, [1, 2, 1, 0, 0, 0, -1, -2, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                  Convolution(clip, [1, 0, -1, 2, 0, -2, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
+            mode = [[1, 2, 1, 0, 0, 0, -1, -2, -1], [1, 0, -1, 2, 0, -2, 1, 0, -1]]
+            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max' if i in planes else '' for i in range(num_p)])
         case 'prewitt':
-            return core.std.Expr([Convolution(clip, [1, 1, 0, 1, 0, -1, 0, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                  Convolution(clip, [1, 1, 1, 0, 0, 0, -1, -1, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                  Convolution(clip, [1, 0, -1, 1, 0, -1, 1, 0, -1], 0 if saturate is None else saturate, 1.0 if total is None else total, planes),
-                                  Convolution(clip, [0, -1, -1, 1, 0, -1, 1, 1, 0], 0 if saturate is None else saturate, 1.0 if total is None else total, planes)],
+            mode = [[1, 1, 0, 1, 0, -1, 0, -1, -1], [1, 1, 1, 0, 0, 0, -1, -1, -1], [1, 0, -1, 1, 0, -1, 1, 0, -1], [0, -1, -1, 1, 0, -1, 1, 1, 0]]
+            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max z a max max' if i in planes else '' for i in range(num_p)])
+        case 'kirsch4':
+            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, -3, -3, 5, 0, -3, 5, -3, -3],
+                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, 5, -3, 0, 5, -3, -3, 5]]
+            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
+                                 ['x y max z a max max' if i in planes else '' for i in range(num_p)])
+        case 'kirsch8':
+            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, 5, -3, 5, 0, -3, -3, -3, -3], [5, -3, -3, 5, 0, -3, 5, -3, -3], [-3, -3, -3, 5, 0, -3, 5, 5, -3],
+                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, -3, -3, 0, 5, -3, 5, 5], [-3, -3, 5, -3, 0, 5, -3, -3, 5], [-3, 5, 5, -3, 0, 5, -3, -3, -3]]
+            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
+                                 ['x y max z a max max b c max d e max max max' if i in planes else '' for i in range(num_p)])
         case _:
             raise TypeError(f'{func_name}: invalid "mode"')
     
