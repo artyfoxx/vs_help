@@ -3447,7 +3447,8 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max' if i in planes else '' for i in range(num_p)])
         case 'prewitt':
-            mode = [[1, 1, 0, 1, 0, -1, 0, -1, -1], [1, 1, 1, 0, 0, 0, -1, -1, -1], [1, 0, -1, 1, 0, -1, 1, 0, -1], [0, -1, -1, 1, 0, -1, 1, 1, 0]]
+            mode = [[1, 1, 0, 1, 0, -1, 0, -1, -1], [1, 1, 1, 0, 0, 0, -1, -1, -1],
+                    [1, 0, -1, 1, 0, -1, 1, 0, -1], [0, -1, -1, 1, 0, -1, 1, 1, 0]]
             return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max z a max max' if i in planes else '' for i in range(num_p)])
         case 'kirsch4':
@@ -3456,8 +3457,10 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max z a max max' if i in planes else '' for i in range(num_p)])
         case 'kirsch8':
-            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, 5, -3, 5, 0, -3, -3, -3, -3], [5, -3, -3, 5, 0, -3, 5, -3, -3], [-3, -3, -3, 5, 0, -3, 5, 5, -3],
-                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, -3, -3, 0, 5, -3, 5, 5], [-3, -3, 5, -3, 0, 5, -3, -3, 5], [-3, 5, 5, -3, 0, 5, -3, -3, -3]]
+            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, 5, -3, 5, 0, -3, -3, -3, -3],
+                    [5, -3, -3, 5, 0, -3, 5, -3, -3], [-3, -3, -3, 5, 0, -3, 5, 5, -3],
+                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, -3, -3, 0, 5, -3, 5, 5],
+                    [-3, -3, 5, -3, 0, 5, -3, -3, 5], [-3, 5, 5, -3, 0, 5, -3, -3, -3]]
             return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
                                  ['x y max z a max max b c max d e max max max' if i in planes else '' for i in range(num_p)])
         case _:
@@ -3699,7 +3702,8 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     return clip
 
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
-             mode: int = 1, upscaler: Callable | None = None, **descale_args: Any) -> vs.VideoNode:
+             mode: int = 1, upscaler: Callable | None = None, ratio: float = 1.0,
+             **descale_args: Any) -> vs.VideoNode:
     
     func_name = 'rescaler'
     
@@ -3740,34 +3744,34 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     match dx, dy, mode & 1:
         case None, None, 1:
             dy = h * 2 // 3
-            descale_args['src_width'] = w * dy / h
+            descale_args['src_width'] = w * dy / h * ratio
             dx = ceil(descale_args['src_width'] / 2) * 2
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
         case None, None, 0:
             dy = h * 2 // 3
-            dx = round(w * dy / h)
+            dx = round(w * dy * ratio / h)
         case None, int(), 1:
-            descale_args['src_width'] = w * dy / h
+            descale_args['src_width'] = w * dy / h * ratio
             dx = ceil(descale_args['src_width'] / 2) * 2
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
         case None, int(), 0:
-            dx = round(w * dy / h)
+            dx = round(w * dy * ratio / h)
         case None, float(), 1:
-            descale_args['src_width'] = w * dy / h
+            descale_args['src_width'] = w * dy / h * ratio
             dx = ceil(descale_args['src_width'] / 2) * 2
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
             descale_args['src_height'] = dy
             dy = ceil(descale_args['src_height'] / 2) * 2
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case None, float(), 0:
-            dx = round(w * dy / h)
+            dx = round(w * dy * ratio / h)
             dy = round(dy)
         case int(), None, 1:
-            descale_args['src_height'] = h * dx / w
+            descale_args['src_height'] = h * dx / w * ratio
             dy = ceil(descale_args['src_height'] / 2) * 2
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case int(), None, 0:
-            dy = round(h * dx / w)
+            dy = round(h * dx * ratio / w)
         case int(), int(), _:
             pass
         case int(), float(), 1:
@@ -3780,11 +3784,11 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             descale_args['src_width'] = dx
             dx = ceil(descale_args['src_width'] / 2) * 2
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-            descale_args['src_height'] = h * dx / w
+            descale_args['src_height'] = h * dx / w * ratio
             dy = ceil(descale_args['src_height'] / 2) * 2
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case float(), None, 0:
-            dy = round(h * dx / w)
+            dy = round(h * dx * ratio / w)
             dx = round(dx)
         case float(), int(), 1:
             descale_args['src_width'] = dx
