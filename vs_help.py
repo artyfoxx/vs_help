@@ -2353,7 +2353,7 @@ def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold=float"')
     
     if sw > 0 and sh > 0:
-        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or mode == 'ellipse' and sw % 3 != 1 else [1, 1, 1, 1, 1, 1, 1, 1]
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or (mode == 'ellipse' and sw % 3 != 1) else [1, 1, 1, 1, 1, 1, 1, 1]
     elif sw > 0:
         mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
     elif sh > 0:
@@ -2391,7 +2391,7 @@ def InpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
         raise ValueError(f'{func_name}: "thr_arg" must be "threshold=float"')
     
     if sw > 0 and sh > 0:
-        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or mode == 'ellipse' and sw % 3 != 1 else [1, 1, 1, 1, 1, 1, 1, 1]
+        mode_m = [0, 1, 0, 1, 1, 0, 1, 0] if mode == 'losange' or (mode == 'ellipse' and sw % 3 != 1) else [1, 1, 1, 1, 1, 1, 1, 1]
     elif sw > 0:
         mode_m = [0, 0, 0, 1, 1, 0, 0, 0]
     elif sh > 0:
@@ -3718,6 +3718,8 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     
     w = clip.width
     h = clip.height
+    blunt_w = 1 << clip.format.subsampling_w
+    blunt_h = 1 << clip.format.subsampling_h
     crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
     
     if descale_args and (x := crop_keys & set(descale_args.keys())):
@@ -3744,31 +3746,31 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     match dx, dy, mode & 1:
         case None, None, 1:
             dy = h * 2 // 3
-            descale_args['src_width'] = w * dy / h * ratio
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_width'] = w * dy * ratio / h
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
         case None, None, 0:
             dy = h * 2 // 3
             dx = round(w * dy * ratio / h)
         case None, int(), 1:
-            descale_args['src_width'] = w * dy / h * ratio
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_width'] = w * dy * ratio / h
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
         case None, int(), 0:
             dx = round(w * dy * ratio / h)
         case None, float(), 1:
-            descale_args['src_width'] = w * dy / h * ratio
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            descale_args['src_width'] = w * dy * ratio / h
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
             descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
+            dy = ceil(descale_args['src_height'] / blunt_h) * blunt_h
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case None, float(), 0:
             dx = round(w * dy * ratio / h)
             dy = round(dy)
         case int(), None, 1:
-            descale_args['src_height'] = h * dx / w * ratio
-            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_height'] = h * dx * ratio / w
+            dy = ceil(descale_args['src_height'] / blunt_h) * blunt_h
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case int(), None, 0:
             dy = round(h * dx * ratio / w)
@@ -3776,32 +3778,32 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             pass
         case int(), float(), 1:
             descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
+            dy = ceil(descale_args['src_height'] / blunt_h) * blunt_h
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case int(), float(), 0:
             dy = round(dy)
         case float(), None, 1:
             descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
-            descale_args['src_height'] = h * dx / w * ratio
-            dy = ceil(descale_args['src_height'] / 2) * 2
+            descale_args['src_height'] = h * dx * ratio / w
+            dy = ceil(descale_args['src_height'] / blunt_h) * blunt_h
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case float(), None, 0:
             dy = round(h * dx * ratio / w)
             dx = round(dx)
         case float(), int(), 1:
             descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
         case float(), int(), 0:
             dx = round(dx)
         case float(), float(), 1:
             descale_args['src_width'] = dx
-            dx = ceil(descale_args['src_width'] / 2) * 2
+            dx = ceil(descale_args['src_width'] / blunt_w) * blunt_w
             descale_args['src_left'] = (dx - descale_args['src_width']) / 2
             descale_args['src_height'] = dy
-            dy = ceil(descale_args['src_height'] / 2) * 2
+            dy = ceil(descale_args['src_height'] / blunt_h) * blunt_h
             descale_args['src_top'] = (dy - descale_args['src_height']) / 2
         case float(), float(), 0:
             dx = round(dx)
