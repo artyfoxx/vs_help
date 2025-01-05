@@ -1254,7 +1254,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+    space = clip.format.color_family
+    num_p = clip.format.num_planes
+    
+    if space not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
     clip = core.std.SetFieldBased(clip, 0)
@@ -1312,7 +1315,9 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
         crop_args = {key: value * 2 for key, value in upscaler_args.items() if key in crop_keys}
         upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
-        crop_args = {key: value - 0.5 if key in {'src_left', 'src_top'} else value for key, value in crop_args.items()}
+        
+        crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5
+        crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
         
         match order:
             case 0:
@@ -1320,12 +1325,19 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             case 1:
                 clip = edi3_aa(clip, mode, False, **upscaler_args)
             case 2:
+                expr = ['x y max', 'x y min', 'x y max']
                 clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
-                                      edi3_aa(clip, mode, False, **upscaler_args)], 'x y max')
+                                      edi3_aa(clip, mode, False, **upscaler_args)], expr[:num_p])
             case _:
                 raise ValueError(f'{func_name}: Please use 0...2 order value')
         
-        clip = autotap3(clip, dx, dy, **crop_args)
+        if clip.format.subsampling_h:
+            luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
+            crop_args['src_top'] -= 0.5
+            clip = core.std.ShufflePlanes([luma, core.resize.Spline36(clip, dx, dy, **crop_args)],
+                                          list(range(num_p)), space)
+        else:
+            clip = autotap3(clip, dx, dy, **crop_args)
     else:
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
         clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
