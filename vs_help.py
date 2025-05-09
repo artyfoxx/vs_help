@@ -1247,7 +1247,8 @@ def FineDehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list[
     
     return clip
 
-def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 0, order: int = 0, **upscaler_args: Any) -> vs.VideoNode:
+def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 0, order: int = 0,
+             **upscaler_args: Any) -> vs.VideoNode:
     
     func_name = 'upscaler'
     
@@ -1328,8 +1329,12 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 expr = ['x y max', 'x y min', 'x y max']
                 clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
                                       edi3_aa(clip, mode, False, **upscaler_args)], expr[:num_p])
+            case 3:
+                expr = ['x y min', 'x y max', 'x y min']
+                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
+                                      edi3_aa(clip, mode, False, **upscaler_args)], expr[:num_p])
             case _:
-                raise ValueError(f'{func_name}: Please use 0...2 order value')
+                raise ValueError(f'{func_name}: Please use 0...3 order value')
         
         if clip.format.subsampling_h:
             luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
