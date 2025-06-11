@@ -3739,7 +3739,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     blunt_h = 1 << clip.format.subsampling_h
     crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
     
-    if descale_args and (x := crop_keys & set(descale_args.keys())):
+    if descale_args and mode & 1 and (x := crop_keys & set(descale_args.keys())):
         raise ValueError(f'{func_name}: Unsupported key(s) {x} in descale_args')
     
     if not isinstance(mode, int):
@@ -3969,7 +3969,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         raise TypeError(f'{func_name}: invalid "sigma"')
     
     match dx, dy, kernel, frames:
-        case None | int() | float(), None | int() | float(), [str(), a], int() if all(isinstance(i, str) for i in a):
+        case None | int() | float(), None | int() | float(), list(), int() if all(isinstance(i, str) for i in kernel):
             frange = kernel
             clip = clip[frames] * len(frange)
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
