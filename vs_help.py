@@ -413,7 +413,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     Args:
         axis: can take the values "X" or "Y" for columns and rows respectively.
         target: the target column/row, it is counted from the upper left edge of the screen. It could be a list.
-        donor: the donor column/row. It could be a list.
+            It can be negative.
+        donor: the donor column/row. It could be a list. It can be negative.
         limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
             and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
         curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
@@ -425,7 +426,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         clamp: clamp target between donor minimum and maximum, by default True.
     
     Example:
-        clip = fix_border(clip, ['X', 0, 1, 50], ['X', 1919, 1918, 50], ['Y', 0, 1, 50], ['Y', 1079, 1078, 50])
+        clip = fix_border(clip, ['X', 0, 1, 50], ['X', -1, -2, 50], ['Y', 0, 1, 50], ['Y', -1, -2, 50])
     """
     func_name = 'fix_border'
     
@@ -476,17 +477,33 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
             clip = core.std.Invert(clip)
             limit = -limit
         
+        match target:
+            case int():
+                target = [target]
+            case list() if all(isinstance(i, int) for i in target):
+                pass
+            case _:
+                raise TypeError(f'{func_name}: "target" must be "int" or "list[int]"')
+        
+        match donor:
+            case int():
+                donor = [donor]
+            case list() if all(isinstance(i, int) for i in donor):
+                pass
+            case _:
+                raise TypeError(f'{func_name}: "donor" must be "int" or "list[int]"')
+        
         orig = clip
         
         def stats_x(clip: vs.VideoNode, x: int | list[int], w: int, mean: int) -> vs.VideoNode:
             
-            match x:
-                case int() if 0 <= x < w:
-                    x = [x]
-                case list() if all(isinstance(i, int) and 0 <= i < w for i in x):
-                    pass
-                case _:
-                    raise TypeError(f'{func_name}: invalid "x" = {x}')
+            if all(isinstance(i, int) and 0 <= i < w for i in x):
+                pass
+            elif all(isinstance(i, int) and -w <= i < 0 for i in x):
+                for i, j in enumerate(x):
+                    x[i] = w + j
+            else:
+                raise ValueError(f'{func_name}: {x} is out of range')
             
             return CrazyPlaneStats(
                 core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
@@ -495,13 +512,13 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         
         def stats_y(clip: vs.VideoNode, y: int | list[int], h: int, mean: int) -> vs.VideoNode:
             
-            match y:
-                case int() if 0 <= y < h:
-                    y = [y]
-                case list() if all(isinstance(i, int) and 0 <= i < h for i in y):
-                    pass
-                case _:
-                    raise TypeError(f'{func_name}: invalid "y" = {y}')
+            if all(isinstance(i, int) and 0 <= i < h for i in y):
+                pass
+            elif all(isinstance(i, int) and -h <= i < 0 for i in y):
+                for i, j in enumerate(y):
+                    y[i] = h + j
+            else:
+                raise ValueError(f'{func_name}: {y} is out of range')
             
             return CrazyPlaneStats(
                 core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
@@ -525,9 +542,6 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
                 )
             case _:
                 raise ValueError(f'{func_name}: invalid "axis"')
-        
-        if isinstance(target, int):
-            target = [target]
         
         expr = (f'{' '.join(f'{axis} {i} =' for i in target)} '
                 f'{'or ' * (len(target) - 1)}{expr} {shift} - 0 {full} clamp x ?')
@@ -3427,10 +3441,10 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             raise ValueError(f'{func_name}: invalid "planes"')
     
     match mode:
-        case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 == 1 and len(mode[1]) % 2 == 1:
+        case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 and len(mode[1]) % 2:
             side_h, side_v = len(mode[0]), len(mode[1])
             mode = [j * i for i in mode[1] for j in mode[0]]
-        case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2 == 1:
+        case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2:
             side_h = side_v
         case None:
             side_h = side_v = 3
@@ -3969,7 +3983,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         raise TypeError(f'{func_name}: invalid "sigma"')
     
     match dx, dy, kernel, frames:
-        case None | int() | float(), None | int() | float(), list(), int() if all(isinstance(i, str) for i in kernel):
+        case None | int() | float(), None | int() | float(), [str(), *a], int() if all(isinstance(i, str) for i in a):
             frange = kernel
             clip = clip[frames] * len(frange)
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
