@@ -4027,17 +4027,14 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal result, counter, frange
+        nonlocal result, counter
         result[n] = f.props[means[mean]]
         counter[n] = np.True_
         
         if np.all(counter):
             match frange[0]:
                 case str():
-                    if len(frange) != len(set(frange)):
-                        frange = [f'{j}_#{i}' for i, j in enumerate(frange)]
-                    
-                    sfrange = frange
+                    sfrange = [f'{j}_#{i}' for i, j in enumerate(frange)] if len(frange) != len(set(frange)) else frange
                 case int():
                     sfrange = [str(i) for i in frange]
                 case float():
@@ -4067,7 +4064,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 raise ValueError(f'{func_name}: there is no result, check the settings')
             
             plt.figure(figsize=(16, 9))
-            plt.plot(frange, result)
+            plt.plot(sfrange if param == 'kernel' else frange, result)
             plt.xlabel(param)
             plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
