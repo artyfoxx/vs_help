@@ -4,8 +4,8 @@ Written for internal use, but it would be great if it was useful to someone else
 Documented rather fragmentarily.
 # Dependencies
 ## General
-* [VapourSynth](https://www.vapoursynth.com/) >= R58
-* [Python](https://www.python.org/) >= 3.10
+* [VapourSynth](https://www.vapoursynth.com/) >= R66
+* [Python](https://www.python.org/) >= 3.12
 ## Plugins
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)

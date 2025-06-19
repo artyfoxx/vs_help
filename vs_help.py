@@ -4027,21 +4027,26 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal result, counter
+        nonlocal result, counter, frange
         result[n] = f.props[means[mean]]
         counter[n] = np.True_
         
         if np.all(counter):
             match frange[0]:
                 case str():
+                    if len(frange) != len(set(frange)):
+                        frange = [f'{j}_#{i}' for i, j in enumerate(frange)]
+                    
                     sfrange = frange
                 case int():
                     sfrange = [str(i) for i in frange]
                 case float():
-                    step = dx[2] if isinstance(dx, list) else dy[2]
-                    if isinstance(step, float):
-                        step = len(str(step).split('.')[1])
-                        sfrange = [f'{i:.{step}f}' for i in frange]
+                    tale_0 = str(frange[0]).split('.')[1]
+                    tale_1 = str(frange[1]).split('.')[1]
+                    
+                    if int(tale_0) or int(tale_1):
+                        digits = max(len(tale_0), len(tale_1))
+                        sfrange = [f'{i:.{digits}f}' for i in frange]
                     else:
                         sfrange = [str(int(i)) for i in frange]
             
@@ -4049,7 +4054,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             if sigma:
                 result = gaussian_filter(result, sigma)
-            
+            # добавить второй прогон для поиска отклонений от основного разрешения
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
             res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
@@ -4066,11 +4071,19 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             plt.xlabel(param)
             plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
+            
             if mark:
-                plt.scatter(frange[min_index], result[min_index], marker='x')
-                for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
-                    plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                 rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                if param == 'kernel':
+                    for i, j in zip(min_index, result[min_index]):
+                        plt.plot(i, j, marker='x', c='k')
+                        plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                else:
+                    for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
+                        plt.plot(i, j, marker='x', c='k')
+                        plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+            
             plt.savefig(output.replace('.txt', '.png'))
             plt.close()
         
