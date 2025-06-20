@@ -4002,19 +4002,31 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args))
             param = 'dx'
         case None | int() | float(), None | int() | float(), str(), [int(), int()]:
-            frange = list(range(*frames))
-            resc = rescaler(clip[frames[0]:frames[1]], dx, dy, kernel, **descale_args)
+            frange = np.arange(*frames, dtype=np.int_)
+            clip = clip[frames[0]:frames[1]]
+            resc = rescaler(clip, dx, dy, kernel, **descale_args)
             param = 'frame'
         case None | int() | float(), [int() | float(), int() | float()], str(), [int(), int()]:
-            frange = list(range(*frames)) * 2
-            resc = (rescaler(clip[frames[0]:frames[1]], dx, dy[0], kernel, **descale_args) +
-                    rescaler(clip[frames[0]:frames[1]], dx, dy[1], kernel, **descale_args))
+            frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
+            clip = clip[frames[0]:frames[1]]
+            resc = (rescaler(clip, dx, dy[0], kernel, **descale_args) +
+                    rescaler(clip, dx, dy[1], kernel, **descale_args))
+            clip *= 2
             param = 'frame_dy'
         case [int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
-            frange = list(range(*frames)) * 2
-            resc = (rescaler(clip[frames[0]:frames[1]], dx[0], dy, kernel, **descale_args) +
-                    rescaler(clip[frames[0]:frames[1]], dx[1], dy, kernel, **descale_args))
+            frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
+            clip = clip[frames[0]:frames[1]]
+            resc = (rescaler(clip, dx[0], dy, kernel, **descale_args) +
+                    rescaler(clip, dx[1], dy, kernel, **descale_args))
+            clip *= 2
             param = 'frame_dx'
+        case [int() | float(), int() | float()], [int() | float(), int() | float()], str(), [int(), int()]:
+            frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
+            clip = clip[frames[0]:frames[1]]
+            resc = (rescaler(clip, dx[0], dy[0], kernel, **descale_args) +
+                    rescaler(clip, dx[1], dy[1], kernel, **descale_args))
+            clip *= 2
+            param = 'frame_dx_dy'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
             return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
@@ -4047,12 +4059,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     if len(frange) != len(set(frange)):
                         frange = [f'{j}_#{i}' for i, j in enumerate(frange)]
                     sfrange = frange
-                case int():
+                case np.int_():
                     if param != 'frame':
+                        result[result == 0.0] = 1e-20
                         result = np.divide(*result.reshape(2, -1))
                         frange = frange[:len(result)]
                     sfrange = [str(i) for i in frange]
-                case float():
+                case np.float64():
                     tale_0 = str(frange[0]).split('.')[1]
                     tale_1 = str(frange[1]).split('.')[1]
                     
