@@ -4005,6 +4005,16 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             frange = list(range(*frames))
             resc = rescaler(clip[frames[0]:frames[1]], dx, dy, kernel, **descale_args)
             param = 'frame'
+        case None | int() | float(), [int() | float(), int() | float()], str(), [int(), int()]:
+            frange = list(range(*frames)) * 2
+            resc = (rescaler(clip[frames[0]:frames[1]], dx, dy[0], kernel, **descale_args) +
+                    rescaler(clip[frames[0]:frames[1]], dx, dy[1], kernel, **descale_args))
+            param = 'frame_dy'
+        case [int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
+            frange = list(range(*frames)) * 2
+            resc = (rescaler(clip[frames[0]:frames[1]], dx[0], dy, kernel, **descale_args) +
+                    rescaler(clip[frames[0]:frames[1]], dx[1], dy, kernel, **descale_args))
+            param = 'frame_dx'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
             return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
@@ -4027,15 +4037,20 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
-        nonlocal result, counter
+        nonlocal result, counter, frange
         result[n] = f.props[means[mean]]
         counter[n] = np.True_
         
         if np.all(counter):
             match frange[0]:
                 case str():
-                    sfrange = [f'{j}_#{i}' for i, j in enumerate(frange)] if len(frange) != len(set(frange)) else frange
+                    if len(frange) != len(set(frange)):
+                        frange = [f'{j}_#{i}' for i, j in enumerate(frange)]
+                    sfrange = frange
                 case int():
+                    if param != 'frame':
+                        result = np.divide(*result.reshape(2, -1))
+                        frange = frange[:len(result)]
                     sfrange = [str(i) for i in frange]
                 case float():
                     tale_0 = str(frange[0]).split('.')[1]
@@ -4051,7 +4066,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             if sigma:
                 result = gaussian_filter(result, sigma)
-            # добавить второй прогон для поиска отклонений от основного разрешения
+            
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
             res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
@@ -4064,7 +4079,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 raise ValueError(f'{func_name}: there is no result, check the settings')
             
             plt.figure(figsize=(16, 9))
-            plt.plot(sfrange if param == 'kernel' else frange, result)
+            plt.plot(frange, result)
             plt.xlabel(param)
             plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
