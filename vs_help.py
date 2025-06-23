@@ -3728,7 +3728,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
         
         return clip
     
-    clip = core.std.FrameEval(clip, partial(get_search, clip=clip), prop_src=clip)
+    clip = core.std.FrameEval(clip, partial(get_search, clip=clip), prop_src=clip, clip_src=clip)
     
     return clip
 
