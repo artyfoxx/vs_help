@@ -3760,16 +3760,21 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
         raise TypeError(f'{func_name}: invalid mode')
     
     if mode & 2:
+        # https://web.archive.org/web/20231123073420/https://anibin.blogspot.com/2014/01/blog-post_3155.html
         if dx is None:
             raise TypeError(f'{func_name}: invalid "dx" for studio resolution mode')
         if dy is None:
             raise TypeError(f'{func_name}: invalid "dy" for studio resolution mode')
-        if w != 1920 or h != 1080:
-            raise ValueError(f'{func_name}: Unsupported resolution for studio resolution mode')
-        up_w = 1088 * 16 / 9 if mode & 1 else 1934
-        dx = dx - (up_w - 1920) * dx / up_w
-        dy = dy - 8 * dy / 1088
-        mode |= 1
+        if mode & 1:
+            match w, h:
+                case 1920, 1080:
+                    up_w = 1088 * 16 / 9
+                    dx = dx - (up_w - 1920) * dx / up_w
+                    dy = dy - 8 * dy / 1088
+                case _:
+                    raise ValueError(f'{func_name}: Unsupported resolution for studio resolution mode')
+        else:
+            raise ValueError(f'{func_name}: Fractional operation mode is required for studio resolution mode')
     
     if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
         raise ValueError(f'{func_name}: invalid "kernel"')
