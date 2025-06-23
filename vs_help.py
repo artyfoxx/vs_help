@@ -3976,6 +3976,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if frames is None:
         frames = [0, clip.num_frames]
     
+    if kernel == 'all':
+        kernel = ['bilinear', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic',
+                  'lanczos', 'lanczos', 'lanczos', 'lanczos', 'spline16', 'spline36', 'spline64']
+        descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5]
+        descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5]
+        descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
+    
     match output:
         case None:
             output = f'getnative_frame(s)_{frames}.txt' if isinstance(frames, int) else f'getnative_dx_{dx}_dy_{dy}.txt'
