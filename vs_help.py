@@ -1752,7 +1752,7 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
                                  CrazyPlaneStats(core.std.Expr(fields, ['x y - abs' if i == plane else '' for i in range(num_p)]), mean, plane, norm)],
                                 lambda: dict(avg0=f'y.{means[mean]}', avg1=f'z.{means[mean]}', avg2=f'a.{means[mean]}'))
     
-    clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip)
+    clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip, clip_src=clip)
     clip = core.std.RemoveFrameProps(clip, ['avg0', 'avg1', 'avg2'])
     
     return clip
@@ -2510,7 +2510,7 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
         scope = radius * 2 + 1
         clips = [shift_clip(clip, i - radius) for i in range(scope)]
         
-        clip = core.std.FrameEval(clip, partial(get_smooth, clips=clips, core=core), prop_src=clips)
+        clip = core.std.FrameEval(clip, partial(get_smooth, clips=clips, core=core), prop_src=clips, clip_src=clips)
     
     if scenechange:
         clip = core.std.RemoveFrameProps(clip, ['_SceneChangeNext', '_SceneChangePrev'])
@@ -3989,17 +3989,17 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
                             else [value] * len(frange) for key, value in descale_args.items()}
             descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None} for i in range(len(frange))]
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], **descale_args[n]))
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], **descale_args[n]), clip_src=clip)
             param = 'kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), int():
             frange = np.arange(*dy, dtype=np.float64)
             clip = clip[frames] * len(frange)
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, **descale_args))
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, **descale_args), clip_src=clip)
             param = 'dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), int():
             frange = np.arange(*dx, dtype=np.float64)
             clip = clip[frames] * len(frange)
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args))
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args), clip_src=clip)
             param = 'dx'
         case None | int() | float(), None | int() | float(), str(), [int(), int()]:
             frange = np.arange(*frames, dtype=np.int_)
@@ -4114,6 +4114,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         
         return clip
     
-    clip = core.std.FrameEval(clip, partial(get_native, clip=clip), prop_src=clip)
+    clip = core.std.FrameEval(clip, partial(get_native, clip=clip), prop_src=clip, clip_src=clip)
     
     return clip
