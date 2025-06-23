@@ -3952,9 +3952,9 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
     return clip
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
-              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0, mark: bool = False,
-              output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
-              **descale_args: Any) -> vs.VideoNode:
+              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
+              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
+              yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
     import matplotlib as mpl
     import matplotlib.pyplot as plt
@@ -4073,7 +4073,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     sfrange = frange
                 case np.int_():
                     if param != 'frame':
-                        result[result == 0.0] = 1e-20
+                        result[result < 1e-20] = 1e-20
                         result = np.divide(*result.reshape(2, -1))
                         frange = frange[:len(result)]
                     sfrange = [str(i) for i in frange]
@@ -4094,7 +4094,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
-            res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
+            
+            if param in {'frame_dx', 'frame_dy', 'frame_dx_dy'}:
+                res = [f'{i:>{dig}} {j:20.2f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
+            else:
+                res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
             
             if res:
                 with open(output, 'w') as file:
@@ -4105,6 +4109,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             plt.figure(figsize=(16, 9))
             plt.plot(frange, result)
+            plt.yscale(yscale)
             plt.xlabel(param)
             plt.ylabel('absolute normalized difference', rotation=90)
             plt.grid()
@@ -4122,7 +4127,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                                      rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             
             plt.savefig(output.replace('.txt', '.png'))
-            plt.close()
+            plt.close('all')
         
         return clip
     
