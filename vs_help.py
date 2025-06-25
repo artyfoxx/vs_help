@@ -3953,7 +3953,7 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
-              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
+              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
               yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
     import gc
@@ -4053,13 +4053,17 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if crop:
         clip = core.std.Crop(clip, crop, crop, crop, crop)
     
-    clip = CrazyPlaneStats(clip, mean)
+    match mean:
+        case -1:
+            clip = core.std.PlaneStats(clip)
+        case _:
+            clip = CrazyPlaneStats(clip, mean)
     
     result = np.zeros(len(frange), dtype=np.float64)
     counter = np.full(len(frange), np.False_, dtype=np.bool_)
     
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
-             'root_mean_square', 'root_mean_cube', 'median']
+             'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         
