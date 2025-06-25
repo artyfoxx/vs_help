@@ -3733,7 +3733,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     return clip
 
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
-             mode: int = 1, upscaler: Callable | None = None, ratio: float = 1.0,
+             mode: int = 5, upscaler: Callable | None = None, ratio: float = 1.0,
              **descale_args: Any) -> vs.VideoNode:
     
     func_name = 'rescaler'
