@@ -3956,6 +3956,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 0,
               yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
+    import gc
+
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     from scipy.ndimage import gaussian_filter
@@ -4128,6 +4130,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             plt.savefig(output.replace('.txt', '.png'))
             plt.close('all')
+            gc.collect()
         
         return clip
     
