@@ -4074,8 +4074,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         if np.all(counter):
             match frange[0]:
                 case str():
-                    if len(frange) != len(set(frange)):
-                        frange = [f'{j}_#{i}' for i, j in enumerate(frange)]
+                    if len(frange) != len(x := set(frange)):
+                        temp = {i: [j for j, k in enumerate(frange) if i == k] for i in x}
+                        frange = [f'{j}#{temp[j].index(i)}' if len(temp[j]) > 1 else j for i, j in enumerate(frange)]
                     sfrange = frange
                 case np.int_():
                     if param != 'frame':
@@ -4086,7 +4087,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 case np.float64():
                     tale_0 = str(frange[0]).split('.')[1]
                     tale_1 = str(frange[1]).split('.')[1]
-                    
                     if int(tale_0) or int(tale_1):
                         digits = max(len(tale_0), len(tale_1))
                         sfrange = [f'{i:.{digits}f}' for i in frange]
@@ -4113,7 +4113,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             else:
                 raise ValueError(f'{func_name}: there is no result, check the settings')
             
-            plt.figure(figsize=(16, 9))
+            plt.figure(figsize=(16, 9), layout='tight')
             plt.plot(frange, result)
             plt.yscale(yscale)
             plt.xlabel(param)
@@ -4122,13 +4122,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             if mark:
                 if param == 'kernel':
+                    plt.plot(min_index, result[min_index], marker='x', c='k', ls='')
                     for i, j in zip(min_index, result[min_index]):
-                        plt.plot(i, j, marker='x', c='k')
                         plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
                                      rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
                 else:
+                    plt.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
                     for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
-                        plt.plot(i, j, marker='x', c='k')
                         plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
                                      rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             
