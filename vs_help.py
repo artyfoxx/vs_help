@@ -3952,7 +3952,7 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
     return clip
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
-              frames: int | list[int] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
+              frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
               yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
@@ -3975,15 +3975,32 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if clip.format.color_family != vs.GRAY:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    if frames is None:
-        frames = [0, clip.num_frames]
+    match frames:
+        case None if clip.num_frames == 1:
+            frames = 0
+        case None:
+            frames = [0, clip.num_frames]
+        case int() | [int(), int()] | [int(), int(), int()]:
+            pass
+        case [int() | None, int() | None] | [int() | None, int() | None, int() | None]:
+            temp = [0, clip.num_frames, 1]
+            frames = [temp[i] if j is None else j for i, j in enumerate(frames)]
+        case _:
+            raise TypeError(f'{func_name}: invalid "frames"')
     
-    if kernel == 'all':
-        kernel = ['bilinear', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic',
-                  'lanczos', 'lanczos', 'lanczos', 'lanczos', 'spline16', 'spline36', 'spline64']
-        descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5]
-        descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5]
-        descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
+    match kernel:
+        case 'all':
+            kernel = ['bilinear', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic',
+                      'bicubic', 'lanczos', 'lanczos', 'lanczos', 'lanczos', 'spline16', 'spline36', 'spline64']
+            descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5]
+            descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5]
+            descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
+        case str():
+            pass
+        case [str(), *a] if all(isinstance(i, str) for i in a):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "kernel"')
     
     match output:
         case None:
@@ -3997,7 +4014,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         raise TypeError(f'{func_name}: invalid "sigma"')
     
     match dx, dy, kernel, frames:
-        case None | int() | float(), None | int() | float(), [str(), *a], int() if all(isinstance(i, str) for i in a):
+        case None | int() | float(), None | int() | float(), list(), int():
             frange = kernel
             clip = clip[frames] * len(frange)
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
@@ -4015,36 +4032,38 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             clip = clip[frames] * len(frange)
             resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args), clip_src=clip)
             param = 'dx'
-        case None | int() | float(), None | int() | float(), str(), [int(), int()]:
+        case None | int() | float(), None | int() | float(), str(), list():
             frange = np.arange(*frames, dtype=np.int_)
-            clip = clip[frames[0]:frames[1]]
+            clip = clip[slice(*frames)]
             resc = rescaler(clip, dx, dy, kernel, **descale_args)
             param = 'frame'
-        case None | int() | float(), [int() | float(), int() | float()], str(), [int(), int()]:
+        case None | int() | float(), [int() | float(), int() | float()], str(), list():
             frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
-            clip = clip[frames[0]:frames[1]]
+            clip = clip[slice(*frames)]
             resc = (rescaler(clip, dx, dy[0], kernel, **descale_args) +
                     rescaler(clip, dx, dy[1], kernel, **descale_args))
             clip *= 2
             param = 'frame_dy'
-        case [int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
+        case [int() | float(), int() | float()], None | int() | float(), str(), list():
             frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
-            clip = clip[frames[0]:frames[1]]
+            clip = clip[slice(*frames)]
             resc = (rescaler(clip, dx[0], dy, kernel, **descale_args) +
                     rescaler(clip, dx[1], dy, kernel, **descale_args))
             clip *= 2
             param = 'frame_dx'
-        case [int() | float(), int() | float()], [int() | float(), int() | float()], str(), [int(), int()]:
+        case [int() | float(), int() | float()], [int() | float(), int() | float()], str(), list():
             frange = np.tile(np.arange(*frames, dtype=np.int_), 2)
-            clip = clip[frames[0]:frames[1]]
+            clip = clip[slice(*frames)]
             resc = (rescaler(clip, dx[0], dy[0], kernel, **descale_args) +
                     rescaler(clip, dx[1], dy[1], kernel, **descale_args))
             clip *= 2
             param = 'frame_dx_dy'
-        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), [int(), int()]:
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
-        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), [int(), int()]:
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, **descale_args) for i in range(*frames)])
+        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+        case None | int() | float(), None | int() | float(), list(), list():
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
     
