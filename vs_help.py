@@ -60,7 +60,7 @@ Functions:
     out_of_range_search
     rescaler (float only)
     SCDetect
-    getnative
+    getnative (float only)
 """
 
 import re
@@ -3777,7 +3777,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             raise ValueError(f'{func_name}: Fractional operation mode is required for studio resolution mode')
     
     if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
-        raise ValueError(f'{func_name}: invalid "kernel"')
+        raise ValueError(f'{func_name}: invalid "kernel": {kernel}')
     
     match dx, dy, mode & 1:
         case None, None, 1:
@@ -3963,6 +3963,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     from scipy.ndimage import gaussian_filter
     from scipy.signal import argrelextrema
     mpl.use('Agg')
+    plt.rcParams.update({'figure.max_open_warning': 0})
     
     func_name = 'getnative'
     
@@ -4015,7 +4016,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
-            frange = kernel
+            frange = kernel.copy()
             clip = clip[frames] * len(frange)
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
                             else [value] * len(frange) for key, value in descale_args.items()}
@@ -4084,13 +4085,15 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
-    def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
+    def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list | np.ndarray) -> vs.VideoNode:
         
-        nonlocal result, counter, frange
+        nonlocal result, counter
         result[n] = f.props[means[mean]]
         counter[n] = np.True_
         
         if np.all(counter):
+            result[result < 1e-20] = 1e-20
+            
             match frange[0]:
                 case str():
                     if len(frange) != len(x := set(frange)):
@@ -4099,7 +4102,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     sfrange = frange
                 case np.int_():
                     if param != 'frame':
-                        result[result < 1e-20] = 1e-20
                         result = np.divide(*result.reshape(2, -1))
                         frange = frange[:len(result)]
                     sfrange = [str(i) for i in frange]
@@ -4157,6 +4159,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         
         return clip
     
-    clip = core.std.FrameEval(clip, partial(get_native, clip=clip), prop_src=clip, clip_src=clip)
+    clip = core.std.FrameEval(clip, partial(get_native, clip=clip, frange=frange), prop_src=clip, clip_src=clip)
     
     return clip
