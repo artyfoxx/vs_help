@@ -3776,7 +3776,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
         else:
             raise ValueError(f'{func_name}: Fractional operation mode is required for studio resolution mode')
     
-    if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64'}:
+    if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64', 'point'}:
         raise ValueError(f'{func_name}: invalid "kernel": {kernel}')
     
     match dx, dy, mode & 1:
@@ -3957,7 +3957,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               mean: int = -1, yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
     import gc
-
+    
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     from scipy.ndimage import gaussian_filter
