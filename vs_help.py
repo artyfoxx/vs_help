@@ -4016,6 +4016,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if not isinstance(sigma, int) or sigma < 0:
         raise TypeError(f'{func_name}: invalid "sigma"')
     
+    multiple = False
+    
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
             frange = kernel.copy()
@@ -4061,34 +4063,37 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     rescaler(clip, dx[1], dy[1], kernel, **descale_args))
             clip *= 2
             param = 'frame_dx_dy'
-        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
-                                              (f'frames_{frames}_pass_dy', None),
-                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
-        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
-                                              (f'frames_{frames}_pass_dx', None),
-                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
         case None | int() | float(), None | int() | float(), list(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
-                                              (f'frames_{frames}_pass_kernel', None),
-                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+            frange = kernel.copy()
+            multiple = True
+            param = 'kernel'
+        case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
+            frange = np.arange(*dy, dtype=np.float64)
+            multiple = True
+            param = 'dy'
+        case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
+            frange = np.arange(*dx, dtype=np.float64)
+            multiple = True
+            param = 'dx'
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
     
-    clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+    if multiple:
+        output = f'frames_{frames}_pass_{param}.txt'
+        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, (output[:-4], None), thr,
+                                          crop, mean, yscale, **descale_args) for i in range(*frames)])
+    else:
+        clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+        if crop:
+            clip = core.std.Crop(clip, crop, crop, crop, crop)
+        match mean:
+            case -1:
+                clip = core.std.PlaneStats(clip)
+            case _:
+                clip = CrazyPlaneStats(clip, mean)
     
-    if crop:
-        clip = core.std.Crop(clip, crop, crop, crop, crop)
-    
-    match mean:
-        case -1:
-            clip = core.std.PlaneStats(clip)
-        case _:
-            clip = CrazyPlaneStats(clip, mean)
-    
-    result = np.zeros(len(frange), dtype=np.float64)
-    counter = np.full(len(frange), np.False_, dtype=np.bool_)
+    result = np.zeros(clip.num_frames, dtype=np.float64)
+    counter = np.full(clip.num_frames, np.False_, dtype=np.bool_)
     
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
@@ -4126,6 +4131,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             if sigma:
                 result = gaussian_filter(result, sigma)
+            
+            if multiple:
+                result = np.mean(result.reshape(-1, len(frange)), axis=0)
             
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
