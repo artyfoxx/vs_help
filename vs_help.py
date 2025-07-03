@@ -667,8 +667,7 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
     vectors = [core.mv.Analyse(sup1, isb=j, delta=i, **args[1]) for i in range(1, tr + 1) for j in (True, False)]
     
     for i in args[3:]:
-        for j in range(tr * 2):
-            vectors[j] = core.mv.Recalculate(sup1, vectors[j], **i)
+        vectors = [core.mv.Recalculate(sup1, j, **i) for j in vectors]
     
     clip = getattr(core.mv, f'Degrain{tr}')(clip, sup2 if full_range else sup1, *vectors, **args[2])
     
@@ -1310,7 +1309,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 eedi3_args = {key: value for key, value in upscaler_args.items() if key in eedi3_keys}
                 znedi3_args = {key: value for key, value in upscaler_args.items() if key in znedi3_keys}
                 
-                if any((x := i) not in eedi3_args and x not in znedi3_args for i in upscaler_args):
+                if any((x := i) not in eedi3_args and i not in znedi3_args for i in upscaler_args):
                     raise KeyError(f'{func_name}: Unsupported key {x} in upscaler_args')
                 
                 clip = core.eedi3m.EEDI3(clip, field=1, dh=True,
@@ -1441,13 +1440,13 @@ def apply_range(first: vs.VideoNode, second: vs.VideoNode, *args: int | list[int
     
     for i in args:
         match i:
-            case [int(a), int(b)] if 0 <= a < b and b < num_f:
+            case [int(a), int(b)] if 0 <= a < b and b <= num_f:
                 if a == 0:
-                    first = second[:b + 1] + first[b + 1:]
-                elif b == num_f - 1:
+                    first = second[:b] + first[b:]
+                elif b == num_f:
                     first = first[:a] + second[a:]
                 else:
-                    first = first[:a] + second[a:b + 1] + first[b + 1:]
+                    first = first[:a] + second[a:b] + first[b:]
             case int(a) | [int(a)] if 0 <= a < num_f:
                 if a == 0:
                     first = second[a] + first[a + 1:]
@@ -1456,7 +1455,7 @@ def apply_range(first: vs.VideoNode, second: vs.VideoNode, *args: int | list[int
                 else:
                     first = first[:a] + second[a] + first[a + 1:]
             case _:
-                raise ValueError(f'{func_name}: *args must be list[first_frame, last_frame], list[frame] or "int"')
+                raise ValueError(f'{func_name}: *args must be list[second_frame, first_frame], list[frame] or "int"')
     
     return first
 
