@@ -68,6 +68,7 @@ from collections.abc import Callable
 from functools import partial
 from inspect import signature
 from math import ceil, sqrt
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -3952,8 +3953,8 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
-              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
+              mark: bool = False, output: str | tuple[str, None] | None = None, thr: float = 0.015, crop: int = 5,
+              mean: int = -1, yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
     
     import gc
 
@@ -4004,9 +4005,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     match output:
         case None:
-            output = f'getnative_frame(s)_{frames}.txt' if isinstance(frames, int) else f'getnative_dx_{dx}_dy_{dy}.txt'
+            output = f'getnative_frame_{frames}.txt' if isinstance(frames, int) else f'getnative_dx_{dx}_dy_{dy}.txt'
         case str():
             pass
+        case (str(a), None):
+            output = f'{a}/getnative_frame_{frames}.txt'
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
     
@@ -4059,11 +4062,17 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             clip *= 2
             param = 'frame_dx_dy'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
+                                              (f'frames_{frames}_pass_dy', None),
+                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
+                                              (f'frames_{frames}_pass_dx', None),
+                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
         case None | int() | float(), None | int() | float(), list(), list():
-            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, None, thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+            return core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark,
+                                              (f'frames_{frames}_pass_kernel', None),
+                                              thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
     
@@ -4084,7 +4093,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
-    def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list | np.ndarray) -> vs.VideoNode:
+    def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
         nonlocal result, counter
         result[n] = f.props[means[mean]]
@@ -4127,7 +4136,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
             
             if res:
-                with open(output, 'w') as file:
+                p = Path(output)
+                p.parent.mkdir(exist_ok=True)
+                with p.open('w') as file:
                     file.write(f'{param:<{dig}} abs diff\n')
                     file.writelines(res)
             else:
@@ -4152,7 +4163,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
                                      rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             
-            plt.savefig(output.replace('.txt', '.png'))
+            plt.savefig(p.with_suffix('.png'))
             plt.close('all')
             gc.collect()
         
