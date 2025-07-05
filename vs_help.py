@@ -3953,8 +3953,8 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
-              mark: bool = False, output: str | tuple[str, None] | None = None, thr: float = 0.015, crop: int = 5,
-              mean: int = -1, yscale: str = 'log', **descale_args: Any) -> vs.VideoNode:
+              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
+              yscale: str = 'log', alt: bool = False, **descale_args: Any) -> vs.VideoNode:
     
     import gc
     
@@ -3998,25 +3998,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
         case str():
             pass
-        case [str(), *a] if all(isinstance(i, str) for i in a):
+        case [str(), str(), *a] if all(isinstance(i, str) for i in a):
             pass
         case _:
             raise TypeError(f'{func_name}: invalid "kernel"')
     
-    match output:
-        case None:
-            output = f'getnative_frame_{frames}.txt' if isinstance(frames, int) else f'getnative_dx_{dx}_dy_{dy}.txt'
-        case str():
-            pass
-        case (str(a), None):
-            output = f'{a}/getnative_frame_{frames}.txt'
-        case _:
-            raise TypeError(f'{func_name}: invalid "output"')
-    
     if not isinstance(sigma, int) or sigma < 0:
         raise TypeError(f'{func_name}: invalid "sigma"')
-    
-    multiple = False
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
@@ -4024,18 +4012,22 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             clip = clip[frames] * len(frange)
             descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
                             else [value] * len(frange) for key, value in descale_args.items()}
-            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None} for i in range(len(frange))]
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], **descale_args[n]), clip_src=clip)
+            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
+                            for i in range(len(frange))]
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, dy, frange[n], **descale_args[n]),
+                                      clip_src=clip)
             param = 'kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), int():
             frange = np.arange(*dy, dtype=np.float64)
             clip = clip[frames] * len(frange)
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, **descale_args), clip_src=clip)
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, dx, frange[n], kernel, **descale_args),
+                                      clip_src=clip)
             param = 'dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), int():
             frange = np.arange(*dx, dtype=np.float64)
             clip = clip[frames] * len(frange)
-            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args), clip_src=clip)
+            resc = core.std.FrameEval(clip, lambda n, clip=clip: rescaler(clip, frange[n], dy, kernel, **descale_args),
+                                      clip_src=clip)
             param = 'dx'
         case None | int() | float(), None | int() | float(), str(), list():
             frange = np.arange(*frames, dtype=np.int_)
@@ -4065,23 +4057,43 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             param = 'frame_dx_dy'
         case None | int() | float(), None | int() | float(), list(), list():
             frange = kernel.copy()
-            multiple = True
-            param = 'kernel'
+            if not alt:
+                clip = clip[slice(*frames)]
+                descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
+                                else [value] * len(frange) for key, value in descale_args.items()}
+                descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
+                                for i in range(len(frange))]
+                resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
+                clip *= len(frange)
+            param = 'total_kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
             frange = np.arange(*dy, dtype=np.float64)
-            multiple = True
-            param = 'dy'
+            if not alt:
+                clip = clip[slice(*frames)]
+                resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
+                clip *= len(frange)
+            param = 'total_dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
             frange = np.arange(*dx, dtype=np.float64)
-            multiple = True
-            param = 'dx'
+            if not alt:
+                clip = clip[slice(*frames)]
+                resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
+                clip *= len(frange)
+            param = 'total_dx'
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
     
-    if multiple:
-        output = f'frames_{frames}_pass_{param}.txt'
-        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, (output[:-4], None), thr,
-                                          crop, mean, yscale, **descale_args) for i in range(*frames)])
+    match output:
+        case None:
+            output = f'pass_{param}_frame(s)_{frames}_{dx}x{dy}.txt'
+        case str() if output.split('.')[-1] == 'txt':
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "output"')
+    
+    if alt and param in {'total_kernel', 'total_dy', 'total_dx'}:
+        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, f'{output[:-4]}/frame_{i}.txt',
+                                          thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
     else:
         clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
         if crop:
@@ -4128,11 +4140,19 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             dig = max(max(len(i) for i in sfrange), len(param))
             
-            if sigma:
+            if param in {'total_kernel', 'total_dy', 'total_dx'}:
+                if alt:
+                    result = result.reshape(-1, len(frange))
+                    if sigma:
+                        result = gaussian_filter(result, sigma, axes=1)
+                    result = np.exp(np.mean(np.log(result), axis=0))
+                else:
+                    result = result.reshape(len(frange), -1)
+                    if sigma:
+                        result = gaussian_filter(result, sigma, axes=0)
+                    result = np.exp(np.mean(np.log(result), axis=1))
+            elif sigma:
                 result = gaussian_filter(result, sigma)
-            
-            if multiple:
-                result = np.mean(result.reshape(-1, len(frange)), axis=0)
             
             min_index = argrelextrema(result, np.less)[0]
             min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
@@ -4159,7 +4179,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             plt.grid()
             
             if mark:
-                if param == 'kernel':
+                if param in {'kernel', 'total_kernel'}:
                     plt.plot(min_index, result[min_index], marker='x', c='k', ls='')
                     for i, j in zip(min_index, result[min_index]):
                         plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
