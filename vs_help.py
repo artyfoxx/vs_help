@@ -3954,8 +3954,12 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', alt: bool = False, **descale_args: Any) -> vs.VideoNode:
-    
+              yscale: str = 'log', details: bool = False, **descale_args: Any) -> vs.VideoNode:
+    """
+    Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
+    фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
+    Поэтому при использовании срезов с большим значением шага неизбежно СИЛЬНОЕ падение производительности.
+    """  # noqa: D205, RUF002
     import gc
     
     import matplotlib as mpl
@@ -3963,7 +3967,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     from scipy.ndimage import gaussian_filter
     from scipy.signal import argrelextrema
     mpl.use('Agg')
-    plt.rcParams.update({'figure.max_open_warning': 0})
     
     func_name = 'getnative'
     
@@ -4057,28 +4060,25 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             param = 'frame_dx_dy'
         case None | int() | float(), None | int() | float(), list(), list():
             frange = kernel.copy()
-            if not alt:
-                clip = clip[slice(*frames)]
-                descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
-                                else [value] * len(frange) for key, value in descale_args.items()}
-                descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
-                                for i in range(len(frange))]
-                resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
+                            else [value] * len(frange) for key, value in descale_args.items()}
+            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
+                            for i in range(len(frange))]
+            resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
+            clip *= len(frange)
             param = 'total_kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
             frange = np.arange(*dy, dtype=np.float64)
-            if not alt:
-                clip = clip[slice(*frames)]
-                resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
+            clip *= len(frange)
             param = 'total_dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
             frange = np.arange(*dx, dtype=np.float64)
-            if not alt:
-                clip = clip[slice(*frames)]
-                resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
+            clip *= len(frange)
             param = 'total_dx'
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
@@ -4091,24 +4091,67 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
     
-    if alt and param in {'total_kernel', 'total_dy', 'total_dx'}:
-        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, f'{output[:-4]}/frame_{i}.txt',
-                                          thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
-    else:
-        clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
-        if crop:
-            clip = core.std.Crop(clip, crop, crop, crop, crop)
-        match mean:
-            case -1:
-                clip = core.std.PlaneStats(clip)
-            case _:
-                clip = CrazyPlaneStats(clip, mean)
+    clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+    
+    if crop:
+        clip = core.std.Crop(clip, crop, crop, crop, crop)
+    
+    match mean:
+        case -1:
+            clip = core.std.PlaneStats(clip)
+        case _:
+            clip = CrazyPlaneStats(clip, mean)
     
     result = np.zeros(clip.num_frames, dtype=np.float64)
     counter = np.full(clip.num_frames, np.False_, dtype=np.bool_)
     
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
+    
+    def get_plot(sfrange: list[str], frange: list[str] | np.ndarray, result: np.ndarray, output: str,
+                 param: str) -> None:
+        
+        dig = max(max(len(i) for i in sfrange), len(param))
+        
+        min_index = argrelextrema(result, np.less)[0]
+        min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
+        
+        if param in {'frame_dx', 'frame_dy', 'frame_dx_dy'}:
+            res = [f'{i:>{dig}} {j:20.2f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
+        else:
+            res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
+        
+        if res:
+            p = Path(output)
+            p.parent.mkdir(exist_ok=True)
+            with p.open('w') as file:
+                file.write(f'{param:<{dig}} abs diff\n')
+                file.writelines(res)
+        else:
+            raise ValueError(f'{func_name}: there is no result, check the settings')
+        
+        plt.figure(figsize=(16, 9), layout='tight')
+        plt.plot(frange, result)
+        plt.yscale(yscale)
+        plt.xlabel(param)
+        plt.ylabel('absolute normalized difference', rotation=90)
+        plt.grid()
+        
+        if mark:
+            if param in {'kernel', 'total_kernel'}:
+                plt.plot(min_index, result[min_index], marker='x', c='k', ls='')
+                for i, j in zip(min_index, result[min_index]):
+                    plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                    rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+            else:
+                plt.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
+                for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
+                    plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                    rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+        
+        plt.savefig(p.with_suffix('.png'))
+        plt.close('all')
+        gc.collect()
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
@@ -4138,61 +4181,20 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     else:
                         sfrange = [str(int(i)) for i in frange]
             
-            dig = max(max(len(i) for i in sfrange), len(param))
-            
             if param in {'total_kernel', 'total_dy', 'total_dx'}:
-                if alt:
-                    result = result.reshape(-1, len(frange))
-                    if sigma:
-                        result = gaussian_filter(result, sigma, axes=1)
-                    result = np.exp(np.mean(np.log(result), axis=0))
-                else:
-                    result = result.reshape(len(frange), -1)
-                    if sigma:
-                        result = gaussian_filter(result, sigma, axes=0)
-                    result = np.exp(np.mean(np.log(result), axis=1))
+                result = result.reshape(len(frange), -1)
+                if sigma:
+                    result = gaussian_filter(result, sigma, axes=0)
+                if details:
+                    import sys
+                    for i, j in zip(enumerate(result.T), range(*frames)):
+                        print(f'Frame: {i[0]}/{result.shape[1]} "details" pass{' ':<20}', end='\r', file=sys.stderr)
+                        get_plot(sfrange, frange, i[1], f'{output[:-4]}/frame_{j}.txt', param.split('_')[1])
+                result = np.exp(np.mean(np.log(result), axis=1))
             elif sigma:
                 result = gaussian_filter(result, sigma)
             
-            min_index = argrelextrema(result, np.less)[0]
-            min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
-            
-            if param in {'frame_dx', 'frame_dy', 'frame_dx_dy'}:
-                res = [f'{i:>{dig}} {j:20.2f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
-            else:
-                res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
-            
-            if res:
-                p = Path(output)
-                p.parent.mkdir(exist_ok=True)
-                with p.open('w') as file:
-                    file.write(f'{param:<{dig}} abs diff\n')
-                    file.writelines(res)
-            else:
-                raise ValueError(f'{func_name}: there is no result, check the settings')
-            
-            plt.figure(figsize=(16, 9), layout='tight')
-            plt.plot(frange, result)
-            plt.yscale(yscale)
-            plt.xlabel(param)
-            plt.ylabel('absolute normalized difference', rotation=90)
-            plt.grid()
-            
-            if mark:
-                if param in {'kernel', 'total_kernel'}:
-                    plt.plot(min_index, result[min_index], marker='x', c='k', ls='')
-                    for i, j in zip(min_index, result[min_index]):
-                        plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
-                else:
-                    plt.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
-                    for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
-                        plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
-            
-            plt.savefig(p.with_suffix('.png'))
-            plt.close('all')
-            gc.collect()
+            get_plot(sfrange, frange, result, output, param)
         
         return clip
     
