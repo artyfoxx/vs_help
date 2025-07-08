@@ -4151,7 +4151,6 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         
         plt.savefig(p.with_suffix('.png'))
         plt.close('all')
-        gc.collect()
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
@@ -4195,6 +4194,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                 result = gaussian_filter(result, sigma)
             
             get_plot(sfrange, frange, result, output, param)
+            gc.collect()
         
         return clip
     
