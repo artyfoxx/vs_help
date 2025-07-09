@@ -3987,8 +3987,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         case int() | [int(), int()] | [int(), int(), int()]:
             pass
         case [int() | None, int() | None] | [int() | None, int() | None, int() | None]:
-            temp = [0, clip.num_frames, 1]
-            frames = [temp[i] if j is None else j for i, j in enumerate(frames)]
+            defaults = [0, clip.num_frames, 1]
+            frames = [defaults[i] if j is None else j for i, j in enumerate(frames)]
         case _:
             raise TypeError(f'{func_name}: invalid "frames"')
     
@@ -4130,27 +4130,25 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         else:
             raise ValueError(f'{func_name}: there is no result, check the settings')
         
-        plt.figure(figsize=(16, 9), layout='tight')
-        plt.plot(frange, result)
-        plt.yscale(yscale)
-        plt.xlabel(param)
-        plt.ylabel('absolute normalized difference', rotation=90)
-        plt.grid()
+        fig, ax = plt.subplots(figsize=(16, 9), layout='tight')
+        ax.plot(frange, result)
+        ax.set(yscale=yscale, xlabel=param, ylabel='absolute normalized difference')
+        ax.grid()
         
         if mark:
             if param in {'kernel', 'total_kernel'}:
-                plt.plot(min_index, result[min_index], marker='x', c='k', ls='')
+                ax.plot(min_index, result[min_index], marker='x', c='k', ls='')
                 for i, j in zip(min_index, result[min_index]):
-                    plt.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                    ax.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             else:
-                plt.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
+                ax.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
                 for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
-                    plt.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                    ax.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
                                     rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
         
-        plt.savefig(p.with_suffix('.png'))
-        plt.close('all')
+        fig.savefig(p.with_suffix('.png'), format='png')
+        plt.close(fig)
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
@@ -4186,9 +4184,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     result = gaussian_filter(result, sigma, axes=0)
                 if details:
                     import sys
-                    for i, j in zip(enumerate(result.T), range(*frames)):
-                        print(f'Frame: {i[0]}/{result.shape[1]} "details" pass{' ':<20}', end='\r', file=sys.stderr)
-                        get_plot(sfrange, frange, i[1], f'{output[:-4]}/frame_{j}.txt', param.split('_')[1])
+                    for i, j, k in zip(result.T, range(result.shape[1]), range(*frames)):
+                        print(f'Frame: {j}/{result.shape[1]} - "details" pass{' ':<20}', end='\r', file=sys.stderr)
+                        get_plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param.split('_')[1])
                 result = np.exp(np.mean(np.log(result), axis=1))
             elif sigma:
                 result = gaussian_filter(result, sigma)
