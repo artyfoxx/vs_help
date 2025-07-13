@@ -76,7 +76,8 @@ import vapoursynth as vs
 from vapoursynth import core
 
 
-def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256, **crop_args: float) -> vs.VideoNode:
+def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256,
+             **crop_args: float) -> vs.VideoNode:
     """
     Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor modifications.
     
@@ -197,10 +198,11 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     return clip
 
-def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0, thresh2: int | None = None,
-                 athresh: int = 256, sharp1: float = 1, sharp2: float = 4, blur1: float = 0.33, blur2: float = 1.25,
-                 mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1, ltaps: int = 1, preblur: bool = False, depth: int = 2,
-                 wthresh: int = 230, wblur: int = 2, mtaps3: int = 1) -> vs.VideoNode:
+def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0,
+                thresh2: int | None = None, athresh: int = 256, sharp1: float = 1, sharp2: float = 4,
+                blur1: float = 0.33, blur2: float = 1.25, mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1,
+                ltaps: int = 1, preblur: bool = False, depth: int = 2, wthresh: int = 230, wblur: int = 2,
+                mtaps3: int = 1) -> vs.VideoNode:
     """
     An upscaler based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor modifications.
     
@@ -298,7 +300,8 @@ def Lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     
     return clip
 
-def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1, m: bool = False) -> vs.VideoNode:
+def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1,
+                m: bool = False) -> vs.VideoNode:
     """
     Dehalo by bion, ported from AviSynth version with minor additions.
     
@@ -496,13 +499,12 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         
         orig = clip
         
-        def stats_x(clip: vs.VideoNode, x: int | list[int], w: int, mean: int) -> vs.VideoNode:
+        def stats_x(clip: vs.VideoNode, x: list[int], w: int, mean: int) -> vs.VideoNode:
             
-            if all(isinstance(i, int) and 0 <= i < w for i in x):
+            if all(0 <= i < w for i in x):
                 pass
-            elif all(isinstance(i, int) and -w <= i < 0 for i in x):
-                for i, j in enumerate(x):
-                    x[i] = w + j
+            elif all(-w <= i < 0 for i in x):
+                x[:] = [i + w for i in x]
             else:
                 raise ValueError(f'{func_name}: {x} is out of range')
             
@@ -511,13 +513,12 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
                 mean, norm=False
             )
         
-        def stats_y(clip: vs.VideoNode, y: int | list[int], h: int, mean: int) -> vs.VideoNode:
+        def stats_y(clip: vs.VideoNode, y: list[int], h: int, mean: int) -> vs.VideoNode:
             
-            if all(isinstance(i, int) and 0 <= i < h for i in y):
+            if all(0 <= i < h for i in y):
                 pass
-            elif all(isinstance(i, int) and -h <= i < 0 for i in y):
-                for i, j in enumerate(y):
-                    y[i] = h + j
+            elif all(-h <= i < 0 for i in y):
+                y[:] = [i + h for i in y]
             else:
                 raise ValueError(f'{func_name}: {y} is out of range')
             
@@ -581,7 +582,8 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     return clip
 
 def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
-               gain: float = 0.75, exp_n: int = 2, inf_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear', mode: int = 1, **descale_args: Any) -> vs.VideoNode:
+                gain: float = 0.75, exp_n: int = 2, inf_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
+                mode: int = 1, **descale_args: Any) -> vs.VideoNode:
     """
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
     
@@ -3954,7 +3956,7 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', details: bool = False, **descale_args: Any) -> vs.VideoNode:
+              yscale: str = 'log', interim: int = 0, **descale_args: Any) -> vs.VideoNode:
     """
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
     фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
@@ -3963,10 +3965,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     import gc
     
     import matplotlib as mpl
+    mpl.use('agg')
     import matplotlib.pyplot as plt
     from scipy.ndimage import gaussian_filter
     from scipy.signal import argrelextrema
-    mpl.use('Agg')
     
     func_name = 'getnative'
     
@@ -3993,21 +3995,27 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             raise TypeError(f'{func_name}: invalid "frames"')
     
     match kernel:
-        case 'all':
+        case 'all' if not any(isinstance(i, list) for i in descale_args.values()):
             kernel = ['bilinear', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic',
                       'bicubic', 'lanczos', 'lanczos', 'lanczos', 'lanczos', 'spline16', 'spline36', 'spline64']
             descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5]
             descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5]
             descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
+        case str() if any(isinstance(i, list) for i in descale_args.values()):
+            kernel = [kernel] * max(len(i) for i in descale_args.values() if isinstance(i, list))
         case str():
             pass
-        case [str(), str(), *a] if all(isinstance(i, str) for i in a):
+        case list() if (all(isinstance(i, str) for i in kernel) and (not descale_args or
+                        len(kernel) >= max(len(i) if isinstance(i, list) else 1 for i in descale_args.values()))):
             pass
         case _:
-            raise TypeError(f'{func_name}: invalid "kernel"')
+            raise TypeError(f'{func_name}: invalid "kernel" or "descale_args"')
     
     if not isinstance(sigma, int) or sigma < 0:
         raise TypeError(f'{func_name}: invalid "sigma"')
+    
+    if not isinstance(interim, int) or interim not in {0, 1, 2}:
+        raise TypeError(f'{func_name}: invalid "interim"')
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
@@ -4060,25 +4068,28 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             param = 'frame_dx_dy'
         case None | int() | float(), None | int() | float(), list(), list():
             frange = kernel.copy()
-            clip = clip[slice(*frames)]
-            descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
-                            else [value] * len(frange) for key, value in descale_args.items()}
-            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
-                            for i in range(len(frange))]
-            resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
-            clip *= len(frange)
+            if interim != 2:
+                clip = clip[slice(*frames)]
+                descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
+                                else [value] * len(frange) for key, value in descale_args.items()}
+                descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
+                                for i in range(len(frange))]
+                resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
+                clip *= len(frange)
             param = 'total_kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
             frange = np.arange(*dy, dtype=np.float64)
-            clip = clip[slice(*frames)]
-            resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
-            clip *= len(frange)
+            if interim != 2:
+                clip = clip[slice(*frames)]
+                resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
+                clip *= len(frange)
             param = 'total_dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
             frange = np.arange(*dx, dtype=np.float64)
-            clip = clip[slice(*frames)]
-            resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
-            clip *= len(frange)
+            if interim != 2:
+                clip = clip[slice(*frames)]
+                resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
+                clip *= len(frange)
             param = 'total_dx'
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
@@ -4091,16 +4102,14 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
     
-    clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
-    
-    if crop:
-        clip = core.std.Crop(clip, crop, crop, crop, crop)
-    
-    match mean:
-        case -1:
-            clip = core.std.PlaneStats(clip)
-        case _:
-            clip = CrazyPlaneStats(clip, mean)
+    if interim == 2 and param in {'total_kernel', 'total_dy', 'total_dx'}:
+        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, f'{output[:-4]}/frame_{i}.txt',
+                                          thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
+    else:
+        clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+        if crop:
+            clip = core.std.Crop(clip, crop, crop, crop, crop)
+        clip = core.std.PlaneStats(clip) if mean == -1 else CrazyPlaneStats(clip, mean)
     
     result = np.zeros(clip.num_frames, dtype=np.float64)
     counter = np.full(clip.num_frames, np.False_, dtype=np.bool_)
@@ -4179,15 +4188,15 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         sfrange = [str(int(i)) for i in frange]
             
             if param in {'total_kernel', 'total_dy', 'total_dx'}:
-                result = result.reshape(len(frange), -1)
+                result = result.reshape(-1, len(frange)) if interim == 2 else result.reshape(len(frange), -1).T
                 if sigma:
-                    result = gaussian_filter(result, sigma, axes=0)
-                if details:
+                    result = gaussian_filter(result, sigma, axes=1)
+                if interim == 1:
                     import sys
-                    for i, j, k in zip(result.T, range(result.shape[1]), range(*frames)):
-                        print(f'Frame: {j}/{result.shape[1]} - "details" pass{' ':<20}', end='\r', file=sys.stderr)
+                    for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
+                        print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
                         get_plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param.split('_')[1])
-                result = np.exp(np.mean(np.log(result), axis=1))
+                result = np.exp(np.mean(np.log(result), axis=0))
             elif sigma:
                 result = gaussian_filter(result, sigma)
             
