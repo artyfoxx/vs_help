@@ -3956,7 +3956,7 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', interim: int = 0, **descale_args: Any) -> vs.VideoNode:
+              yscale: str = 'log', interim: bool = False, **descale_args: Any) -> vs.VideoNode:
     """
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
     фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
@@ -4014,7 +4014,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if not isinstance(sigma, int) or sigma < 0:
         raise TypeError(f'{func_name}: invalid "sigma"')
     
-    if not isinstance(interim, int) or interim not in {0, 1, 2}:
+    if not isinstance(interim, bool):
         raise TypeError(f'{func_name}: invalid "interim"')
     
     match dx, dy, kernel, frames:
@@ -4068,28 +4068,25 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             param = 'frame_dx_dy'
         case None | int() | float(), None | int() | float(), list(), list():
             frange = kernel.copy()
-            if interim != 2:
-                clip = clip[slice(*frames)]
-                descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
-                                else [value] * len(frange) for key, value in descale_args.items()}
-                descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
-                                for i in range(len(frange))]
-                resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            descale_args = {key: value + [None] * (len(frange) - len(value)) if isinstance(value, list)
+                            else [value] * len(frange) for key, value in descale_args.items()}
+            descale_args = [{key: value[i] for key, value in descale_args.items() if value[i] is not None}
+                            for i in range(len(frange))]
+            resc = core.std.Splice([rescaler(clip, dx, dy, i, **j) for i, j in zip(frange, descale_args)])
+            clip *= len(frange)
             param = 'total_kernel'
         case None | int() | float(), [int() | float(), int() | float(), int() | float()], str(), list():
             frange = np.arange(*dy, dtype=np.float64)
-            if interim != 2:
-                clip = clip[slice(*frames)]
-                resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            resc = core.std.Splice([rescaler(clip, dx, i, kernel, **descale_args) for i in frange])
+            clip *= len(frange)
             param = 'total_dy'
         case [int() | float(), int() | float(), int() | float()], None | int() | float(), str(), list():
             frange = np.arange(*dx, dtype=np.float64)
-            if interim != 2:
-                clip = clip[slice(*frames)]
-                resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
-                clip *= len(frange)
+            clip = clip[slice(*frames)]
+            resc = core.std.Splice([rescaler(clip, i, dy, kernel, **descale_args) for i in frange])
+            clip *= len(frange)
             param = 'total_dx'
         case _:
             raise TypeError(f'{func_name}: unsupported combination of parameters')
@@ -4102,14 +4099,12 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         case _:
             raise TypeError(f'{func_name}: invalid "output"')
     
-    if interim == 2 and param in {'total_kernel', 'total_dy', 'total_dx'}:
-        clip = core.std.Splice([getnative(clip, dx, dy, i, kernel, sigma, mark, f'{output[:-4]}/frame_{i}.txt',
-                                          thr, crop, mean, yscale, **descale_args) for i in range(*frames)])
-    else:
-        clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
-        if crop:
-            clip = core.std.Crop(clip, crop, crop, crop, crop)
-        clip = core.std.PlaneStats(clip) if mean == -1 else CrazyPlaneStats(clip, mean)
+    clip = core.akarin.Expr([clip, resc], f'x y - abs var! var@ {thr} > var@ 0 ?')
+    
+    if crop:
+        clip = core.std.Crop(clip, crop, crop, crop, crop)
+    
+    clip = core.std.PlaneStats(clip) if mean == -1 else CrazyPlaneStats(clip, mean)
     
     result = np.zeros(clip.num_frames, dtype=np.float64)
     counter = np.full(clip.num_frames, np.False_, dtype=np.bool_)
@@ -4188,10 +4183,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         sfrange = [str(int(i)) for i in frange]
             
             if param in {'total_kernel', 'total_dy', 'total_dx'}:
-                result = result.reshape(-1, len(frange)) if interim == 2 else result.reshape(len(frange), -1).T
+                result = result.reshape(len(frange), -1).T
                 if sigma:
                     result = gaussian_filter(result, sigma, axes=1)
-                if interim == 1:
+                if interim:
                     import sys
                     for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
                         print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
