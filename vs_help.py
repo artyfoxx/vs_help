@@ -4143,13 +4143,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             if param in {'kernel', 'total_kernel'}:
                 ax.plot(min_index, result[min_index], marker='x', c='k', ls='')
                 for i, j in zip(min_index, result[min_index]):
-                    ax.annotate(j, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                    rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                    ax.annotate(f'{j:.2e}', (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
+                                rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
             else:
                 ax.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
                 for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
                     ax.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                    rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                                rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
         
         fig.savefig(p.with_suffix('.png'), format='png')
         plt.close(fig)
