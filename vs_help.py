@@ -4161,7 +4161,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         counter[n] = np.True_
         
         if np.all(counter):
-            result[result < 1e-20] = 1e-20
+            result[result < 1e-9] = 1e-9
             
             match frange[0]:
                 case str():
