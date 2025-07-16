@@ -4113,7 +4113,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
     def get_plot(sfrange: list[str], frange: list[str] | np.ndarray, result: np.ndarray, output: str,
-                 param: str) -> None:
+                 param: str, y_lim: tuple[np.float64, np.float64] | None = None) -> None:
         
         dig = max(max(len(i) for i in sfrange), len(param))
         
@@ -4137,6 +4137,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         fig, ax = plt.subplots(figsize=(16, 9), layout='tight')
         ax.plot(frange, result)
         ax.set(yscale=yscale, xlabel=param, ylabel='absolute normalized difference')
+        if y_lim is not None:
+            ax.set_ylim(*y_lim)
         ax.grid()
         
         if mark:
@@ -4188,9 +4190,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     result = gaussian_filter(result, sigma, axes=1)
                 if interim:
                     import sys
+                    y_lim = (np.amin(result), np.amax(result))
                     for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
                         print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
-                        get_plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param.split('_')[1])
+                        get_plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param.split('_')[1], y_lim)
                 result = np.exp(np.mean(np.log(result), axis=0))
             elif sigma:
                 result = gaussian_filter(result, sigma)
