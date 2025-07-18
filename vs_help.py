@@ -69,7 +69,7 @@ from functools import partial
 from inspect import signature
 from math import ceil, sqrt
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 import vapoursynth as vs
@@ -4112,49 +4112,58 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
-    def get_plot(sfrange: list[str], frange: list[str] | np.ndarray, result: np.ndarray, output: str,
+    class GetPlot:
+        def __enter__(self) -> Self:
+            self.fig, self.ax = plt.subplots(figsize=(16, 9), layout='tight')
+            return self
+        
+        def plot(self, sfrange: list[str], frange: list[str] | np.ndarray, result: np.ndarray, output: str,
                  param: str, y_lim: tuple[np.float64, np.float64] | None = None) -> None:
-        
-        dig = max(max(len(i) for i in sfrange), len(param))
-        
-        min_index = argrelextrema(result, np.less)[0]
-        min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
-        
-        if param in {'frame_dx', 'frame_dy', 'frame_dx_dy'}:
-            res = [f'{i:>{dig}} {j:20.2f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
-        else:
-            res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
-        
-        if res:
-            p = Path(output)
-            p.parent.mkdir(exist_ok=True)
-            with p.open('w') as file:
-                file.write(f'{param:<{dig}} abs diff\n')
-                file.writelines(res)
-        else:
-            raise ValueError(f'{func_name}: there is no result, check the settings')
-        
-        fig, ax = plt.subplots(figsize=(16, 9), layout='tight')
-        ax.plot(frange, result)
-        ax.set(yscale=yscale, xlabel=param, ylabel='absolute normalized difference')
-        if y_lim is not None:
-            ax.set_ylim(*y_lim)
-        ax.grid()
-        
-        if mark:
-            if param in {'kernel', 'total_kernel'}:
-                ax.plot(min_index, result[min_index], marker='x', c='k', ls='')
-                for i, j in zip(min_index, result[min_index]):
-                    ax.annotate(f'{j:.2e}', (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+            
+            dig = max(max(len(i) for i in sfrange), len(param))
+            
+            min_index = argrelextrema(result, np.less)[0]
+            min_label = [' local min' if i in min_index else '' for i in range(len(frange))]
+            
+            if param in {'frame_dx', 'frame_dy', 'frame_dx_dy'}:
+                res = [f'{i:>{dig}} {j:20.2f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
             else:
-                ax.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
-                for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
-                    ax.annotate(k, (i, j), textcoords='offset points', xytext=(6, 12), ha='right', va='bottom',
-                                rotation=90, arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                res = [f'{i:>{dig}} {j:.20f}{k}\n' for i, j, k in zip(sfrange, result, min_label)]
+            
+            if res:
+                p = Path(output)
+                p.parent.mkdir(exist_ok=True)
+                with p.open('w') as file:
+                    file.write(f'{param:<{dig}} abs diff\n')
+                    file.writelines(res)
+            else:
+                raise ValueError(f'{func_name}: there is no result, check the settings')
+            
+            self.ax.plot(frange, result)
+            self.ax.set(yscale=yscale, xlabel=param, ylabel='absolute normalized difference')
+            if y_lim is not None:
+                self.ax.set_ylim(*y_lim)
+            self.ax.grid()
+            
+            if mark:
+                if param in {'kernel', 'total_kernel'}:
+                    self.ax.plot(min_index, result[min_index], marker='x', c='k', ls='')
+                    for i, j in zip(min_index, result[min_index]):
+                        self.ax.annotate(f'{j:.2e}', (i, j), textcoords='offset points',
+                                         xytext=(6, 12), ha='right', va='bottom', rotation=90,
+                                         arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                else:
+                    self.ax.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
+                    for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
+                        self.ax.annotate(k, (i, j), textcoords='offset points',
+                                         xytext=(6, 12), ha='right', va='bottom', rotation=90,
+                                         arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+            
+            self.fig.savefig(p.with_suffix('.png'), format='png')
+            self.ax.clear()
         
-        fig.savefig(p.with_suffix('.png'), format='png')
-        plt.close(fig)
+        def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+            plt.close(self.fig)
     
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
@@ -4184,21 +4193,23 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     else:
                         sfrange = [str(int(i)) for i in frange]
             
-            if param in {'total_kernel', 'total_dy', 'total_dx'}:
-                result = result.reshape(len(frange), -1).T
-                if sigma:
-                    result = gaussian_filter(result, sigma, axes=1)
-                if interim:
-                    import sys
-                    y_lim = (np.amin(result), np.amax(result))
-                    for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
-                        print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
-                        get_plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param.split('_')[1], y_lim)
-                result = np.exp(np.mean(np.log(result), axis=0))
-            elif sigma:
-                result = gaussian_filter(result, sigma)
+            with GetPlot() as plot:
+                if param in {'total_kernel', 'total_dy', 'total_dx'}:
+                    result = result.reshape(len(frange), -1).T
+                    if sigma:
+                        result = gaussian_filter(result, sigma, axes=1)
+                    if interim:
+                        import sys
+                        y_lim = (np.amin(result), np.amax(result))
+                        for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
+                            print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
+                            plot.plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param[6:], y_lim)
+                    result = np.exp(np.mean(np.log(result), axis=0))
+                elif sigma:
+                    result = gaussian_filter(result, sigma)
+                
+                plot.plot(sfrange, frange, result, output, param)
             
-            get_plot(sfrange, frange, result, output, param)
             gc.collect()
         
         return clip
