@@ -676,7 +676,8 @@ def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range
     
     return clip
 
-def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear', tff: bool = True, **descale_args: Any) -> vs.VideoNode:
+def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear',
+             tff: bool = True, **descale_args: Any) -> vs.VideoNode:
     """
     Simplified Destripe from YomikoR without unnecessary frills.
     
@@ -721,7 +722,8 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     
     return clip
 
-def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None = None, **znedi3_args: Any) -> vs.VideoNode:
+def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None = None,
+        **znedi3_args: Any) -> vs.VideoNode:
     """daa by Didée, ported from AviSynth version with minor additions."""
     func_name = 'daa'
     
@@ -764,8 +766,8 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
     
     return clip
 
-def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5, shift: int | list[int] = 0,
-                   mode: int = 0, mean: int = 0) -> vs.VideoNode:
+def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5,
+                   shift: int | list[int] = 0, mode: int = 0, mean: int = 0) -> vs.VideoNode:
     """
     Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
     
@@ -785,7 +787,8 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
     factor = 1 << clip.format.bits_per_sample - 8
     full = 256 * factor - 1
     
-    def simple_average(clip: vs.VideoNode, curve: int | None, weight: float, shift: int, mode: int, mean: int) -> vs.VideoNode:
+    def simple_average(clip: vs.VideoNode, curve: int | None, weight: float, shift: int, mode: int,
+                       mean: int) -> vs.VideoNode:
         
         if curve is None:
             return clip
@@ -1004,8 +1007,8 @@ def dehalo_mask(clip: vs.VideoNode, expand: float = 0.5, iterations: int = 2, br
     
     return mask
 
-def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True, mt_prewitt: bool = False,
-                    **after_args: Any) -> vs.VideoNode:
+def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: float = 1, rg: bool = True,
+                    mt_prewitt: bool = False, **after_args: Any) -> vs.VideoNode:
     
     func_name = 'tp7_deband_mask'
     
@@ -1117,9 +1120,10 @@ def DeHalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     
     return clip
 
-def FineDehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128, thlimi: int = 50,
-                thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50, highsens: float = 50,
-                ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True, edgeproc: float = 0.0, mt_prewitt: bool = False) -> vs.VideoNode:
+def FineDehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128,
+               thlimi: int = 50, thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50,
+               highsens: float = 50, ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True,
+               edgeproc: float = 0.0, mt_prewitt: bool = False) -> vs.VideoNode:
     
     func_name = 'FineDehalo'
     
@@ -2764,7 +2768,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     frames_d = [None] * num_f
     frames_c = [None] * num_f
     
-    with open(ovr_d, 'r') as file:
+    with open(ovr_d) as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -2777,7 +2781,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
             elif (res := re.search(r'(\d+) (\w)', line)) is not None:
                 frames_d[int(res.group(1))] = res.group(2)
     
-    with open(ovr_c, 'r') as file:
+    with open(ovr_c) as file:
         for line in file:
             if (res := re.search(r'(\d+),(\d+) (\w+)', line)) is not None:
                 first = int(res.group(1))
@@ -3956,12 +3960,13 @@ def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', interim: bool = False, **descale_args: Any) -> vs.VideoNode:
+              yscale: str = 'log', interim: bool = False, figsize: tuple[int, int] = (16, 9),
+              layout: str | None = 'tight', **descale_args: Any) -> vs.VideoNode:
     """
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
     фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
     Поэтому при использовании срезов с большим значением шага неизбежно СИЛЬНОЕ падение производительности.
-    """  # noqa: D205, RUF002
+    """  # noqa: D205
     import gc
     
     import matplotlib as mpl
@@ -4016,6 +4021,15 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     if not isinstance(interim, bool):
         raise TypeError(f'{func_name}: invalid "interim"')
+    
+    if layout not in {'tight', 'constrained', 'compressed', 'none', None}:
+        raise TypeError(f'{func_name}: invalid "layout"')
+    
+    match figsize:
+        case (int(), int()):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: invalid "figsize"')
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
@@ -4114,7 +4128,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     class GetPlot:
         def __enter__(self) -> Self:
-            self.fig, self.ax = plt.subplots(figsize=(16, 9), layout='tight')
+            self.fig, self.ax = plt.subplots(figsize=figsize, layout=layout)
             return self
         
         def plot(self, sfrange: list[str], frange: list[str] | np.ndarray, result: np.ndarray, output: str,
