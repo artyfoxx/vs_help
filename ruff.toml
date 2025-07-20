@@ -1,17 +1,38 @@
 target-version = "py312"
 line-length = 120
+indent-width = 4
 
 [lint]
-select = ["E", "W", "F", "B", "UP", "D", "SIM", "I", "ANN", "S", "C4", "NPY", "RUF"]
+select = [
+    "E",    # flake8-errors
+    "W",    # flake8-warnings
+    "F",    # flake8-pyflakes
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "ANN",  # flake8-annotations
+    "S",    # flake8-bandit
+    "C4",   # flake8-comprehensions
+    "BLE",  # flake8-blind-except
+    "DTZ",  # flake8-datetimez
+    "UP",   # pyupgrade
+    "D",    # pydocstyle
+    "I",    # isort
+    "NPY",  # NumPy-specific rules
+    "RUF",  # Ruff-specific rules
+    "ERA",  # eradicate
+    "FURB", # refurb
+]
 ignore = [
-    "E501",
-    "W293",
-    "B905",
-    "UP015",
-    "D103",
-    "D401",
-    "D403",
-    "C408"
+    "C408",   # unnecessary-collection-call
+    "E501",   # line-too-long
+    "W293",   # blank-line-with-whitespace
+    "B905",   # zip-without-explicit-strict
+    "D103",   # undocumented-public-function
+    "D401",   # non-imperative-mood
+    "D403",   # first-word-uncapitalized
+    "RUF001", # ambiguous-unicode-character-string
+    "RUF002", # ambiguous-unicode-character-docstring
+    "RUF003", # ambiguous-unicode-character-comment
 ]
 
 [lint.pydocstyle]
@@ -28,5 +49,6 @@ avoid-escape = false
 
 [format]
 quote-style = "single"
+indent-style = "space"
 line-ending = "cr-lf"
 skip-magic-trailing-comma = true
