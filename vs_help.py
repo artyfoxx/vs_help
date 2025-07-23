@@ -65,7 +65,7 @@ Functions:
 
 import re
 from collections.abc import Callable
-from functools import partial
+from functools import partial, wraps
 from inspect import signature
 from math import ceil, sqrt
 from pathlib import Path
@@ -75,6 +75,89 @@ import numpy as np
 import vapoursynth as vs
 from vapoursynth import core
 
+
+def float_decorator(num_clips: int = 1) -> Callable:
+    
+    func_name = 'float_decorator'
+    
+    def decorator(func: Callable) -> Callable:
+        
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> vs.VideoNode:
+            
+            if not all(isinstance(i, vs.VideoNode) for i in args[:num_clips]):
+                raise TypeError(f'{func_name} the clip(s) must be of the vs.VideoNode type')
+            
+            if not all(i.format.color_family in {vs.YUV, vs.GRAY} for i in args[:num_clips]):
+                raise TypeError(f'{func_name}: Unsupported color family')
+            
+            if all(i.format.sample_type == vs.INTEGER for i in args[:num_clips]):
+                return func(*args, **kwargs)
+            elif all(i.format.sample_type == vs.FLOAT for i in args[:num_clips]):
+                pass
+            else:
+                raise TypeError(f'{func_name} the clip(s) must be of the INTEGER or FLOAT sample type')
+            
+            expr0 = ['x 1 min 0 max', 'x 0.5 + 1 min 0 max', 'x 0.5 + 1 min 0 max']
+            expr1 = ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']
+            
+            clips = [core.std.Expr(i, expr0[:i.format.num_planes]) for i in args[:num_clips]]
+            clip = func(*clips, *args[num_clips:], **kwargs)
+            clip = core.std.Expr(clip, expr1[:clip.format.num_planes])
+            
+            return clip
+        
+        return wrapper
+    
+    return decorator
+
+def chroma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 1 min 0 max', 'x 0.5 + 1 min 0 max', 'x 0.5 + 1 min 0 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def chroma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def luma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 0.5 + 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def luma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 0.5 - 0.5 min -0.5 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def diff_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 0.5 min -0.5 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
+
+def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+    
+    if clip.format.sample_type == vs.FLOAT:
+        expr = ['x 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+    
+    return clip
 
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256,
              **crop_args: float) -> vs.VideoNode:
@@ -407,7 +490,8 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
     
     return clip
 
-def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) -> vs.VideoNode:
+@float_decorator()
+def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool]) -> vs.VideoNode:
     """
     A simple functions for fix brightness artifacts at the borders of the frame.
     
@@ -441,8 +525,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
     num_p = clip.format.num_planes
     
     if space == vs.YUV:
-        planes = list({i[6] if len(i) > 6 else 0 for i in args})
-        clips = core.std.SplitPlanes(chroma_up(clip, planes))
+        clips = core.std.SplitPlanes(clip)
     elif space == vs.GRAY:
         clips = [clip]
     else:
@@ -478,7 +561,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
             expr = f'{expr} x.minimum {shift} + x.maximum {shift} + clamp'
         
         if curve < 0:
-            clip = core.std.Invert(clip)
+            clip = core.std.InvertMask(clip)
             limit = -limit
         
         match target:
@@ -556,7 +639,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
             clip = Clamp(clip, orig, orig, 0, -limit)
         
         if curve < 0:
-            clip = core.std.Invert(clip)
+            clip = core.std.InvertMask(clip)
         
         return clip
     
@@ -577,7 +660,7 @@ def fix_border(clip: vs.VideoNode, *args: list[str | int | list[int] | bool]) ->
         else:
             raise ValueError(f'{func_name}: invalid plane {i[6]}')
     
-    clip = chroma_down(core.std.ShufflePlanes(clips, [0] * num_p, space), planes) if space == vs.YUV else clips[0]
+    clip = core.std.ShufflePlanes(clips, [0] * num_p, space) if space == vs.YUV else clips[0]
     
     return clip
 
@@ -637,7 +720,7 @@ def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = 
     
     return clip
 
-def degrain_n(clip: vs.VideoNode, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> vs.VideoNode:
+def degrain_n(clip: vs.VideoNode, /, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> vs.VideoNode:
     """
     Just an alias for mv.Degrain.
     
@@ -1430,11 +1513,11 @@ def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: 
     
     return clip
 
-def apply_range(first: vs.VideoNode, second: vs.VideoNode, *args: int | list[int]) -> vs.VideoNode:
+def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[int]) -> vs.VideoNode:
     
     func_name = 'apply_range'
     
-    if any(not isinstance(i, vs.VideoNode) for i in (first, second)):
+    if not all(isinstance(i, vs.VideoNode) for i in (first, second)):
         raise TypeError(f'{func_name} both clips must be of the vs.VideoNode type')
     
     num_f = first.num_frames
@@ -3913,50 +3996,6 @@ def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> v
     
     return clip
 
-def chroma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT and any(planes):
-        clip = core.std.Expr(clip, ['x 0.5 + 1 min 0 max' if i in planes and i else '' for i in range(clip.format.num_planes)])
-    
-    return clip
-
-def chroma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT and any(planes):
-        clip = core.std.Expr(clip, ['x 0.5 - 0.5 min -0.5 max' if i in planes and i else '' for i in range(clip.format.num_planes)])
-    
-    return clip
-
-def luma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT and 0 in planes:
-        clip = core.std.Expr(clip, ['x 0.5 + 1 min 0 max'] + [''] * (clip.format.num_planes - 1))
-    
-    return clip
-
-def luma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT and 0 in planes:
-        clip = core.std.Expr(clip, ['x 0.5 - 0.5 min -0.5 max'] + [''] * (clip.format.num_planes - 1))
-    
-    return clip
-
-def diff_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT:
-        clip = core.std.Expr(clip, ['x 0.5 min -0.5 max' if i in planes else '' for i in range(clip.format.num_planes)])
-    
-    return clip
-
-def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
-    
-    if clip.format.sample_type == vs.FLOAT:
-        num_p = clip.format.num_planes
-        expr = ['x 1 min 0 max'] + ['x 0.5 min -0.5 max'] * (num_p - 1)
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
-    
-    return clip
-
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
@@ -4231,3 +4270,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     clip = core.std.FrameEval(clip, partial(get_native, clip=clip, frange=frange), prop_src=clip, clip_src=clip)
     
     return clip
+
+# Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
+# Обязательны к тщательной проверке на float: Blur, UnsharpMask, RemoveGrain, MinBlur, Repair, sbr, Clamp.
+# добавить поддержку float в average_fields
+# проверить как ведёт себя PlaneStats на хрома-флоатах, сранить с CrazyPlaneStats
+# search_field_diffs - убрать нахрен нормализацию и добавить PlaneStats по-умолчанию
