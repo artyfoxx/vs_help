@@ -1593,8 +1593,8 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
-        raise TypeError(f'{func_name}: Unsupported color family')
+    if clip.format.color_family != vs.GRAY:
+        raise TypeError(f'{func_name}: Unsupported color family, only vs.GRAY is supported')
     
     num_p = clip.format.num_planes
     
