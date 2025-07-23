@@ -401,6 +401,7 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
             3 - the most accurate.
             4 - the roughest.
             1 and 2 - somewhere in the middle.
+            5...7 - the same, but Gaussian convolution is used
         m: show the mask instead of the clip or not.
     """
     func_name = 'bion_dehalo'
@@ -464,8 +465,10 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
             mask = get_mask(clip, 2)
         case 6:
             mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y min')
+        case 7:
+            mask = core.std.Expr([get_mask(clip, 0), get_mask(clip, 2)], 'x y max')
         case _:
-            raise ValueError(f'{func_name}: Please use 1...6 mask value')
+            raise ValueError(f'{func_name}: Please use 1...7 mask value')
     
     blurr = RemoveGrain(RemoveGrain(MinBlur(clip, 1), 11), 11)
     
