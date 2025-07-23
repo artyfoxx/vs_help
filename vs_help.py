@@ -2209,11 +2209,11 @@ def sbr(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNo
     
     rg11 = Convolution(clip, [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
     rg11D = diff_clamp(core.std.MakeDiff(clip, rg11, planes=planes), planes)
-    rg11DD = luma_down(Convolution(luma_up(rg11D, planes), [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes), planes)
-    rg11DD = diff_clamp(core.std.MakeDiff(rg11D, rg11DD, planes=planes), planes)
+    rg11DD = Convolution(luma_up(rg11D, planes), [1, 2, 1, 2, 4, 2, 1, 2, 1], planes=planes)
+    rg11DD = diff_clamp(core.std.MakeDiff(luma_up(rg11D, planes), rg11DD, planes=planes), planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
-    clip = clip_clamp(core.std.MakeDiff(clip, rg11DD, planes=planes), planes)
+    clip = luma_up(core.std.MakeDiff(clip, luma_up(rg11DD, planes), planes=planes), planes)
     
     return clip
 
@@ -2247,11 +2247,11 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
     
     rg11 = Convolution(clip, [[1], [1, 2, 1]], planes=planes)
     rg11D = diff_clamp(core.std.MakeDiff(clip, rg11, planes=planes), planes)
-    rg11DD = luma_down(Convolution(luma_up(rg11D, planes), [[1], [1, 2, 1]], planes=planes), planes)
-    rg11DD = diff_clamp(core.std.MakeDiff(rg11D, rg11DD, planes=planes), planes)
+    rg11DD = Convolution(luma_up(rg11D, planes), [[1], [1, 2, 1]], planes=planes)
+    rg11DD = diff_clamp(core.std.MakeDiff(luma_up(rg11D, planes), rg11DD, planes=planes), planes)
     rg11DD = core.std.Expr([rg11DD, rg11D], [expr if i in planes else '' for i in range(num_p)])
     
-    clip = clip_clamp(core.std.MakeDiff(clip, rg11DD, planes=planes), planes)
+    clip = luma_up(core.std.MakeDiff(clip, luma_up(rg11DD, planes), planes=planes), planes)
     
     return clip
 
