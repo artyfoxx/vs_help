@@ -2412,7 +2412,7 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
             raise ValueError(f'{func_name}: Please use 1...3 "r" value')
     
     DD = core.std.Expr([RG11D, RG4D], [expr if i in planes else '' for i in range(num_p)])
-    clip = clip_clamp(core.std.MakeDiff(clip, DD, planes=planes), planes)
+    clip = luma_up(core.std.MakeDiff(clip, luma_up(DD, planes), planes=planes), planes)
     
     return clip
 
