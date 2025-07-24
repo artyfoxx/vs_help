@@ -3469,7 +3469,8 @@ def ForwardClense(clip: vs.VideoNode, /, planes: int | list[int] | None = None) 
     
     return clip
 
-def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool = False) -> vs.VideoNode:
+@float_decorator()
+def VerticalCleaner(clip: vs.VideoNode, /, mode: int | list[int] = 1, edges: bool = False) -> vs.VideoNode:
     
     func_name = 'VerticalCleaner'
     
@@ -3499,14 +3500,14 @@ def VerticalCleaner(clip: vs.VideoNode, mode: int | list[int] = 1, edges: bool =
         # mode 1
         'x[0,-1] x[0,1] min x max x[0,-1] x[0,1] max min',
         # mode 2
-        'x x[0,-1] x[0,1] min x[0,-1] x[0,-2] x[0,-1] - 0 max - 0 max x[0,1] x[0,2] x[0,1] - 0 max - 0 max max min x[0,-1] '
-        f'x[0,-2] - 0 max x[0,-1] + {full} min x[0,1] x[0,2] - 0 max x[0,1] + {full} min min x[0,-1] max x[0,1] max clamp'
+        'x x[0,-1] x[0,1] min x[0,-1] x[0,-2] x[0,-1] - 0 max - 0 max x[0,1] x[0,2] x[0,1] - 0 max - 0 max max min '
+        f'x[0,-1] x[0,-2] - 0 max x[0,-1] + {full} min x[0,1] x[0,2] - 0 max x[0,1] + {full} min min x[0,-1] max '
+        'x[0,1] max clamp'
     ]
     
     orig = clip
     
-    planes = [i for i, j in enumerate(mode + [mode[-1]] * (num_p - len(mode))) if j]
-    clip = chroma_down(core.akarin.Expr(chroma_up(clip, planes), [expr[i] for i in mode]), planes)
+    clip = core.akarin.Expr(clip, [expr[i] for i in mode])
     
     if not edges:
         expr = ['',
