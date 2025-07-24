@@ -2898,7 +2898,9 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
     
     return result
 
-def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = False, roundoff: int = 1) -> vs.VideoNode:
+@float_decorator()
+def RemoveGrain(clip: vs.VideoNode, /, mode: int | list[int] = 2, edges: bool = False,
+                roundoff: int = 1) -> vs.VideoNode:
     """
     Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
     
@@ -2952,8 +2954,8 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
         # mode 0
         '',
         # mode 1
-        'x x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x[-1,-1] x[0,-1] max '
-        'x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max clamp',
+        'x x[-1,-1] x[0,-1] min x[1,-1] x[-1,0] min min x[1,0] x[-1,1] min x[0,1] x[1,1] min min min x[-1,-1] x[0,-1] '
+        'max x[1,-1] x[-1,0] max max x[1,0] x[-1,1] max x[0,1] x[1,1] max max max clamp',
         # mode 2
         'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop swap6 drop5 clamp',
         # mode 3
@@ -2962,128 +2964,133 @@ def RemoveGrain(clip: vs.VideoNode, mode: int | list[int] = 2, edges: bool = Fal
         'x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x[1,0] x[-1,1] x[0,1] x[1,1] sort8 drop3 swap4 drop swap2 drop2 clamp',
         # mode 5
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-        'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs d1! x c2@ - abs d2! x c3@ - '
-        'abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ '
+        'clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs d1! x c2@ - abs '
+        'd2! x c3@ - abs d3! x c4@ - abs d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ '
+        'd3@ = c3@ c1@ ? ? ?',
         # mode 6
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs 2 * mal1@ mil1@ - + {full} '
-        f'min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * mal3@ mil3@ - + {full} min d3! x c4@ - abs '
-        f'2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
-        'c3@ c1@ ? ? ?',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ '
+        'clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs 2 * mal1@ mil1@ '
+        f'- + {full} min d1! x c2@ - abs 2 * mal2@ mil2@ - + {full} min d2! x c3@ - abs 2 * mal3@ mil3@ - + {full} min '
+        f'd3! x c4@ - abs 2 * mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ '
+        'd2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
         # mode 7
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - + {full} min '
-        f'd1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ - + {full} min d3! x c4@ - abs mal4@ mil4@ '
-        f'- + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ '
+        'clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - + '
+        f'{full} min d1! x c2@ - abs mal2@ mil2@ - + {full} min d2! x c3@ - abs mal3@ mil3@ - + {full} min d3! x c4@ - '
+        f'abs mal4@ mil4@ - + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ '
+        'd3@ = c3@ c1@ ? ? ?',
         # mode 8
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ clamp '
-        f'c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - 2 * + {full} '
-        f'min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs mal3@ mil3@ - 2 * + {full} min d3! x c4@ - abs '
-        f'mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ d2@ = c2@ mind@ d3@ = '
-        'c3@ c1@ ? ? ?',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! x mil1@ mal1@ '
+        'clamp c1! x mil2@ mal2@ clamp c2! x mil3@ mal3@ clamp c3! x mil4@ mal4@ clamp c4! x c1@ - abs mal1@ mil1@ - 2 '
+        f'* + {full} min d1! x c2@ - abs mal2@ mil2@ - 2 * + {full} min d2! x c3@ - abs mal3@ mil3@ - 2 * + {full} min '
+        f'd3! x c4@ - abs mal4@ mil4@ - 2 * + {full} min d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = c4@ mind@ '
+        'd2@ = c2@ mind@ d3@ = c3@ c1@ ? ? ?',
         # mode 9
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - d1! '
-        'mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x mil4@ mal4@ '
-        'clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - '
+        'd1! mal2@ mil2@ - d2! mal3@ mil3@ - d3! mal4@ mil4@ - d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x '
+        'mil4@ mal4@ clamp mind@ d2@ = x mil2@ mal2@ clamp mind@ d3@ = x mil3@ mal3@ clamp x mil1@ mal1@ clamp ? ? ?',
         # mode 10
-        'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] - abs '
-        'd6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min mind! mind@ '
-        'd7@ = x[0,1] mind@ d8@ = x[1,1] mind@ d6@ = x[-1,1] mind@ d2@ = x[0,-1] mind@ d3@ = x[1,-1] mind@ d1@ = x[-1,-1] '
-        'mind@ d5@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
+        'x x[-1,-1] - abs d1! x x[0,-1] - abs d2! x x[1,-1] - abs d3! x x[-1,0] - abs d4! x x[1,0] - abs d5! x x[-1,1] '
+        '- abs d6! x x[0,1] - abs d7! x x[1,1] - abs d8! d1@ d2@ min d3@ min d4@ min d5@ min d6@ min d7@ min d8@ min '
+        'mind! mind@ d7@ = x[0,1] mind@ d8@ = x[1,1] mind@ d6@ = x[-1,1] mind@ d2@ = x[0,-1] mind@ d3@ = x[1,-1] mind@ '
+        'd1@ = x[-1,-1] mind@ d5@ = x[1,0] x[-1,0] ? ? ? ? ? ? ?',
         # mode 11
         f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
         # mode 12
         f'x 4 * x[0,-1] x[-1,0] + x[1,0] + x[0,1] + 2 * + x[-1,-1] + x[1,-1] + x[-1,1] + x[1,1] + 16 /{rnd}',
         # mode 13
-        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 '
-        f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 '
+        f'bitand 0 = mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 '
+        f'/{rnd} ? ? x ?',
         # mode 14
-        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 '
-        f'= mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 /{rnd} ? ? x ?',
+        'x[-1,-1] x[1,1] - abs d1! x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 '
+        f'bitand 1 = mind@ d2@ = x[0,-1] x[0,1] + 2 /{rnd} mind@ d3@ = x[1,-1] x[-1,1] + 2 /{rnd} x[-1,-1] x[1,1] + 2 '
+        f'/{rnd} ? ? x ?',
         # mode 15
-        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
-        'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
-        'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
-        'min x[-1,-1] x[1,1] max clamp ? ? x ?',
+        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! '
+        'x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 0 = mind@ d2@ = avg@ '
+        'x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp '
+        'avg@ x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? x ?',
         # mode 16
-        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! x[0,-1] '
-        'x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 = mind@ d2@ = avg@ x[0,-1] x[0,1] '
-        'min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp avg@ x[-1,-1] x[1,1] '
-        'min x[-1,-1] x[1,1] max clamp ? ? x ?',
+        f'x[-1,-1] x[0,-1] 2 * + x[1,-1] + x[-1,1] + x[0,1] 2 * + x[1,1] + 8 /{rnd} avg! x[-1,-1] x[1,1] - abs d1! '
+        'x[0,-1] x[0,1] - abs d2! x[1,-1] x[-1,1] - abs d3! d1@ d2@ d3@ min min mind! Y 1 bitand 1 = mind@ d2@ = avg@ '
+        'x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = avg@ x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp '
+        'avg@ x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? x ?',
         # mode 17
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mil1@ mil2@ max mil3@ '
-        'max mil4@ max lower! mal1@ mal2@ min mal3@ min mal4@ min upper! x lower@ upper@ min lower@ upper@ max clamp',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mil1@ mil2@ max '
+        'mil3@ max mil4@ max lower! mal1@ mal2@ min mal3@ min mal4@ min upper! x lower@ upper@ min lower@ upper@ max '
+        'clamp',
         # mode 18
-        'x x[-1,-1] - abs x x[1,1] - abs max d1! x x[0,-1] - abs x x[0,1] - abs max d2! x x[1,-1] - abs x x[-1,1] - abs max '
-        'd3! x x[-1,0] - abs x x[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x x[-1,0] x[1,0] min '
-        'x[-1,0] x[1,0] max clamp mind@ d2@ = x x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = x x[1,-1] x[-1,1] '
-        'min x[1,-1] x[-1,1] max clamp x x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? ?',
+        'x x[-1,-1] - abs x x[1,1] - abs max d1! x x[0,-1] - abs x x[0,1] - abs max d2! x x[1,-1] - abs x x[-1,1] - '
+        'abs max d3! x x[-1,0] - abs x x[1,0] - abs max d4! d1@ d2@ min d3@ min d4@ min mind! mind@ d4@ = x x[-1,0] '
+        'x[1,0] min x[-1,0] x[1,0] max clamp mind@ d2@ = x x[0,-1] x[0,1] min x[0,-1] x[0,1] max clamp mind@ d3@ = x '
+        'x[1,-1] x[-1,1] min x[1,-1] x[-1,1] max clamp x x[-1,-1] x[1,1] min x[-1,-1] x[1,1] max clamp ? ? ?',
         # mode 19
         f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 8 /{rnd}',
         # mode 20
         f'x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 9 /{rnd}',
         # mode 21
-        f'x x[-1,-1] x[1,1] + 2 /{trnc} x[0,-1] x[0,1] + 2 /{trnc} min x[1,-1] x[-1,1] + 2 /{trnc} min x[-1,0] x[1,0] + 2 /'
-        f'{trnc} min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max x[-1,0] x[1,0] + '
-        f'2 /{rnd} max clamp',
+        f'x x[-1,-1] x[1,1] + 2 /{trnc} x[0,-1] x[0,1] + 2 /{trnc} min x[1,-1] x[-1,1] + 2 /{trnc} min x[-1,0] x[1,0] '
+        f'+ 2 /{trnc} min x[-1,-1] x[1,1] + 2 /{rnd} x[0,-1] x[0,1] + 2 /{rnd} max x[1,-1] x[-1,1] + 2 /{rnd} max '
+        f'x[-1,0] x[1,0] + 2 /{rnd} max clamp',
         # mode 22
-        f'x[-1,-1] x[1,1] + 2 /{rnd} l1! x[0,-1] x[0,1] + 2 /{rnd} l2! x[1,-1] x[-1,1] + 2 /{rnd} l3! x[-1,0] x[1,0] + 2 '
-        f'/{rnd} l4! x l1@ l2@ min l3@ min l4@ min l1@ l2@ max l3@ max l4@ max clamp',
+        f'x[-1,-1] x[1,1] + 2 /{rnd} l1! x[0,-1] x[0,1] + 2 /{rnd} l2! x[1,-1] x[-1,1] + 2 /{rnd} l3! x[-1,0] x[1,0] + '
+        f'2 /{rnd} l4! x l1@ l2@ min l3@ min l4@ min l1@ l2@ max l3@ max l4@ max clamp',
         # mode 23
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
-        'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x x mal1@ - ld1@ min x mal2@ - ld2@ min max x mal3@ - ld3@ '
-        'min max x mal4@ - ld4@ min max 0 max - 0 max mil1@ x - ld1@ min mil2@ x - ld2@ min max mil3@ x - ld3@ min max mil4@ '
-        f'x - ld4@ min max 0 max + {full} min',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - '
+        'ld1! mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x x mal1@ - ld1@ min x mal2@ - ld2@ min max x '
+        'mal3@ - ld3@ min max x mal4@ - ld4@ min max 0 max - 0 max mil1@ x - ld1@ min mil2@ x - ld2@ min max mil3@ x - '
+        f'ld3@ min max mil4@ x - ld4@ min max 0 max + {full} min',
         # mode 24
         'x[-1,-1] x[1,1] max mal1! x[-1,-1] x[1,1] min mil1! x[0,-1] x[0,1] max mal2! x[0,-1] x[0,1] min mil2! x[1,-1] '
-        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - ld1! '
-        'mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x mal1@ - 0 max u1! x mal2@ - 0 max u2! x mal3@ - 0 max '
-        'u3! x mal4@ - 0 max u4! mil1@ x - 0 max d1! mil2@ x - 0 max d2! mil3@ x - 0 max d3! mil4@ x - 0 max d4! x u1@ ld1@ '
-        'u1@ - min u2@ ld2@ u2@ - min max u3@ ld3@ u3@ - min max u4@ ld4@ u4@ - min max 0 max - 0 max d1@ ld1@ d1@ - min d2@ '
-        f'ld2@ d2@ - min max d3@ ld3@ d3@ - min max d4@ ld4@ d4@ - min max 0 max + {full} min',
+        'x[-1,1] max mal3! x[1,-1] x[-1,1] min mil3! x[-1,0] x[1,0] max mal4! x[-1,0] x[1,0] min mil4! mal1@ mil1@ - '
+        'ld1! mal2@ mil2@ - ld2! mal3@ mil3@ - ld3! mal4@ mil4@ - ld4! x mal1@ - 0 max u1! x mal2@ - 0 max u2! x mal3@ '
+        '- 0 max u3! x mal4@ - 0 max u4! mil1@ x - 0 max d1! mil2@ x - 0 max d2! mil3@ x - 0 max d3! mil4@ x - 0 max '
+        'd4! x u1@ ld1@ u1@ - min u2@ ld2@ u2@ - min max u3@ ld3@ u3@ - min max u4@ ld4@ u4@ - min max 0 max - 0 max '
+        f'd1@ ld1@ d1@ - min d2@ ld2@ d2@ - min max d3@ ld3@ d3@ - min max d4@ ld4@ d4@ - min max 0 max + {full} min',
         # mode 25
         f'x x[-1,0] < {full} x x[-1,0] - ? x x[1,0] < {full} x x[1,0] - ? min x x[-1,-1] < {full} x x[-1,-1] - ? min x '
-        f'x[0,-1] < {full} x x[0,-1] - ? min x x[1,-1] < {full} x x[1,-1] - ? min x x[-1,1] < {full} x x[-1,1] - ? min x '
-        f'x[0,1] < {full} x x[0,1] - ? min x x[1,1] < {full} x x[1,1] - ? min mn! x[-1,0] x < {full} x[-1,0] x - ? x[1,0] x '
-        f'< {full} x[1,0] x - ? min x[-1,-1] x < {full} x[-1,-1] x - ? min x[0,-1] x < {full} x[0,-1] x - ? min x[1,-1] x < '
-        f'{full} x[1,-1] x - ? min x[-1,1] x < {full} x[-1,1] x - ? min x[0,1] x < {full} x[0,1] x - ? min x[1,1] x < {full} '
-        f'x[1,1] x - ? min pl! x pl@ 2 /{trnc} mn@ pl@ - 0 max min + {full} min mn@ 2 /{trnc} pl@ mn@ - 0 max min - 0 max',
+        f'x[0,-1] < {full} x x[0,-1] - ? min x x[1,-1] < {full} x x[1,-1] - ? min x x[-1,1] < {full} x x[-1,1] - ? min '
+        f'x x[0,1] < {full} x x[0,1] - ? min x x[1,1] < {full} x x[1,1] - ? min mn! x[-1,0] x < {full} x[-1,0] x - ? '
+        f'x[1,0] x < {full} x[1,0] x - ? min x[-1,-1] x < {full} x[-1,-1] x - ? min x[0,-1] x < {full} x[0,-1] x - ? '
+        f'min x[1,-1] x < {full} x[1,-1] x - ? min x[-1,1] x < {full} x[-1,1] x - ? min x[0,1] x < {full} x[0,1] x - ? '
+        f'min x[1,1] x < {full} x[1,1] x - ? min pl! x pl@ 2 /{trnc} mn@ pl@ - 0 max min + {full} min mn@ 2 /{trnc} '
+        'pl@ mn@ - 0 max min - 0 max',
         # mode 26
-        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
-        'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max '
-        'min x[1,-1] x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min '
-        'x[-1,-1] x[-1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp',
+        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min '
+        'x[-1,1] x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[0,-1] max '
+        'x[0,-1] x[1,-1] max min x[1,-1] x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min '
+        'x[-1,0] x[-1,1] max min x[-1,-1] x[-1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp',
         # mode 27
         'x[-1,-1] x[1,1] min x[-1,-1] x[0,-1] min max x[0,1] x[1,1] min max x[0,-1] x[0,1] min max x[0,-1] x[1,-1] min '
-        'x[-1,1] x[0,1] min max x[1,-1] x[-1,1] min max x[1,-1] x[1,0] min max max x[-1,0] x[-1,1] min x[-1,0] x[1,0] min '
-        'max x[1,0] x[1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[1,1] max x[-1,-1] x[0,-1] max min x[0,1] '
-        'x[1,1] max min x[0,-1] x[0,1] max min x[0,-1] x[1,-1] max x[-1,1] x[0,1] max min x[1,-1] x[-1,1] max min x[1,-1] '
-        'x[1,0] max min min x[-1,0] x[-1,1] max x[-1,0] x[1,0] max min x[1,0] x[1,1] max min x[-1,-1] x[-1,0] max min min '
-        'upper! x lower@ upper@ min lower@ upper@ max clamp',
+        'x[-1,1] x[0,1] min max x[1,-1] x[-1,1] min max x[1,-1] x[1,0] min max max x[-1,0] x[-1,1] min x[-1,0] x[1,0] '
+        'min max x[1,0] x[1,1] min max x[-1,-1] x[-1,0] min max max lower! x[-1,-1] x[1,1] max x[-1,-1] x[0,-1] max '
+        'min x[0,1] x[1,1] max min x[0,-1] x[0,1] max min x[0,-1] x[1,-1] max x[-1,1] x[0,1] max min x[1,-1] x[-1,1] '
+        'max min x[1,-1] x[1,0] max min min x[-1,0] x[-1,1] max x[-1,0] x[1,0] max min x[1,0] x[1,1] max min x[-1,-1] '
+        'x[-1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp',
         # mode 28
-        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min x[-1,1] '
-        'x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max x[-1,-1] x[1,1] min x[1,-1] x[-1,1] min max '
-        'x[0,-1] x[0,1] min max x[-1,0] x[1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] max min x[1,-1] '
-        'x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] max min x[-1,-1] '
-        'x[-1,0] max min min x[-1,-1] x[1,1] max x[1,-1] x[-1,1] max min x[0,-1] x[0,1] max min x[-1,0] x[1,0] max min min '
-        'upper! x lower@ upper@ min lower@ upper@ max clamp'
+        'x[-1,-1] x[0,-1] min x[0,-1] x[1,-1] min max x[1,-1] x[1,0] min max x[1,0] x[1,1] min max x[0,1] x[1,1] min '
+        'x[-1,1] x[0,1] min max x[-1,0] x[-1,1] min max x[-1,-1] x[-1,0] min max max x[-1,-1] x[1,1] min x[1,-1] '
+        'x[-1,1] min max x[0,-1] x[0,1] min max x[-1,0] x[1,0] min max max lower! x[-1,-1] x[0,-1] max x[0,-1] x[1,-1] '
+        'max min x[1,-1] x[1,0] max min x[1,0] x[1,1] max min x[0,1] x[1,1] max x[-1,1] x[0,1] max min x[-1,0] x[-1,1] '
+        'max min x[-1,-1] x[-1,0] max min min x[-1,-1] x[1,1] max x[1,-1] x[-1,1] max min x[0,-1] x[0,1] max min '
+        'x[-1,0] x[1,0] max min min upper! x lower@ upper@ min lower@ upper@ max clamp'
     ]
     
     orig = clip
     
-    planes = [i for i, j in enumerate(mode + [mode[-1]] * (num_p - len(mode))) if j]
-    clip = chroma_down(core.akarin.Expr(chroma_up(clip, planes), [expr[i] for i in mode]), planes)
+    clip = core.akarin.Expr(clip, [expr[i] for i in mode])
     
     if not edges:
         expr = 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?'
-        clip = core.akarin.Expr([clip, orig], [expr if i in planes else '' for i in range(num_p)])
+        clip = core.akarin.Expr([clip, orig], [expr if i else '' for i in mode])
     
     return clip
 
