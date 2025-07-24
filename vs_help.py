@@ -2312,12 +2312,13 @@ def Sharpen(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None
     
     return clip
 
-def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNode, overshoot: float = 0, undershoot: float = 0,
-          planes: int | list[int] | None = None) -> vs.VideoNode:
+@float_decorator(num_clips=3)
+def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNode, /, overshoot: float = 0,
+          undershoot: float = 0, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'Clamp'
     
-    if any(not isinstance(clip, vs.VideoNode) for i in (clip, bright_limit, dark_limit)):
+    if not all(isinstance(i, vs.VideoNode) for i in (clip, bright_limit, dark_limit)):
         raise TypeError(f'{func_name} all clips must be of the vs.VideoNode type')
     
     if clip.format.id != bright_limit.format.id or clip.format.id != dark_limit.format.id:
@@ -2338,7 +2339,7 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
         factor = 1 << clip.format.bits_per_sample - 8
         expr = f'x y {overshoot * factor} + min z {undershoot * factor} - max'
     else:
-        expr = f'x y {overshoot} 255 / + min z {undershoot} 255 / - max 1 min 0 max'
+        expr = f'x y {overshoot} 255 / + min z {undershoot} 255 / - max'
     
     match planes:
         case None:
@@ -2350,8 +2351,7 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    clip = chroma_down(core.std.Expr([chroma_up(clip, planes), chroma_up(bright_limit, planes), chroma_up(dark_limit, planes)],
-                                     [expr if i in planes else '' for i in range(num_p)]), planes)
+    clip = core.std.Expr([clip, bright_limit, dark_limit], [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
