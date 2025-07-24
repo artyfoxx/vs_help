@@ -3520,8 +3520,10 @@ def VerticalCleaner(clip: vs.VideoNode, /, mode: int | list[int] = 1, edges: boo
     
     return clip
 
-def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | None = None, saturate: int | None = None,
-                total: float | None = None, planes: int | list[int] | None = None) -> vs.VideoNode:
+@float_decorator()
+def Convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] | None = None,
+                saturate: int | None = None, total: float | None = None,
+                planes: int | list[int] | None = None) -> vs.VideoNode:
     """
     An unnatural hybrid of std.Convolution, mt_convolution and mt_edge.
     
@@ -3530,7 +3532,8 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
     The default mode value is boxblur 3x3.
     The default value of saturate is 1.
     The default value of total is the sum of the absolute values of the resulting matrix.
-    For named modes, the default values are changed to obtain the desired result, but they can be overridden by specifying them explicitly.
+    For named modes, the default values are changed to obtain the desired result, but they can be overridden by
+    specifying them explicitly.
     """
     func_name = 'Convolution'
     
@@ -3541,7 +3544,6 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    full = (1 << clip.format.bits_per_sample) - 1 if clip.format.sample_type == vs.INTEGER else 1
     
     match planes:
         case None:
@@ -3554,10 +3556,11 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             raise ValueError(f'{func_name}: invalid "planes"')
     
     match mode:
-        case [[int(), *a], [int(), *b]] if all(isinstance(i, int) for i in a + b) and len(mode[0]) % 2 and len(mode[1]) % 2:
-            side_h, side_v = len(mode[0]), len(mode[1])
-            mode = [j * i for i in mode[1] for j in mode[0]]
-        case [int(), *a] if all(isinstance(i, int) for i in a) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2:
+        case [list(a), list(b)] if all(isinstance(i, int) for i in a + b) and len(a) % 2 and len(b) % 2:
+            side_h, side_v = len(a), len(b)
+            mode = [j * i for i in b for j in a]
+        case list() if (all(isinstance(i, int) for i in mode) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode)
+                        and side_v % 2):
             side_h = side_v
         case None:
             side_h = side_v = 3
@@ -3583,30 +3586,51 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             fix = ' -1 *'
             div = 1
         case 'min/max':
-            expr = ('x[-1,-1] x[0,-1] max x[1,-1] max x[-1,0] max x max x[1,0] max x[-1,1] max x[0,1] max x[1,1] max '
-                    'x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min -')
+            expr = ['x[-1,-1] x[0,-1] max x[1,-1] max x[-1,0] max x max x[1,0] max x[-1,1] max x[0,1] max x[1,1] max '
+                    'x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min -']
             div = 1
         case 'hprewitt':
-            mode = [[1, 2, 1, 0, 0, 0, -1, -2, -1], [1, 0, -1, 2, 0, -2, 1, 0, -1]]
-            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
-                                 ['x y max' if i in planes else '' for i in range(num_p)])
+            expr = ['x[-1,-1] x[0,-1] 2 * x[1,-1] x[-1,1] -1 * x[0,1] -2 * x[1,1] -1 * + + + + +',
+                    'x[-1,-1] x[1,-1] -1 * x[-1,0] 2 * x[1,0] -2 * x[-1,1] x[1,1] -1 * + + + + +']
+            fix = ' abs'
+            div = 1
         case 'prewitt':
-            mode = [[1, 1, 0, 1, 0, -1, 0, -1, -1], [1, 1, 1, 0, 0, 0, -1, -1, -1],
-                    [1, 0, -1, 1, 0, -1, 1, 0, -1], [0, -1, -1, 1, 0, -1, 1, 1, 0]]
-            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
-                                 ['x y max z a max max' if i in planes else '' for i in range(num_p)])
+            expr = ['x[-1,-1] x[0,-1] x[-1,0] x[1,0] -1 * x[0,1] -1 * x[1,1] -1 * + + + + +',
+                    'x[-1,-1] x[0,-1] x[1,-1] x[-1,1] -1 * x[0,1] -1 * x[1,1] -1 * + + + + +',
+                    'x[-1,-1] x[1,-1] -1 * x[-1,0] x[1,0] -1 * x[-1,1] x[1,1] -1 * + + + + +',
+                    'x[0,-1] -1 * x[1,-1] -1 * x[-1,0] x[1,0] -1 * x[-1,1] x[0,1] + + + + +']
+            fix = ' abs'
+            div = 1
         case 'kirsch4':
-            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, -3, -3, 5, 0, -3, 5, -3, -3],
-                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, 5, -3, 0, 5, -3, -3, 5]]
-            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
-                                 ['x y max z a max max' if i in planes else '' for i in range(num_p)])
+            expr = ['x[-1,-1] 5 * x[0,-1] 5 * x[1,-1] 5 * x[-1,0] -3 * x[1,0] -3 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] 5 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] 5 * x[1,0] -3 * '
+                    'x[-1,1] 5 * x[0,1] -3 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] -3 * x[1,0] -3 * '
+                    'x[-1,1] 5 * x[0,1] 5 * x[1,1] 5 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] 5 * x[-1,0] -3 * x[1,0] 5 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] 5 * + + + + + + +']
+            fix = ' abs'
+            div = 1
         case 'kirsch8':
-            mode = [[5, 5, 5, -3, 0, -3, -3, -3, -3], [5, 5, -3, 5, 0, -3, -3, -3, -3],
-                    [5, -3, -3, 5, 0, -3, 5, -3, -3], [-3, -3, -3, 5, 0, -3, 5, 5, -3],
-                    [-3, -3, -3, -3, 0, -3, 5, 5, 5], [-3, -3, -3, -3, 0, 5, -3, 5, 5],
-                    [-3, -3, 5, -3, 0, 5, -3, -3, 5], [-3, 5, 5, -3, 0, 5, -3, -3, -3]]
-            return core.std.Expr([Convolution(clip, i, 0 if saturate is None else saturate, 1.0 if total is None else total, planes) for i in mode],
-                                 ['x y max z a max max b c max d e max max max' if i in planes else '' for i in range(num_p)])
+            expr = ['x[-1,-1] 5 * x[0,-1] 5 * x[1,-1] 5 * x[-1,0] -3 * x[1,0] -3 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] 5 * x[0,-1] 5 * x[1,-1] -3 * x[-1,0] 5 * x[1,0] -3 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] 5 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] 5 * x[1,0] -3 * '
+                    'x[-1,1] 5 * x[0,1] -3 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] 5 * x[1,0] -3 * '
+                    'x[-1,1] 5 * x[0,1] 5 * x[1,1] -3 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] -3 * x[1,0] -3 * '
+                    'x[-1,1] 5 * x[0,1] 5 * x[1,1] 5 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] -3 * x[-1,0] -3 * x[1,0] 5 * '
+                    'x[-1,1] -3 * x[0,1] 5 * x[1,1] 5 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] -3 * x[1,-1] 5 * x[-1,0] -3 * x[1,0] 5 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] 5 * + + + + + + +',
+                    'x[-1,-1] -3 * x[0,-1] 5 * x[1,-1] 5 * x[-1,0] -3 * x[1,0] 5 * '
+                    'x[-1,1] -3 * x[0,1] -3 * x[1,1] -3 * + + + + + + +']
+            fix = ' abs'
+            div = 1
         case _:
             raise TypeError(f'{func_name}: invalid "mode"')
     
@@ -3633,12 +3657,13 @@ def Convolution(clip: vs.VideoNode, mode: str | list[int] | list[list[int]] | No
             raise TypeError(f'{func_name}: invalid "total"')
     
     if 'expr' in locals():
-        expr = f'{expr} {div} /{fix} 0 {full} clamp'
+        expr = f'{' '.join(f'{i} {div} /{fix}' for i in expr)}{' max' * (len(expr) - 1)}'
     else:
-        expr = (f'{' '.join(f'x[{j - (side_h // 2)},{i - (side_v // 2)}] {mode[i * side_h + j]} *' for i in range(side_v) for j in range(side_h))} '
-                f'{'+ ' * (len(mode) - 1)}{div} /{fix} 0 {full} clamp')
+        expr = (f'{' '.join(f'x[{j - (side_h // 2)},{i - (side_v // 2)}] {mode[i * side_h + j]} *'
+                            for i in range(side_v) for j in range(side_h))} '
+                f'{'+ ' * (len(mode) - 1)}{div} /{fix}')
     
-    clip = chroma_down(core.akarin.Expr(chroma_up(clip, planes), [expr if i in planes else '' for i in range(num_p)]), planes)
+    clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
