@@ -3354,8 +3354,8 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int = 0, 
     
     return clip
 
-def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, following: vs.VideoNode | None = None, reduceflicker: bool = False,
-           planes: int | list[int] | None = None) -> vs.VideoNode:
+def Clense(clip: vs.VideoNode, /, previous: vs.VideoNode | None = None, following: vs.VideoNode | None = None,
+           reduceflicker: bool = False, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'Clense'
     
@@ -3367,14 +3367,16 @@ def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, following: 
     
     if previous is None:
         previous = shift_clip(clip, 1)
-    elif isinstance(previous, vs.VideoNode) and clip.format.name == previous.format.name and clip.num_frames == previous.num_frames:
+    elif (isinstance(previous, vs.VideoNode) and clip.format.name == previous.format.name
+          and clip.num_frames == previous.num_frames):
         pass
     else:
         raise TypeError(f'{func_name}: invalid "previous"')
     
     if following is None:
         following = shift_clip(clip, -1)
-    elif isinstance(following, vs.VideoNode) and clip.format.name == following.format.name and clip.num_frames == following.num_frames:
+    elif (isinstance(following, vs.VideoNode) and clip.format.name == following.format.name
+          and clip.num_frames == following.num_frames):
         pass
     else:
         raise TypeError(f'{func_name}: invalid "following"')
@@ -3398,10 +3400,12 @@ def Clense(clip: vs.VideoNode, previous: vs.VideoNode | None = None, following: 
     
     expr = 'x y z min max y z max min'
     
-    clip = clip[0] + core.std.Expr([clip, previous, following], [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
+    clip = clip[0] + core.std.Expr([clip, previous, following],
+                                   [expr if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
     
     if reduceflicker:
-        clip = clip[0:2] + core.std.Expr([orig, shift_clip(clip, 1), following], [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
+        clip = clip[0:2] + core.std.Expr([orig, shift_clip(clip, 1), following],
+                                         [expr if i in planes else '' for i in range(num_p)])[2:-1] + clip[-1]
     
     return clip
 
