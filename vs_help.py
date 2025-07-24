@@ -3278,11 +3278,13 @@ def Repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int | list[int] =
     
     return clip
 
-def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edges: bool = False, planes: int | list[int] | None = None) -> vs.VideoNode:
+@float_decorator(num_clips=2)
+def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int = 0, edges: bool = False,
+                   planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'TemporalRepair'
     
-    if any(not isinstance(i, vs.VideoNode) for i in (clip, refclip)):
+    if not all(isinstance(i, vs.VideoNode) for i in (clip, refclip)):
         raise TypeError(f'{func_name} both clips must be of the vs.VideoNode type')
     
     if clip.format.name != refclip.format.name:
@@ -3314,38 +3316,37 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, mode: int = 0, edg
         # mode 0
         'x a z min y min a z max y max clamp',
         # mode 1
-        'x y y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 '
-        'max max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 '
-        'max max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max - 0 max z min a min a[-1,-1] '
-        'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
-        'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
-        f'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max y + {full} min z max a max clamp',
+        'x y y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] '
+        'min - 0 max max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] '
+        'z[1,1] min - 0 max max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max - 0 max z '
+        'min a min a[-1,-1] z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max '
+        'y[-1,1] - 0 max max a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] '
+        'z[1,1] max y[1,1] - 0 max max a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max y '
+        f'+ {full} min z max a max clamp',
         # mode 2
-        'y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - 0 max '
-        'max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] min - 0 max '
-        'max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max y a z min - 0 max max a[-1,-1] '
-        'z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max y[-1,1] - 0 max max '
-        'a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] z[1,1] max y[1,1] - 0 max max '
-        'a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max a z max y - 0 max max max ulmax! x y '
-        f'ulmax@ - 0 max y ulmax@ + {full} min clamp',
+        'y[-1,-1] a[-1,-1] z[-1,-1] min - 0 max y[-1,0] a[-1,0] z[-1,0] min - 0 max max y[-1,1] a[-1,1] z[-1,1] min - '
+        '0 max max y[1,-1] a[1,-1] z[1,-1] min - 0 max max y[1,0] a[1,0] z[1,0] min - 0 max max y[1,1] a[1,1] z[1,1] '
+        'min - 0 max max y[0,-1] a[0,-1] z[0,-1] min - 0 max max y[0,1] a[0,1] z[0,1] min - 0 max max y a z min - 0 '
+        'max max a[-1,-1] z[-1,-1] max y[-1,-1] - 0 max a[-1,0] z[-1,0] max y[-1,0] - 0 max max a[-1,1] z[-1,1] max '
+        'y[-1,1] - 0 max max a[1,-1] z[1,-1] max y[1,-1] - 0 max max a[1,0] z[1,0] max y[1,0] - 0 max max a[1,1] '
+        'z[1,1] max y[1,1] - 0 max max a[0,-1] z[0,-1] max y[0,-1] - 0 max max a[0,1] z[0,1] max y[0,1] - 0 max max a '
+        f'z max y - 0 max max max ulmax! x y ulmax@ - 0 max y ulmax@ + {full} min clamp',
         # mode 3
-        'y[-1,-1] a[-1,-1] - abs y[-1,0] a[-1,0] - abs max y[-1,1] a[-1,1] - abs max y[1,-1] a[1,-1] - abs max y[1,0] a[1,0] '
-        '- abs max y[1,1] a[1,1] - abs max y[0,-1] a[0,-1] - abs max y[0,1] a[0,1] - abs max y a - abs max y[-1,-1] z[-1,-1] '
-        '- abs y[-1,0] z[-1,0] - abs max y[-1,1] z[-1,1] - abs max y[1,-1] z[1,-1] - abs max y[1,0] z[1,0] - abs max y[1,1] '
-        'z[1,1] - abs max y[0,-1] z[0,-1] - abs max y[0,1] z[0,1] - abs max y z - abs max min pmax! x y pmax@ - 0 max y '
-        f'pmax@ + {full} min clamp',
+        'y[-1,-1] a[-1,-1] - abs y[-1,0] a[-1,0] - abs max y[-1,1] a[-1,1] - abs max y[1,-1] a[1,-1] - abs max y[1,0] '
+        'a[1,0] - abs max y[1,1] a[1,1] - abs max y[0,-1] a[0,-1] - abs max y[0,1] a[0,1] - abs max y a - abs max '
+        'y[-1,-1] z[-1,-1] - abs y[-1,0] z[-1,0] - abs max y[-1,1] z[-1,1] - abs max y[1,-1] z[1,-1] - abs max y[1,0] '
+        'z[1,0] - abs max y[1,1] z[1,1] - abs max y[0,-1] z[0,-1] - abs max y[0,1] z[0,1] - abs max y z - abs max min '
+        f'pmax! x y pmax@ - 0 max y pmax@ + {full} min clamp',
         # mode 4
-        f'a z max max_np! a z min min_np! y min_np@ - 0 max 2 * {full} min min_np@ + {full} min max_np@ min reg5! max_np@ '
-        f'max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x reg3@ reg5@ '
-        'clamp ?'
+        f'a z max max_np! a z min min_np! y min_np@ - 0 max 2 * {full} min min_np@ + {full} min max_np@ min reg5! '
+        f'max_np@ max_np@ y - 0 max 2 * {full} min - 0 max min_np@ max reg3! min_np@ reg5@ = max_np@ reg3@ = or y x '
+        'reg3@ reg5@ clamp ?'
     ]
     
     orig = clip
     
-    clip = chroma_up(clip, planes)
-    clip = clip[0] + core.akarin.Expr([clip, chroma_up(refclip, planes), shift_clip(clip, 1), shift_clip(clip, -1)],
+    clip = clip[0] + core.akarin.Expr([clip, refclip, shift_clip(clip, 1), shift_clip(clip, -1)],
                                       [expr[mode] if i in planes else '' for i in range(num_p)])[1:-1] + clip[-1]
-    clip = chroma_down(clip, planes)
     
     if not edges and mode in {1, 2, 3}:
         expr = 'X 0 = Y 0 = X width 1 - = Y height 1 - = or or or y x ?'
