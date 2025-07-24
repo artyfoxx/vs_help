@@ -2255,7 +2255,9 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
     
     return clip
 
-def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, planes: int | list[int] | None = None) -> vs.VideoNode:
+@float_decorator()
+def Blur(clip: vs.VideoNode, /, amountH: float = 0, amountV: float | None = None,
+         planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'Blur'
     
@@ -2266,7 +2268,6 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
         raise TypeError(f'{func_name}: Unsupported color family')
     
     num_p = clip.format.num_planes
-    full = (1 << clip.format.bits_per_sample) - 1 if clip.format.sample_type == vs.INTEGER else 1
     
     match planes:
         case None:
@@ -2291,9 +2292,9 @@ def Blur(clip: vs.VideoNode, amountH: float = 0, amountV: float | None = None, p
     side_v = (1 - 1 / 2 ** amountV) / 2
     
     expr = (f'x[-1,-1] x[-1,1] x[1,-1] x[1,1] + + + {side_h * side_v} * x[-1,0] x[1,0] + {side_h * center_v} * + '
-            f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * + 0 {full} clamp')
+            f'x[0,-1] x[0,1] + {center_h * side_v} * + x {center_h * center_v} * +')
     
-    clip = chroma_down(core.akarin.Expr(chroma_up(clip, planes), [expr if i in planes else '' for i in range(num_p)]), planes)
+    clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
