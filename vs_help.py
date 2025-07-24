@@ -2610,7 +2610,9 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     
     return clip
 
-def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box', roundoff: int = 0) -> vs.VideoNode:
+@float_decorator()
+def UnsharpMask(clip: vs.VideoNode, /, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box',
+                roundoff: int = 0) -> vs.VideoNode:
     """
     Implementation of UnsharpMask with the ability to select the blur type (box or gauss) and rounding mode.
     
@@ -2636,12 +2638,9 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
     num_p = clip.format.num_planes
     
     if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        threshold *= factor
-        full = 256 * factor - 1
+        threshold *= 1 << clip.format.bits_per_sample - 8
     else:
         threshold /= 255
-        full = 1
         roundoff = 3
     
     side = radius * 2 + 1
@@ -2662,12 +2661,15 @@ def UnsharpMask(clip: vs.VideoNode, strength: int = 64, radius: int = 3, thresho
     match blur:
         case 'box':
             expr = (f'{' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ? 0 {full} clamp')
+                    f'{'+ ' * (square - 1)}{square} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 '
+                    f'/ *{rnd} x + x ?')
         case 'gauss':
             row = [x := (x * (side - i) // i if i != 0 else 1) for i in range(side)]  # noqa: F821, F841
             matrix = [i * j for i in row for j in row]
-            expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *' for i in range(side) for j in range(side))} '
-                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} 128 / *{rnd} x + x ? 0 {full} clamp')
+            expr = (f'{' '.join(f'x[{j - radius},{i - radius}] {matrix[i * side + j]} *'
+                                for i in range(side) for j in range(side))} '
+                    f'{'+ ' * (square - 1)}{sum(matrix)} /{rnd} blur! x blur@ - abs {threshold} > x blur@ - {strength} '
+                    f'128 / *{rnd} x + x ?')
         case _:
             raise ValueError(f'{func_name}: invalid "blur"')
     
