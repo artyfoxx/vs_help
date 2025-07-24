@@ -3439,7 +3439,8 @@ def BackwardClense(clip: vs.VideoNode, /, planes: int | list[int] | None = None)
     
     return clip
 
-def ForwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+@float_decorator()
+def ForwardClense(clip: vs.VideoNode, /, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'ForwardClense'
     
@@ -3463,10 +3464,8 @@ def ForwardClense(clip: vs.VideoNode, planes: int | list[int] | None = None) -> 
             raise ValueError(f'{func_name}: invalid "planes"')
     
     expr = f'x y z max 2 * z - {full} min min y z min 2 * z - 0 max max'
-    
-    clip = chroma_up(clip, planes)
-    clip = core.std.Expr([clip, shift_clip(clip, -1), shift_clip(clip, -2)], [expr if i in planes else '' for i in range(num_p)])[:-2] + clip[-2:]
-    clip = chroma_down(clip, planes)
+    clip = core.std.Expr([clip, shift_clip(clip, -1), shift_clip(clip, -2)],
+                         [expr if i in planes else '' for i in range(num_p)])[:-2] + clip[-2:]
     
     return clip
 
