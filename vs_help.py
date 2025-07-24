@@ -905,7 +905,7 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
                 raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
         
         if curve < 0:
-            clip = core.std.Invert(clip)
+            clip = core.std.InvertMask(clip)
         
         match mode:
             case 0:
@@ -944,7 +944,7 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
                 raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         if curve < 0:
-            clip = core.std.Invert(clip)
+            clip = core.std.InvertMask(clip)
         
         clip = core.std.RemoveFrameProps(clip, ['minimum', 'maximum', means[mean]])
         
@@ -4320,8 +4320,12 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     return clip
 
+# как бы так переделать fix_border, чтобы в списки можно было передавать как позиционные, так и именованные аргументы
+# Уйти от использования std.InvertMask
 # Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
-# Обязательны к тщательной проверке на float: Blur, UnsharpMask, RemoveGrain, MinBlur, Repair, sbr, Clamp.
 # добавить поддержку float в average_fields
 # проверить как ведёт себя PlaneStats на хрома-флоатах, сранить с CrazyPlaneStats
 # search_field_diffs - убрать нахрен нормализацию и добавить PlaneStats по-умолчанию
+# Проверить новый форк akarin-vapoursynth-plugin насчёт глюка с возведением в степень.
+# Прикрутить к search_field_diffs режим, где текущие значения будут показываться прямо на экране.
+# Научить mask_detail работать с Destripe
