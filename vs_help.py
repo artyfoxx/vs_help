@@ -544,9 +544,12 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             raise ValueError(f'{func_name}: "shift" must be "int" with -255 <= "shift" <= 255')
         
         if clip.format.sample_type == vs.INTEGER:
-            shift *= 1 << clip.format.bits_per_sample - 8
+            factor = 1 << clip.format.bits_per_sample - 8
+            shift *= factor
+            full = 256 * factor - 1
         else:
             shift /= 255
+            full = 1
         
         match abs(curve):
             case 0:
@@ -566,7 +569,7 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         orig = clip
         
         if curve < 0:
-            clip = core.std.Invert(clip)
+            clip = core.std.Expr(clip, f'{full} x -')
         
         match target:
             case int():
@@ -628,8 +631,8 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         clip = core.std.RemoveFrameProps(clip, ['target_avg', 'donor_avg', 'maximum', 'minimum'])
         
         if curve < 0:
-            expr = f'{' '.join(f'{axis} {i} =' for i in target)}{' or' * (len(target) - 1)} y x ?'
-            clip = core.akarin.Expr([orig, core.std.Invert(clip)], expr)
+            expr = f'{' '.join(f'{axis} {i} =' for i in target)}{' or' * (len(target) - 1)} {full} y - x ?'
+            clip = core.akarin.Expr([orig, clip], expr)
         
         if limit > 0:
             clip = Clamp(clip, orig, orig, limit, 0)
