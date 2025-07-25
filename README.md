@@ -10,7 +10,7 @@ Documented rather fragmentarily.
 * [VapourSynth-CTMF](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-CTMF)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
-* [vapoursynth-plugin](https://github.com/AkarinVS/vapoursynth-plugin)
+* [akarin-vapoursynth-plugin](https://github.com/Jaded-Encoding-Thaumaturgy/akarin-vapoursynth-plugin)
 * [vapoursynth-mvtools](https://github.com/dubhater/vapoursynth-mvtools)
 * [vapoursynth-descale](https://github.com/Jaded-Encoding-Thaumaturgy/vapoursynth-descale)
 * [VapourSynth-TCanny](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-TCanny)
