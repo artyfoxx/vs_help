@@ -3657,7 +3657,9 @@ def Convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] |
     
     return clip
 
-def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 0, norm: bool = True) -> vs.VideoNode:
+@float_decorator()
+def CrazyPlaneStats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int = 0,
+                    norm: bool = True) -> vs.VideoNode:
     """
     Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
     root mean square, root mean cube and median, depending on the mode.
@@ -3697,9 +3699,9 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
     
     if 2 in mode:
         if 0 not in mode:
-            mode += [0]
+            mode.append(0)
         if 1 not in mode:
-            mode += [1]
+            mode.append(1)
         mode.sort()
     
     if not isinstance(norm, bool):
@@ -3723,16 +3725,19 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
                     avg = avg_g = np.exp(np.mean(np.log(matrix, dtype=np.float64)))
                     name = 'geometric_mean'
                 case 2:
-                    avg = np.pi * (avg_a + avg_g) / special.ellipk(np.square(avg_a - avg_g) / np.square(avg_a + avg_g)) / 4
+                    avg = (np.pi * (avg_a + avg_g) /
+                           special.ellipk(np.square(avg_a - avg_g) / np.square(avg_a + avg_g)) / 4)
                     name = 'arithmetic_geometric_mean'
                 case 3:
                     avg = matrix.size / np.sum(np.reciprocal(matrix, dtype=np.float64))
                     name = 'harmonic_mean'
                 case 4:
-                    avg = np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32), dtype=np.float64) / np.mean(matrix, dtype=np.float64)
+                    avg = (np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32), dtype=np.float64) /
+                           np.mean(matrix, dtype=np.float64))
                     name = 'contraharmonic_mean'
                 case 5:
-                    avg = np.sqrt(np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32), dtype=np.float64))
+                    avg = np.sqrt(np.mean(np.square(matrix, dtype=np.float64 if isfloat else np.uint32),
+                                          dtype=np.float64))
                     name = 'root_mean_square'
                 case 6:
                     avg = np.cbrt(np.mean(matrix.astype(np.float64 if isfloat else np.uint64) ** 3, dtype=np.float64))
@@ -3748,8 +3753,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, mode: int | list[int] = 0, plane: int = 
         
         return fout
     
-    clip = chroma_up(clip, [plane])
-    clip = chroma_down(core.std.ModifyFrame(clip=clip, clips=clip, selector=frame_stats), [plane])
+    clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=frame_stats)
     
     return clip
 
