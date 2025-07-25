@@ -499,25 +499,25 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
     A simple functions for fix brightness artifacts at the borders of the frame.
     
     All values are set as positional list arguments. The list have the following format:
-    [axis, target, donor, limit, curve, shift, plane, mean, clamp]. The first three are mandatory.
+    [plane, axis, target, donor, limit, shift, curve, mean, clamp]. The first four are mandatory.
     
     Args:
+        plane: target planar.
         axis: can take the values "X" or "Y" for columns and rows respectively.
         target: the target column/row, it is counted from the upper left edge of the screen. It could be a list.
             It can be negative.
         donor: the donor column/row. It could be a list. It can be negative.
         limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
             and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-        curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
-            -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation, by default 1.
         shift: shift of the zero point of the curve relative to the beginning of the range,
             if curve < 0 - the shift is relative to the end of the range, by default 0.
-        plane: by default 0.
+        curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
+            -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation, by default 1.
         mean: CrazyPlaneStats mode, by default 0.
         clamp: clamp target between donor minimum and maximum, by default True.
     
     Example:
-        clip = fix_border(clip, ['X', 0, 1, 50], ['X', -1, -2, 50], ['Y', 0, 1, 50], ['Y', -1, -2, 50])
+        clip = fix_border(clip, [0, 'X', 0, 1, 50], [0, 'X', -1, -2, 50], [0, 'Y', 0, 1, 50], [0, 'Y', -1, -2, 50])
     """
     func_name = 'fix_border'
     
@@ -534,19 +534,19 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    def correction(clip: vs.VideoNode, axis: str, target: int | list[int], donor: int | list[int], limit: int,
-                   curve: int, shift: int, mean: int, clamp: bool) -> vs.VideoNode:
+    def correction(clip: vs.VideoNode, axis: str, target: int | list[int], donor: int | list[int], limit: int = 0,
+                   shift: int = 0, curve: int = 1, mean: int = 0, clamp: bool = True) -> vs.VideoNode:
         
-        if not isinstance(shift, int):
-            raise ValueError(f'{func_name}: "shift" must be "int"')
+        if not isinstance(limit, int) or limit > 255 or limit < -255:
+            raise ValueError(f'{func_name}: "limit" must be "int" with -255 <= "limit" <= 255')
+        
+        if not isinstance(shift, int) or shift > 255 or shift < -255:
+            raise ValueError(f'{func_name}: "shift" must be "int" with -255 <= "shift" <= 255')
         
         if clip.format.sample_type == vs.INTEGER:
-            factor = 1 << clip.format.bits_per_sample - 8
-            shift *= factor
-            full = 256 * factor - 1
+            shift *= 1 << clip.format.bits_per_sample - 8
         else:
             shift /= 255
-            full = 1
         
         match abs(curve):
             case 0:
@@ -563,9 +563,10 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         if clamp:
             expr = f'{expr} x.minimum {shift} + x.maximum {shift} + clamp'
         
+        orig = clip
+        
         if curve < 0:
-            clip = core.std.InvertMask(clip)
-            limit = -limit
+            clip = core.std.Invert(clip)
         
         match target:
             case int():
@@ -583,8 +584,6 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             case _:
                 raise TypeError(f'{func_name}: "donor" must be "int" or "list[int]"')
         
-        orig = clip
-        
         def stats_x(clip: vs.VideoNode, x: list[int], w: int, mean: int) -> vs.VideoNode:
             
             if all(0 <= i < w for i in x):
@@ -594,10 +593,8 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             else:
                 raise ValueError(f'{func_name}: {x} is out of range')
             
-            return CrazyPlaneStats(
-                core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
-                mean, norm=False
-            )
+            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
+                                   mean, norm=False)
         
         def stats_y(clip: vs.VideoNode, y: list[int], h: int, mean: int) -> vs.VideoNode:
             
@@ -608,60 +605,50 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             else:
                 raise ValueError(f'{func_name}: {y} is out of range')
             
-            return CrazyPlaneStats(
-                core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
-                mean, norm=False
-            )
+            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
+                                   mean, norm=False)
         
         match axis:
             case 'X':
                 w = clip.width
-                clip = core.akarin.PropExpr(
-                    [clip, stats_x(clip, target, w, mean), stats_x(clip, donor, w, mean)],
-                    lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
-                                 maximum='z.maximum', minimum='z.minimum')
+                clip = core.akarin.PropExpr([clip, stats_x(clip, target, w, mean), stats_x(clip, donor, w, mean)],
+                                            lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
+                                                         maximum='z.maximum', minimum='z.minimum')
                 )
             case 'Y':
                 h = clip.height
-                clip = core.akarin.PropExpr(
-                    [clip, stats_y(clip, target, h, mean), stats_y(clip, donor, h, mean)],
-                    lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
-                                 maximum='z.maximum', minimum='z.minimum')
-                )
+                clip = core.akarin.PropExpr([clip, stats_y(clip, target, h, mean), stats_y(clip, donor, h, mean)],
+                                            lambda: dict(target_avg=f'y.{means[mean]}', donor_avg=f'z.{means[mean]}',
+                                                         maximum='z.maximum', minimum='z.minimum'))
             case _:
                 raise ValueError(f'{func_name}: invalid "axis"')
         
-        expr = (f'{' '.join(f'{axis} {i} =' for i in target)} '
-                f'{'or ' * (len(target) - 1)}{expr} {shift} - 0 {full} clamp x ?')
+        expr = f'{' '.join(f'{axis} {i} =' for i in target)}{' or' * (len(target) - 1)} {expr} {shift} - x ?'
         clip = core.akarin.Expr(clip, expr)
         clip = core.std.RemoveFrameProps(clip, ['target_avg', 'donor_avg', 'maximum', 'minimum'])
+        
+        if curve < 0:
+            expr = f'{' '.join(f'{axis} {i} =' for i in target)}{' or' * (len(target) - 1)} y x ?'
+            clip = core.akarin.Expr([orig, core.std.Invert(clip)], expr)
         
         if limit > 0:
             clip = Clamp(clip, orig, orig, limit, 0)
         elif limit < 0:
             clip = Clamp(clip, orig, orig, 0, -limit)
         
-        if curve < 0:
-            clip = core.std.InvertMask(clip)
-        
         return clip
-    
-    defaults = ['X', 0, 0, 0, 1, 0, 0, 0, True]
     
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median']
     
     for i in args:
-        if isinstance(i, list) and 3 <= len(i) <= 9:
-            if len(i) < 9:
-                i += defaults[len(i):]
-        else:
-            raise ValueError(f'{func_name}: *args must be a sequence of lists with 3 <= len(list) <= 9')
+        if not isinstance(i, list) or len(i) < 4 or len(i) > 9:
+            raise ValueError(f'{func_name}: *args must be a sequence of lists with 4 <= len(list) <= 9')
         
-        if i[6] in set(range(num_p)):
-            clips[i[6]] = correction(clips[i[6]], *i[:6], *i[7:])
+        if i[0] in set(range(num_p)):
+            clips[i[0]] = correction(clips[i[0]], *i[1:])
         else:
-            raise ValueError(f'{func_name}: invalid plane {i[6]}')
+            raise ValueError(f'{func_name}: invalid plane {i[0]}')
     
     clip = core.std.ShufflePlanes(clips, [0] * num_p, space) if space == vs.YUV else clips[0]
     
