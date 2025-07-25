@@ -842,8 +842,9 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
     
     return clip
 
-def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight: float = 0.5,
-                   shift: int | list[int] = 0, mode: int = 0, mean: int = 0) -> vs.VideoNode:
+@float_decorator()
+def average_fields(clip: vs.VideoNode, /, weight: float = 0.5, shift: int | list[int] = 0,
+                   curve: int | list[int | None] = 1, mode: int = 0, mean: int = 0) -> vs.VideoNode:
     """
     Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
     
@@ -855,19 +856,37 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.sample_type != vs.INTEGER:
-        raise TypeError(f'{func_name}: floating point sample type is not supported')
-    
     space = clip.format.color_family
     num_p = clip.format.num_planes
-    factor = 1 << clip.format.bits_per_sample - 8
-    full = 256 * factor - 1
     
-    def simple_average(clip: vs.VideoNode, curve: int | None, weight: float, shift: int, mode: int,
+    if clip.format.sample_type == vs.INTEGER:
+        factor = 1 << clip.format.bits_per_sample - 8
+        full = 256 * factor - 1
+    else:
+        factor = 1 / 255
+        full = 1
+    
+    match shift:
+        case int() if -255 <= shift <= 255:
+            shift = [shift * factor] * num_p
+        case list() if 0 < len(shift) <= num_p and all(isinstance(i, int) and -255 <= i <= 255 for i in shift):
+            shift = [i * factor for i in shift]
+            if len(shift) < num_p:
+                shift += [shift[-1]] * (num_p - len(shift))
+        case _:
+            raise ValueError(f'{func_name}: "shift" must be "int" or list[int] and -255 <= "shift" <= 255')
+    
+    match curve:
+        case int():
+            curve = [curve] * num_p
+        case list() if 0 < len(curve) <= num_p and all(isinstance(i, int | None) for i in curve):
+            if len(curve) < num_p:
+                curve += [curve[-1]] * (num_p - len(curve))
+        case _:
+            raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
+    
+    def simple_average(clip: vs.VideoNode, weight: float, shift: int, curve: int | None, mode: int,
                        mean: int) -> vs.VideoNode:
-        
-        if curve is None:
-            return clip
         
         if weight == 0:
             expr0 = f'x.{means[mean]} {shift} +'
@@ -878,24 +897,27 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
         else:
             raise ValueError(f'{func_name}: 0 <= "weight" <= 1')
         
+        if curve is None:
+            return clip
+        
         match abs(curve):
             case 0:
-                expr1 = f'{expr0} x.{means[mean]} {shift} + - x {shift} + + {shift} - 0 {full} clamp'
-                expr2 = f'{expr0} y.{means[mean]} {shift} + - y {shift} + + {shift} - 0 {full} clamp'
+                expr1 = f'{expr0} x.{means[mean]} {shift} + - x {shift} + + {shift} -'
+                expr2 = f'{expr0} y.{means[mean]} {shift} + - y {shift} + + {shift} -'
             case 1:
-                expr1 = f'{expr0} x.{means[mean]} {shift} + / x {shift} + * {shift} - 0 {full} clamp'
-                expr2 = f'{expr0} y.{means[mean]} {shift} + / y {shift} + * {shift} - 0 {full} clamp'
+                expr1 = f'{expr0} x.{means[mean]} {shift} + / x {shift} + * {shift} -'
+                expr2 = f'{expr0} y.{means[mean]} {shift} + / y {shift} + * {shift} -'
             case 2:
-                expr1 = f'x {shift} + {expr0} log x.{means[mean]} {shift} + log / pow {shift} - 0 {full} clamp'
-                expr2 = f'y {shift} + {expr0} log y.{means[mean]} {shift} + log / pow {shift} - 0 {full} clamp'
+                expr1 = f'x {shift} + {expr0} log x.{means[mean]} {shift} + log / pow {shift} -'
+                expr2 = f'y {shift} + {expr0} log y.{means[mean]} {shift} + log / pow {shift} -'
             case 3:
-                expr1 = f'{expr0} 1 x.{means[mean]} {shift} + / pow x {shift} + pow {shift} - 0 {full} clamp'
-                expr2 = f'{expr0} 1 y.{means[mean]} {shift} + / pow y {shift} + pow {shift} - 0 {full} clamp'
+                expr1 = f'{expr0} 1 x.{means[mean]} {shift} + / pow x {shift} + pow {shift} -'
+                expr2 = f'{expr0} 1 y.{means[mean]} {shift} + / pow y {shift} + pow {shift} -'
             case _:
                 raise ValueError(f'{func_name}: Please use -3...3 or "None" (only in the list) curve values')
         
         if curve < 0:
-            clip = core.std.InvertMask(clip)
+            clip = core.std.Expr(clip, f'{full} x -')
         
         match mode:
             case 0:
@@ -908,7 +930,7 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
                     case 1:
                         fields[0] = core.akarin.Expr(fields, expr1)
                     case _:
-                        fields[0], fields[1] = core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)
+                        fields = [core.akarin.Expr(fields, expr1), core.akarin.Expr(fields, expr2)]
                 
                 clip = core.std.Interleave(fields)
                 clip = core.std.DoubleWeave(clip, True)[::2]
@@ -934,33 +956,11 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
                 raise ValueError(f'{func_name}: Please use 0 or 1 mode value')
         
         if curve < 0:
-            clip = core.std.InvertMask(clip)
+            clip = core.std.Expr(clip, f'{full} x -')
         
         clip = core.std.RemoveFrameProps(clip, ['minimum', 'maximum', means[mean]])
         
         return clip
-    
-    match curve:
-        case int():
-            curve = [curve] * num_p
-        case list() if curve:
-            if len(curve) < num_p:
-                curve += [curve[-1]] * (num_p - len(curve))
-            elif len(curve) > num_p:
-                raise ValueError(f'{func_name}: "curve" must be shorter or the same length to number of planes, '
-                                 'or "curve" must be "int"')
-        case _:
-            raise ValueError(f'{func_name}: "curve" must be "int" or list[int | None]')
-    
-    match shift:
-        case int():
-            shift = [shift * factor] * num_p
-        case list() if 0 < len(shift) <= num_p and all(isinstance(i, int) for i in shift):
-            shift = [i * factor for i in shift]
-            if len(shift) < num_p:
-                shift += [shift[-1]] * (num_p - len(shift))
-        case _:
-            raise ValueError(f'{func_name}: "shift" must be "int" or list[int] and -20 <= "shift" <= 20')
     
     means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
              'root_mean_square', 'root_mean_cube', 'median']
@@ -969,11 +969,11 @@ def average_fields(clip: vs.VideoNode, curve: int | list[int | None] = 1, weight
         clips = core.std.SplitPlanes(clip)
         
         for i in range(num_p):
-            clips[i] = simple_average(clips[i], curve[i], weight, shift[i], mode, mean)
+            clips[i] = simple_average(clips[i], weight, shift[i], curve[i], mode, mean)
         
         clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
     elif space == vs.GRAY:
-        clip = simple_average(clip, curve[0], weight, shift[0], mode, mean)
+        clip = simple_average(clip, weight, shift[0], curve[0], mode, mean)
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
@@ -4310,12 +4310,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     return clip
 
-# как бы так переделать fix_border, чтобы в списки можно было передавать как позиционные, так и именованные аргументы
-# Уйти от использования std.InvertMask
 # Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
-# добавить поддержку float в average_fields
 # проверить как ведёт себя PlaneStats на хрома-флоатах, сранить с CrazyPlaneStats
 # search_field_diffs - убрать нахрен нормализацию и добавить PlaneStats по-умолчанию
 # Проверить новый форк akarin-vapoursynth-plugin насчёт глюка с возведением в степень.
 # Прикрутить к search_field_diffs режим, где текущие значения будут показываться прямо на экране.
 # Научить mask_detail работать с Destripe
+# в документации есть get_frame_async, подумать как это можно задействовать в связке с asyncio
