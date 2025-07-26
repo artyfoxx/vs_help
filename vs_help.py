@@ -596,8 +596,10 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             else:
                 raise ValueError(f'{func_name}: {x} is out of range')
             
-            return CrazyPlaneStats(core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
-                                   mean, norm=False)
+            return CrazyPlaneStats.__wrapped__(
+                core.std.StackHorizontal([core.std.Crop(clip, i, w - i - 1, 0, 0) for i in x]),
+                mean, norm=False
+                )
         
         def stats_y(clip: vs.VideoNode, y: list[int], h: int, mean: int) -> vs.VideoNode:
             
@@ -608,8 +610,10 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
             else:
                 raise ValueError(f'{func_name}: {y} is out of range')
             
-            return CrazyPlaneStats(core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
-                                   mean, norm=False)
+            return CrazyPlaneStats.__wrapped__(
+                core.std.StackVertical([core.std.Crop(clip, 0, 0, i, h - i - 1) for i in y]),
+                mean, norm=False
+                )
         
         match axis:
             case 'X':
