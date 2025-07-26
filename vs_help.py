@@ -3749,7 +3749,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int
             if norm:
                 avg /= full
             
-            fout.props[name] = avg - 0.5 if isfloat and plane else avg
+            fout.props[name] = avg
         
         return fout
     
