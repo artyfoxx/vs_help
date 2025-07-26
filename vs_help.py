@@ -1646,8 +1646,10 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
     
     return clip
 
-def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float | list[float] = 0.001, div: float | list[float] = 2.0,
-                       norm: bool = True, frames: list[int] | None = None, output: str | None = None, plane: int = 0, mean: int = 0) -> vs.VideoNode:
+@float_decorator()
+def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: float | list[float] = 0.001,
+                       div: float | list[float] = 2.0, frames: list[int] | None = None, output: str | None = None,
+                       plane: int = 0, mean: int = 0) -> vs.VideoNode:
     """
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
@@ -1688,8 +1690,6 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
             It is relevant for modes 4...7. You can specify several as a list, they will positionally correspond to the
             modes. If the div list is less than the list of modes, the last div value will work for all remaining modes.
             The default is "2.0".
-        
-        norm: normalization to absolute normalized values of the difference between 0 and 1. The default is "True".
         
         frames: a list of frames to check. The default is "all frames".
         
@@ -1784,37 +1784,51 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
                 
                 match j // 2:
                     case 0:
-                        res += [f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}}\n' for k in frames
-                                if (x := diffs[par][k]) >= thr[i]]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}}\n' for k in frames
+                            if (x := diffs[par][k]) >= thr[i]
+                            ]
                     case 1:
-                        res += [f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}}\n' for k in frames
-                                if (x := abs(diffs[par][max(k - 1, 0)] - diffs[par][k])) >= thr[i]]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}}\n' for k in frames
+                            if (x := abs(diffs[par][max(k - 1, 0)] - diffs[par][k])) >= thr[i]
+                            ]
                     case 2:
-                        res += [f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}} {div[i]}\n' for k in frames
-                                if (x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
-                                abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]))) >= thr[i] and
-                                abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]) <= x / div[i]]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}} {div[i]}\n' for k in frames
+                            if (x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
+                                         abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]))) >= thr[i] and
+                            abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]) <= x / div[i]
+                            ]
                     case 3:
-                        res += [f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}} {div[i]}\n' for k in frames
-                                if (x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
-                                abs(diffs[par][min(k + 1, num_f - 1)] - diffs[par][min(k + 2, num_f - 1)]),
-                                abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]),
-                                abs(diffs[par][k] - diffs[par][min(k + 2, num_f - 1)]))) >= thr[i] and
-                                abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 2, num_f - 1)]) <= x / div[i]
-                                and abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]) > x]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {x:.20f} {thr[i]:<{tab}} {div[i]}\n' for k in frames
+                            if (x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
+                                         abs(diffs[par][min(k + 1, num_f - 1)] - diffs[par][min(k + 2, num_f - 1)]),
+                                         abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]),
+                                         abs(diffs[par][k] - diffs[par][min(k + 2, num_f - 1)]))) >= thr[i] and
+                            abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 2, num_f - 1)]) <= x / div[i] and
+                            abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]) > x
+                            ]
                     case 4:
-                        res += [f'{k:>{dig}} {j:>4} {diffs[par][k]:.20f} {(x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
-                                abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]))):.20f} '
-                                f'{min(x / max(abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]), 1e-20), 99999.99):8.2f}\n'
-                                for k in frames]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {diffs[par][k]:.20f} '
+                            f'{(x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
+                                         abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]))):.20f} '
+                            f'{min(x / max(abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]), 1e-20),
+                                   99999.99):8.2f}\n' for k in frames
+                            ]
                     case 5:
-                        res += [f'{k:>{dig}} {j:>4} {diffs[par][k]:.20f} {(x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
-                                abs(diffs[par][min(k + 1, num_f - 1)] - diffs[par][min(k + 2, num_f - 1)]),
-                                abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]),
-                                abs(diffs[par][k] - diffs[par][min(k + 2, num_f - 1)]))):.20f} '
-                                f'{min(x / max(abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 2, num_f - 1)]), 1e-20), 99999.99):8.2f} '
-                                f'{abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]):.20f}\n'
-                                for k in frames]
+                        res += [
+                            f'{k:>{dig}} {j:>4} {diffs[par][k]:.20f} '
+                            f'{(x := max(abs(diffs[par][max(k - 1, 0)] - diffs[par][k]),
+                                         abs(diffs[par][min(k + 1, num_f - 1)] - diffs[par][min(k + 2, num_f - 1)]),
+                                         abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 1, num_f - 1)]),
+                                         abs(diffs[par][k] - diffs[par][min(k + 2, num_f - 1)]))):.20f} '
+                            f'{min(x / max(abs(diffs[par][max(k - 1, 0)] - diffs[par][min(k + 2, num_f - 1)]), 1e-20),
+                                   99999.99):8.2f} '
+                            f'{abs(diffs[par][k] - diffs[par][min(k + 1, num_f - 1)]):.20f}\n' for k in frames
+                            ]
             
             if res:
                 with open(output, 'w') as file:
@@ -1834,9 +1848,11 @@ def search_field_diffs(clip: vs.VideoNode, mode: int | list[int] = 0, thr: float
     
     temp = core.std.SetFieldBased(clip, 0).std.SeparateFields(True)
     fields = [temp[::2], temp[1::2]]
+    diff_avg2 = core.std.Expr(fields, ['x y - abs' if i == plane else '' for i in range(num_p)])
     
-    clip = core.akarin.PropExpr([clip, CrazyPlaneStats(fields[0], mean, plane, norm), CrazyPlaneStats(fields[1], mean, plane, norm),
-                                 CrazyPlaneStats(core.std.Expr(fields, ['x y - abs' if i == plane else '' for i in range(num_p)]), mean, plane, norm)],
+    clip = core.akarin.PropExpr([clip, CrazyPlaneStats.__wrapped__(fields[0], mean, plane),
+                                 CrazyPlaneStats.__wrapped__(fields[1], mean, plane),
+                                 CrazyPlaneStats.__wrapped__(diff_avg2, mean, plane)],
                                 lambda: dict(avg0=f'y.{means[mean]}', avg1=f'z.{means[mean]}', avg2=f'a.{means[mean]}'))
     
     clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip, clip_src=clip)
@@ -4320,9 +4336,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     return clip
 
 # Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
-# проверить как ведёт себя PlaneStats на хрома-флоатах, сранить с CrazyPlaneStats
-# search_field_diffs - убрать нахрен нормализацию и добавить PlaneStats по-умолчанию
-# Проверить новый форк akarin-vapoursynth-plugin насчёт глюка с возведением в степень.
 # Прикрутить к search_field_diffs режим, где текущие значения будут показываться прямо на экране.
 # Научить mask_detail работать с Destripe
 # в документации есть get_frame_async, подумать как это можно задействовать в связке с asyncio
+# переписать все строки в RG
