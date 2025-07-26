@@ -925,7 +925,7 @@ def average_fields(clip: vs.VideoNode, /, weight: float = 0.5, shift: int | list
         
         match mode:
             case 0:
-                clip = CrazyPlaneStats(core.std.SeparateFields(clip, True), mean, norm=False)
+                clip = CrazyPlaneStats.__wrapped__(core.std.SeparateFields(clip, True), mean, norm=False)
                 fields = [clip[::2], clip[1::2]]
                 
                 match weight:
@@ -941,7 +941,8 @@ def average_fields(clip: vs.VideoNode, /, weight: float = 0.5, shift: int | list
                 clip = core.std.SetFieldBased(clip, 0)
             case 1:
                 h = clip.height
-                clips = [CrazyPlaneStats(core.std.Crop(clip, 0, 0, i, h - i - 1), mean, norm=False) for i in range(h)]
+                clips = [CrazyPlaneStats.__wrapped__(core.std.Crop(clip, 0, 0, i, h - i - 1), mean, norm=False)
+                         for i in range(h)]
                 
                 match weight:
                     case 0:
