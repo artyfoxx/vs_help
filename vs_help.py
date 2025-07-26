@@ -14,7 +14,7 @@ Functions:
     degrain_n
     Destripe (float only)
     daa
-    average_fields
+    average_fields (float support)
     znedi3aas
     dehalo_mask
     tp7_deband_mask
@@ -26,7 +26,7 @@ Functions:
     apply_range (float support)
     titles_mask
     after_mask (float support)
-    search_field_diffs
+    search_field_diffs (float support)
     CombMask2
     MTCombMask
     Binarize
@@ -43,7 +43,7 @@ Functions:
     ExpandMulti
     InpandMulti
     TemporalSoften
-    UnsharpMask
+    UnsharpMask (float support)
     diff_tfm
     diff_transfer
     shift_clip (float support)
@@ -1580,26 +1580,37 @@ def titles_mask(clip: vs.VideoNode, thr: float = 230, rg: bool = True, **after_a
     
     return clip
 
-def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, flatten: int = 0, borders: list[int] | None = None,
-               planes: int | list[int] | None = None, **after_args: int) -> vs.VideoNode:
+@float_decorator()
+def after_mask(clip: vs.VideoNode, /, boost: bool = False, offset: float = 0.0, flatten: int = 0,
+               borders: list[int] | None = None, planes: int | list[int] | None = None,
+               **after_args: int) -> vs.VideoNode:
     
     func_name = 'after_mask'
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    if clip.format.color_family != vs.GRAY:
-        raise TypeError(f'{func_name}: Unsupported color family, only vs.GRAY is supported')
+    if clip.format.color_family not in {vs.GRAY, vs.YUV}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    if not isinstance(boost, bool):
+        raise TypeError(f'{func_name}: "boost" must be a boolean')
+    
+    if not isinstance(offset, float) or offset < -1.0 or offset > 1.0:
+        raise ValueError(f'{func_name}: "offset" must be a float in range [-1.0, 1.0]')
+    
+    if not isinstance(flatten, int) or flatten < -255 or flatten > 255:
+        raise ValueError(f'{func_name}: "flatten" must be an integer in range [-255, 255]')
+    
+    match borders:
+        case None:
+            pass
+        case list() if all(isinstance(i, int) for i in borders) and 0 < len(borders) <= 4:
+            pass
+        case _:
+            raise ValueError(f'{func_name}: "borders" must be a list of up to four integers or None')
     
     num_p = clip.format.num_planes
-    
-    if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        full = 256 * factor - 1
-        expr = f'x {128 * factor} / 0.86 {offset} + pow {full} *'
-    else:
-        full = 1
-        expr = f'x 2 * 0.86 {offset} + pow 1 min 0 max'
     
     match planes:
         case None:
@@ -1611,26 +1622,34 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
+    if clip.format.sample_type == vs.INTEGER:
+        factor = 1 << clip.format.bits_per_sample - 8
+        full = 256 * factor - 1
+        expr = f'x {128 * factor} / 0.86 {offset} + pow {full} *'
+    else:
+        full = 1
+        expr = f'x 2 * 0.86 {offset} + pow 1 min 0 max'
+    
     if boost:
         clip = core.std.Expr(clip, expr)
     
-    if flatten > 0:
-        expr = ['x y max z max' if i in planes else '' for i in range(num_p)]
-        
-        for i in range(1, flatten + 1):
-            clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
-    elif flatten < 0:
-        expr = ['x y min z min' if i in planes else '' for i in range(num_p)]
-        
-        for i in range(1, -flatten + 1):
+    if flatten:
+        expr = 'x y max z max' if flatten > 0 else 'x y min z min'
+        expr = [expr if i in planes else '' for i in range(num_p)]
+        for i in range(1, abs(flatten) + 1):
             clip = core.std.Expr([clip, shift_clip(clip, -i), shift_clip(clip, i)], expr)
     
-    after_dict = dict(exp_n='Maximum', inp_n='Minimum', def_n='Deflate', inf_n='Inflate')
+    after_dict = dict(
+        exp_n='x[-1,-1] x[0,-1] max x[1,-1] max x[-1,0] max x max x[1,0] max x[-1,1] max x[0,1] max x[1,1] max',
+        inp_n='x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min',
+        def_n='x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 8 / x min',
+        inf_n='x[-1,-1] x[0,-1] + x[1,-1] + x[-1,0] + x[1,0] + x[-1,1] + x[0,1] + x[1,1] + 8 / x max'
+        )
     
     for key, value in after_args.items():
         if key in after_dict:
             for _ in range(value):
-                clip = getattr(core.std, after_dict[key])(clip, planes=planes)
+                clip = core.akarin.Expr(clip, [after_dict[key] if i in planes else '' for i in range(num_p)])
         else:
             raise KeyError(f'{func_name}: Unsupported key {key} in after_args')
     
@@ -1638,11 +1657,9 @@ def after_mask(clip: vs.VideoNode, boost: bool = False, offset: float = 0.0, fla
         if len(borders) < 4:
             defaults = [0, clip.width - 1, 0, clip.height - 1]
             borders += defaults[len(borders):]
-        elif len(borders) > 4:
-            raise ValueError(f'{func_name}: borders length must be <= 4')
         
         expr = f'X {borders[0]} >= X {borders[1]} <= Y {borders[2]} >= Y {borders[3]} <= and and and {full} 0 ? x min'
-        clip = core.std.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
+        clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)])
     
     return clip
 
