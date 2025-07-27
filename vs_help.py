@@ -428,9 +428,9 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
         expr2 = f'x y - {factor} - 128 *'
         expr3 = f'x {half} - y {half} - * 0 < {half} x {half} - abs y {half} - abs 2 * < x y {half} - 2 * {half} + ? ?'
     else:
-        expr0 = 'x 4 255 / - 4 * 1 min 0 max'
+        expr0 = f'x {4 / 255} - 4 * 1 min 0 max'
         expr1 = 'x y 1.2 * - 1 min 0 max'
-        expr2 = 'x y - 1 255 / - 128 * 1 min 0 max'
+        expr2 = f'x y - {1 / 255} - 128 * 1 min 0 max'
         expr3 = 'x y * 0 < 0 x abs y abs 2 * < x y 2 * ? ? 0.5 min -0.5 max'
     
     def get_mask(clip: vs.VideoNode, mask: int) -> vs.VideoNode:
@@ -575,7 +575,7 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         match target:
             case int():
                 target = [target]
-            case list() if all(isinstance(i, int) for i in target):
+            case [int(), *a] if all(isinstance(i, int) for i in a):
                 pass
             case _:
                 raise TypeError(f'{func_name}: "target" must be "int" or "list[int]"')
@@ -583,7 +583,7 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         match donor:
             case int():
                 donor = [donor]
-            case list() if all(isinstance(i, int) for i in donor):
+            case [str(), *a] if all(isinstance(i, int) for i in a):
                 pass
             case _:
                 raise TypeError(f'{func_name}: "donor" must be "int" or "list[int]"')
@@ -702,7 +702,7 @@ def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = 
     expr = 'x y - 0.5 + 0 1 clamp 16 * var! var@ 1.0 % val! var@ trunc 1 bitand 1 = 1 val@ - val@ ?'
     clip = core.akarin.Expr([clip, resc], expr)
     clip = RemoveGrain(clip, rg)
-    clip = core.std.Expr(clip, f'x {cutoff} 255 / < 0 x {gain} 1 x + * * 1 min 0 max ?')
+    clip = core.std.Expr(clip, f'x {cutoff / 255} < 0 x {gain} 1 x + * * 1 min 0 max ?')
     
     for _ in range(exp_n):
         clip = core.std.Maximum(clip)
@@ -1606,7 +1606,7 @@ def after_mask(clip: vs.VideoNode, /, boost: bool = False, offset: float = 0.0, 
     match borders:
         case None:
             pass
-        case list() if all(isinstance(i, int) for i in borders) and 0 < len(borders) <= 4:
+        case list() if 0 < len(borders) <= 4 and all(isinstance(i, int) for i in borders):
             pass
         case _:
             raise ValueError(f'{func_name}: "borders" must be a list of up to four integers or None')
@@ -2381,7 +2381,7 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
         factor = 1 << clip.format.bits_per_sample - 8
         expr = f'x y {overshoot * factor} + min z {undershoot * factor} - max'
     else:
-        expr = f'x y {overshoot} 255 / + min z {undershoot} 255 / - max'
+        expr = f'x y {overshoot / 255} + min z {undershoot / 255} - max'
     
     match planes:
         case None:
@@ -3601,8 +3601,8 @@ def Convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] |
         case [list(a), list(b)] if all(isinstance(i, int) for i in a + b) and len(a) % 2 and len(b) % 2:
             side_h, side_v = len(a), len(b)
             mode = [j * i for i in b for j in a]
-        case list() if (all(isinstance(i, int) for i in mode) and (side_v := round(sqrt(len(mode)))) ** 2 == len(mode)
-                        and side_v % 2):
+        case list() if (all(isinstance(i, int) for i in mode) and
+                        (side_v := round(sqrt(len(mode)))) ** 2 == len(mode) and side_v % 2):
             side_h = side_v
         case None:
             side_h = side_v = 3
@@ -4144,8 +4144,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             kernel = [kernel] * max(len(i) for i in descale_args.values() if isinstance(i, list))
         case str():
             pass
-        case list() if (all(isinstance(i, str) for i in kernel) and (not descale_args or
-                        len(kernel) >= max(len(i) if isinstance(i, list) else 1 for i in descale_args.values()))):
+        case [str(), *a] if (all(isinstance(i, str) for i in a) and
+                             (not descale_args or
+                              len(kernel) >= max(len(i) if isinstance(i, list) else 1 for i in descale_args.values()))):
             pass
         case _:
             raise TypeError(f'{func_name}: invalid "kernel" or "descale_args"')
@@ -4373,7 +4374,7 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     Args:
         clip: The clip to format.
         prop: The property(s) to format.
-        modifier: The modifier to apply to the property.
+        modifier: The modifier to apply to the property (fmt-syntax).
     """
     func_name = 'PropFormat'
     
@@ -4383,7 +4384,7 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     match prop:
         case str():
             prop = [prop]
-        case list() if all(isinstance(i, str) for i in prop):
+        case [str(), *a] if all(isinstance(i, str) for i in a):
             pass
         case _:
             raise TypeError(f'{func_name}: prop must be a str or a list of str')
@@ -4407,6 +4408,4 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     
     return clip
 
-# Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
-# Научить mask_detail работать с Destripe
 # в документации есть get_frame_async, подумать как это можно задействовать
