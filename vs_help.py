@@ -758,7 +758,7 @@ def degrain_n(clip: vs.VideoNode, /, *args: dict[str, Any], tr: int = 1, full_ra
     return clip
 
 def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear',
-             tff: bool = True, **descale_args: Any) -> vs.VideoNode:
+             tff: bool = True, restripe: bool = False, **descale_args: Any) -> vs.VideoNode:
     """
     Simplified Destripe from YomikoR without unnecessary frills.
     
@@ -773,11 +773,35 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     if clip.format.sample_type != vs.FLOAT:
         raise TypeError(f'{func_name}: integer sample type is not supported')
     
-    if dx is None:
-        dx = clip.width
+    w, h = clip.width, clip.height
     
-    if dy is None:
-        dy = clip.height // 2
+    if h % 2:
+        raise ValueError(f'{func_name}: clip height must be even')
+    
+    match dx:
+        case None:
+            dx = w
+        case int() if 0 < dx <= w:
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "dx"')
+    
+    match dy:
+        case None:
+            dy = h // 2
+        case int() if 0 < dy <= h // 2:
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "dy"')
+    
+    if not isinstance(kernel, str):
+        raise TypeError(f'{func_name}: invalid "kernel" type')
+    
+    if not isinstance(tff, bool):
+        raise TypeError(f'{func_name}: invalid "tff" type')
+    
+    if not isinstance(restripe, bool):
+        raise TypeError(f'{func_name}: invalid "restripe" type')
     
     second_args = {}
     
@@ -796,6 +820,10 @@ def Destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, k
     
     fields[0] = getattr(core.descale, f'De{kernel}')(fields[0], dx, dy, **descale_args)
     fields[1] = getattr(core.descale, f'De{kernel}')(fields[1], dx, dy, **second_args)
+    
+    if restripe:
+        fields[0] = getattr(core.descale, kernel.capitalize())(fields[0], w, h // 2, **descale_args)
+        fields[1] = getattr(core.descale, kernel.capitalize())(fields[1], w, h // 2, **second_args)
     
     clip = core.std.Interleave(fields)
     clip = core.std.DoubleWeave(clip, tff)[::2]
