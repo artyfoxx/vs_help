@@ -664,12 +664,28 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
 
 def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                 gain: float = 0.75, exp_n: int = 2, inf_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
-                mode: int = 1, **descale_args: Any) -> vs.VideoNode:
+                **descale_args: Any) -> vs.VideoNode:
     """
     MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
     
     It is based on the internal rescale function, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
+    
+    Args:
+        clip: The clip to be processed.
+        dx: Weight for rescaling. If None, it will be calculated automatically.
+        dy: Height for rescaling. If None, it will be calculated automatically.
+        rg: RemoveGrain mode.
+        cutoff: The threshold for the mask.
+        gain: The gain factor for the mask.
+        exp_n: The number of times to expand the mask.
+        inf_n: The number of times to inflate the mask.
+        blur_more: Whether to blur the mask more.
+        kernel: The rescaling kernel. If destripe is used, the first word is 'destripe'.
+        descale_args: Additional arguments for the rescaling function.
+    
+    Example:
+        clip = mask_detail(clip, 1280, 360, kernel='destripe_bicubic', b=0, c=0.75, src_top=1/6)
     """
     func_name = 'mask_detail'
     
@@ -691,13 +707,10 @@ def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = 
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    match kernel:
-        case 'bicubic':
-            resc = rescaler(clip, dx, dy, kernel, mode, **descale_args)
-        case 'lanczos':
-            resc = rescaler(clip, dx, dy, kernel, mode, **descale_args)
-        case _:
-            resc = rescaler(clip, dx, dy, kernel, mode)
+    if kernel.split('_')[0] == 'destripe':
+        resc = Destripe(clip, dx, dy, kernel.split('_')[1], restripe=True, **descale_args)
+    else:
+        resc = rescaler(clip, dx, dy, kernel, **descale_args)
     
     expr = 'x y - 0.5 + 0 1 clamp 16 * var! var@ 1.0 % val! var@ trunc 1 bitand 1 = 1 val@ - val@ ?'
     clip = core.akarin.Expr([clip, resc], expr)
