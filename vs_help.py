@@ -61,6 +61,7 @@ Functions:
     rescaler (float only)
     SCDetect
     getnative (float only)
+    PropFormat (float support)
 """
 
 import re
@@ -4352,8 +4353,48 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     return clip
 
+def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.VideoNode:
+    """
+    Format the properties of the clip. All properties are formatted to the string.
+    
+    Args:
+        clip: The clip to format.
+        prop: The property(s) to format.
+        modifier: The modifier to apply to the property.
+    """
+    func_name = 'PropFormat'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name}: clip must be a VideoNode, not {type(clip)}')
+    
+    match prop:
+        case str():
+            prop = [prop]
+        case list() if all(isinstance(i, str) for i in prop):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: prop must be a str or a list of str')
+    
+    if not isinstance(modifier, str):
+        raise TypeError(f'{func_name}: modifier must be a str')
+    
+    def get_prop(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
+        
+        fout = f.copy()
+        
+        for i in prop:
+            if i in f.props:
+                fout.props[i] = f'{f.props[i]:{modifier}}'
+            else:
+                raise ValueError(f'{func_name}: prop {i} is not found in the clip')
+        
+        return fout
+    
+    clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=get_prop)
+    
+    return clip
+
 # Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
 # Прикрутить к search_field_diffs режим, где текущие значения будут показываться прямо на экране.
 # Научить mask_detail работать с Destripe
-# в документации есть get_frame_async, подумать как это можно задействовать в связке с asyncio
-# переписать все строки в RG
+# в документации есть get_frame_async, подумать как это можно задействовать
