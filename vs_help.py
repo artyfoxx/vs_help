@@ -1667,7 +1667,7 @@ def after_mask(clip: vs.VideoNode, /, boost: bool = False, offset: float = 0.0, 
 @float_decorator()
 def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: float | list[float] = 0.001,
                        div: float | list[float] = 2.0, frames: list[int] | None = None, output: str | None = None,
-                       plane: int = 0, mean: int = 0) -> vs.VideoNode:
+                       plane: int = 0, mean: int = 0, check: bool = False) -> vs.VideoNode:
     """
     Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
@@ -1717,6 +1717,10 @@ def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: fl
         
         plane: the position of the planar for calculating the absolute normalized difference.
             The default is "0" (luminance planar).
+        
+        mean: CrazyPlaneStats mode, by default is "0".
+        
+        check: visually checks found frames, default is "False"
     """
     func_name = 'search_field_diffs'
     
@@ -1769,6 +1773,9 @@ def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: fl
                 raise ValueError(f'{func_name}: len(div) > len(mode)')
         case _:
             raise TypeError(f'{func_name}: "div" must be float or list[float] and "div" > 1')
+    
+    if not isinstance(check, bool):
+        raise TypeError(f'{func_name}: "check" must be bool')
     
     num_f = clip.num_frames
     
@@ -1873,7 +1880,13 @@ def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: fl
                                  CrazyPlaneStats.__wrapped__(diff_avg2, mean, plane)],
                                 lambda: dict(avg0=f'y.{means[mean]}', avg1=f'z.{means[mean]}', avg2=f'a.{means[mean]}'))
     
-    clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip, clip_src=clip)
+    if check:
+        clip = core.akarin.PropExpr(clip, lambda: dict(avg1='x.avg0 x.avg1 - abs'))
+        clip = PropFormat(clip, ['avg1', 'avg2'], '.20f')
+        clip = core.akarin.Text(clip, 'Even: {x.avg1}\nOdd:  {x.avg2}')
+    else:
+        clip = core.std.FrameEval(clip, partial(dump_diffs, clip=clip), prop_src=clip, clip_src=clip)
+    
     clip = core.std.RemoveFrameProps(clip, ['avg0', 'avg1', 'avg2'])
     
     return clip
@@ -4395,6 +4408,5 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     return clip
 
 # Подумать насчёт деления на 255 в float. Возможно стоит сделать 256.
-# Прикрутить к search_field_diffs режим, где текущие значения будут показываться прямо на экране.
 # Научить mask_detail работать с Destripe
 # в документации есть get_frame_async, подумать как это можно задействовать
