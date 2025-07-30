@@ -4414,14 +4414,14 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     return clip
 
-def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.VideoNode:
+def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') -> vs.VideoNode:
     """
     Format the properties of the clip. All properties are formatted to the string.
     
     Args:
         clip: The clip to format.
         prop: The property(s) to format.
-        modifier: The modifier to apply to the property (fmt-syntax).
+        modifier: The modifier to apply to the property (fmt-syntax). Blank by default.
     """
     func_name = 'PropFormat'
     
