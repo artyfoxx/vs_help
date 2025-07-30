@@ -3987,7 +3987,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
     
     if descale_args and mode & 1 and (x := crop_keys & set(descale_args.keys())):
-        raise ValueError(f'{func_name}: Unsupported key(s) {x} in descale_args')
+        raise ValueError(f'{func_name}: Unsupported key(s) {x} in descale_args for fractional operation mode')
     
     if not isinstance(mode, int):
         raise TypeError(f'{func_name}: invalid mode')
@@ -4458,3 +4458,4 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     return clip
 
 # в документации есть get_frame_async, подумать как это можно задействовать
+# проверить смещение хромы при аскейле с разным порядком
