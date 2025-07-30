@@ -4383,11 +4383,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         result = np.divide(*result.reshape(2, -1))
                     sfrange = [str(i) for i in frange]
                 case np.float64():
-                    if all(i.is_integer() for i in frange[:2]):
-                        sfrange = [f'{i:.0f}' for i in frange]
-                    else:
-                        digits = max(len(str(i).split('.')[1]) for i in frange[:2])
-                        sfrange = [f'{i:.{digits}f}' for i in frange]
+                    digits = max(f'{i:f}'.rstrip('0')[::-1].index('.') for i in frange[:2])
+                    sfrange = [f'{i:.{digits}f}' for i in frange]
             
             with GetPlot() as plot:
                 if param in {'total_kernel', 'total_dy', 'total_dx'}:
