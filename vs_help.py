@@ -4384,7 +4384,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                     sfrange = [str(i) for i in frange]
                 case np.float64():
                     if all(i.is_integer() for i in frange[:2]):
-                        sfrange = [f'{i:n}' for i in frange]
+                        sfrange = [f'{i:.0f}' for i in frange]
                     else:
                         digits = max(len(str(i).split('.')[1]) for i in frange[:2])
                         sfrange = [f'{i:.{digits}f}' for i in frange]
