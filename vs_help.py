@@ -4383,13 +4383,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         result = np.divide(*result.reshape(2, -1))
                     sfrange = [str(i) for i in frange]
                 case np.float64():
-                    tale_0 = str(frange[0]).split('.')[1]
-                    tale_1 = str(frange[1]).split('.')[1]
-                    if int(tale_0) or int(tale_1):
-                        digits = max(len(tale_0), len(tale_1))
-                        sfrange = [f'{i:.{digits}f}' for i in frange]
+                    if all(i.is_integer() for i in frange[:2]):
+                        sfrange = [f'{i:n}' for i in frange]
                     else:
-                        sfrange = [str(int(i)) for i in frange]
+                        digits = max(len(str(i).split('.')[1]) for i in frange[:2])
+                        sfrange = [f'{i:.{digits}f}' for i in frange]
             
             with GetPlot() as plot:
                 if param in {'total_kernel', 'total_dy', 'total_dx'}:
@@ -4458,4 +4456,3 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str) -> vs.V
     return clip
 
 # в документации есть get_frame_async, подумать как это можно задействовать
-# проверить смещение хромы при аскейле с разным порядком
