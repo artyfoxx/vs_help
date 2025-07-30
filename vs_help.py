@@ -1484,13 +1484,16 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             case _:
                 raise ValueError(f'{func_name}: Please use 0...3 order value')
         
-        if clip.format.subsampling_h:
-            luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
-            crop_args['src_top'] -= 0.5
-            clip = core.std.ShufflePlanes([luma, core.resize.Spline36(clip, dx, dy, **crop_args)],
-                                          list(range(num_p)), space)
-        else:
-            clip = autotap3(clip, dx, dy, **crop_args)
+        match clip.format.subsampling_h:
+            case 0:
+                clip = autotap3(clip, dx, dy, **crop_args)
+            case 1:
+                luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
+                crop_args['src_top'] -= 0.5
+                clip = core.std.ShufflePlanes([luma, core.resize.Spline36(clip, dx, dy, **crop_args)],
+                                            list(range(num_p)), space)
+            case _:
+                raise ValueError(f'{func_name}: Unsupported subsampling_h value')
     else:
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
         clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
