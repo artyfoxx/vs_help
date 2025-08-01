@@ -4144,7 +4144,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
               yscale: str = 'log', interim: bool = False, figsize: tuple[int, int] = (16, 9),
-              layout: str | None = 'tight', **descale_args: Any) -> vs.VideoNode:
+              layout: str | None = 'tight', style: str | list[str] = 'fast', **descale_args: Any) -> vs.VideoNode:
     """
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
     фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
@@ -4214,6 +4214,14 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             pass
         case _:
             raise TypeError(f'{func_name}: invalid "figsize"')
+    
+    match style:
+        case str() if style in plt.style.available:
+            pass
+        case list() if style and all(i in plt.style.available for i in style):
+            pass
+        case _:
+            raise TypeError(f'{func_name}: "style" must be a part of {plt.style.available}')
     
     match dx, dy, kernel, frames:
         case None | int() | float(), None | int() | float(), list(), int():
@@ -4312,6 +4320,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     
     class GetPlot:
         def __enter__(self) -> Self:
+            plt.style.use(style)
             self.fig, self.ax = plt.subplots(figsize=figsize, layout=layout)
             return self
         
@@ -4339,19 +4348,19 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             
             self.ax.plot(frange, result)
             self.ax.set(yscale=yscale, xlabel=param, ylabel='absolute normalized difference')
-            if y_lim is not None:
+            if y_lim:
                 self.ax.set_ylim(*y_lim)
             self.ax.grid()
             
             if mark:
                 if param in {'kernel', 'total_kernel'}:
-                    self.ax.plot(min_index, result[min_index], marker='x', c='k', ls='')
+                    self.ax.plot(min_index, result[min_index], marker='.', c='C0', ls='')
                     for i, j in zip(min_index, result[min_index]):
                         self.ax.annotate(f'{j:.2e}', (i, j), textcoords='offset points',
                                          xytext=(6, 12), ha='right', va='bottom', rotation=90,
                                          arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
                 else:
-                    self.ax.plot(frange[min_index], result[min_index], marker='x', c='k', ls='')
+                    self.ax.plot(frange[min_index], result[min_index], marker='.', c='C0', ls='')
                     for i, j, k in zip(frange[min_index], result[min_index], np.array(sfrange)[min_index]):
                         self.ax.annotate(k, (i, j), textcoords='offset points',
                                          xytext=(6, 12), ha='right', va='bottom', rotation=90,
@@ -4418,7 +4427,7 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') ->
     Args:
         clip: The clip to format.
         prop: The property(s) to format.
-        modifier: The modifier to apply to the property (fmt-syntax). Blank by default.
+        modifier: The modifier to apply to the property (Format Specification Mini-Language). Blank by default.
     """
     func_name = 'PropFormat'
     
@@ -4453,3 +4462,6 @@ def PropFormat(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') ->
     return clip
 
 # в документации есть get_frame_async, подумать как это можно задействовать
+# поковырять исходники Frfun7, подумать над собственной реализацией
+# все Maximum/Minimum и Inflate/Deflate заменить на собственную реализацию
+# переписать upscaler без ограничения на увеличение
