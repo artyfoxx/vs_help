@@ -3979,8 +3979,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     if clip.format.color_family not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    w = clip.width
-    h = clip.height
+    w, h = clip.width, clip.height
     blunt_w = 1 << clip.format.subsampling_w
     blunt_h = 1 << clip.format.subsampling_h
     crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
@@ -3993,20 +3992,15 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
     
     if mode & 2:
         # https://web.archive.org/web/20231123073420/https://anibin.blogspot.com/2014/01/blog-post_3155.html
-        if dx is None:
-            raise TypeError(f'{func_name}: invalid "dx" for studio resolution mode')
         if dy is None:
             raise TypeError(f'{func_name}: invalid "dy" for studio resolution mode')
-        if mode & 1:
-            match w, h:
-                case 1920, 1080:
-                    up_w = 1088 * 16 / 9
-                    dx = dx - (up_w - 1920) * dx / up_w
-                    dy = dy - 8 * dy / 1088
-                case _:
-                    raise ValueError(f'{func_name}: Unsupported resolution for studio resolution mode')
-        else:
+        if not mode & 1:
             raise ValueError(f'{func_name}: Fractional operation mode is required for studio resolution mode')
+        if w == 1920 and h == 1080:
+            dx = dy * 1920 / 1088 if dx is None else dx * 1920 / (1088 * 16 / 9)
+            dy = dy * 1080 / 1088
+        else:
+            raise ValueError(f'{func_name}: Unsupported resolution for studio resolution mode')
     
     if kernel not in {'bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64', 'point'}:
         raise ValueError(f'{func_name}: invalid "kernel": {kernel}')
