@@ -4138,14 +4138,130 @@ def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> v
 
 def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: float | list[float] | None = None,
               frames: int | list[int | None] | None = None, kernel: str | list[str] = 'bilinear', sigma: int = 0,
-              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = -1,
-              yscale: str = 'log', interim: bool = False, figsize: tuple[int, int] = (16, 9),
+              mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 1,
+              interim: bool = False, yscale: str = 'log', figsize: tuple[int, int] = (16, 9),
               layout: str | None = 'tight', style: str | list[str] = 'fast', **descale_args: Any) -> vs.VideoNode:
     """
+    Ещё одна никому не нужная реализация getnative (кроме меня).
+    
+    Основные отличия:
+    - Прямая работа с кадрами внутри функции, а значит корректый вывод их индексов.
+    - Наличие встроенного пресета для автоматического перебора всех популярных комбинаций ядер и их параметров.
+    - Ниличие встроенной возможности сглаживания результата по Гауссу.
+    - Возможность прогона клипа с двумя отстоящими на единицу значениями параметров и выводом их деления.
+    - Рассчёт среднего по всему клипу и вывод всех промежуточных результатов в общих границах координат.
+    - Тонкая настройка графика, включая масштаб шкалы, размер фигуры, выравнивание осей и выбор стиля.
+    
+    Args:
+        clip: Входной клип (поддерживается только 32-битный GRAY).
+        dx: Ширина клипа для рескейла по горизонтали. Может быть целой, дробной или списком.
+            Если не задано, то вычисляется автоматически (ширина клипа * dy / высота клипа).
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+        dy: Высота клипа для рескейла по вертикали. Может быть целой, дробной или списком.
+            Если не задано, то вычисляется автоматически (высота клипа * 2 / 3).
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+        frames: Область клипа для обработки. Может быть целым или списком. Если не задано, то обрабатывается весь клип.
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+            Начало и конец могут быть None, тогда вместо них будут начало и конец клипа соответственно.
+        kernel: Строка или список строк с именами ядер для рескейла. Поддерживаются следующие ядра:
+            ['bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64', 'point'].
+            'all' - автоматический перебор всех популярных комбинаций ядер и их вторичных параметров. Указание
+            дополнительных аргументов в виде списков в этом режиме не поддерживается, а вторичные параметры ядер
+            перезапишутся значениями из пересета. Вот сопоставление ядер и их вторичных параметров:
+            'bicubic#0' - b=1/3, c=1/3
+            'bicubic#1' - b=0.5, c=0
+            'bicubic#2' - b=0,   c=0.5
+            'bicubic#3' - b=0,   c=0.75
+            'bicubic#4' - b=1,   c=0
+            'bicubic#5' - b=0,   c=1
+            'bicubic#6' - b=0.2, c=0.5
+            'bicubic#7' - b=0.5, c=0.5
+            'lanczos#0' - taps=2
+            'lanczos#1' - taps=3
+            'lanczos#2' - taps=4
+            'lanczos#3' - taps=5
+        sigma: Сигма для сглаживания результата по Гауссу. По умолчанию 0.
+        mark: Вывод на график(и) меток локальных минимумов и их значений. По умолчанию False.
+        output: Имя и путь для сохранения файлов. По умолчанию генерируется автоматически.
+        thr: Порог для отсечки шума в области околонулевых значений абсолютной разности исходного и рескейленного
+            клипов. По умолчанию 0.015.
+        crop: Обрезка артефактов по краям области для расчёта среднего. По умолчанию 5.
+        mean: Выбор алгоритма расчёта среднего для режимов 'total_...', собирающих обобщённую статистику по заданному
+            диапазону кадров. Поддерживаются следующие значения:
+            0 - среднее арифметическое.
+            1 - среднее геометрическое. Используется по умолчанию.
+            2 - среднее арифметико-геометрическое.
+            3 - среднее гармоническое.
+            4 - среднее контргармоническое.
+            5 - среднее квадратичное.
+            6 - среднее кубическое.
+            7 - медианное.
+        interim: Генерация промежуточных дампов и графиков. По умолчанию False. Работает только в режимах 'total_...',
+            собирающих статистику по заданному диапазону кадров для диапазона dx, dy или kernel.
+            Если True, то создается папка с тем же именем, что и output, в которой сохраняются все промежуточные
+            дампы и графики, чей масштаб зажат между макс. и мин. значениями всего диапазона.
+        yscale: Выбор масштаба шкалы для графика. Поддерживаются следующие значения:
+            'asinh' - логарифм с обратной функцией asinh.
+            'linear' - линейный.
+            'log' - логарифм. Используется по умолчанию.
+            'logit' - логит.
+            'symlog' - симметричный логарифм.
+        figsize: Размер фигуры для графика в дюймах. По умолчанию (16, 9).
+        layout: Выбор компоновки графика. Поддерживаются следующие значения:
+            'tight' - плотная компоновка. Используется по умолчанию.
+            'constrained' - ограниченная компоновка.
+            'compressed' - сжатая компоновка.
+            'none' и None - без компоновки.
+        style: Стиль(и) графика. По умолчанию 'fast'. Все поддерживаемые стили можно посмотреть тут:
+            https://matplotlib.org/stable/gallery/style_sheets/style_sheets_reference.html
+        **descale_args: Дополнительные аргументы, перенаправляемые в rescaler.
+            Из них особого внимания заслуживает mode, который представляет собой битовую маску для выбора
+            различных режимов рескейла. Поддерживаются следующие значения:
+            mode & 1: 0 - целочисленный рескейл, 1 - дробный.
+            mode & 2: 0 - стандартная обработка dx и dy, 2 - режим студийного разрешения, принимает на вход
+                целочисленное студийное разрешение и автоматически вычисляет дробные dx и dy с макс. точностью.
+            mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через zimg, 8 - через fmtconv.
+            По умолчанию 5 (1 + 0 + 4).
+            
+            Вторичные параметры ядер можно задавать как отдельными аргументами, так и в виде списков.
+            В случае перебора по ядрам первые конвертируются в списки с одинаковыми значениями, а вторые прямо
+            сопоставляются со списком ядер. В случае, если в списке аргументов указано меньще значений, чем ядер,
+            список аргументов дополняется None. Ячейки с None игнорируются и соответствующим ядрам не передаются.
+            Если в каком либо из аргументов длина списка больше количества ядер, то будет ошибка.
+            Если какой-либо из аргументов является списком, а ядро задано как строка, то ядро конвертируется в список.
+            В случае целочисленного рескейла к допустимым аргументам добавляются src_left, src_top, src_width и
+            src_height, они так же могут быть заданы как списки.
+    
+    Примеры использования:
+        Поиск высоты дескейла на отдельном кадре:
+        clip = getnative(clip, clip.width, [600, 1000, 0.1], 1133, 'bilinear', mark=True)
+        
+        Уточнение высоты дескейла на диапазоне кадров:
+        clip = getnative(clip, clip.width, [811.5, 812.5, 0.01], [3171, 61220], 'bilinear', mark=True)
+        
+        Поиск ширины дескейла на отдельном кадре:
+        clip = getnative(clip, [1000, 1500, 0.1], clip.height, 1133, 'bilinear', mark=True)
+        
+        Уточнение ширины дескейла на диапазоне кадров:
+        clip = getnative(clip, [1443, 1444, 0.01], clip.height, [3171, 61220], 'bilinear', mark=True)
+        
+        Поиск правильного ядра и вторичных параметров для отдельного кадра:
+        clip = getnative(clip, 1443.61, 811.99, 1133, 'all', mark=True)
+        
+        Уточнение правильного ядра и вторичных параметров на диапазоне кадров:
+        clip = getnative(clip, 1443.61, 811.99, [3171, 61220], 'all', mark=True)
+        
+        Тоже самое, но через режим студийного разрешения и с автоматическим расчётом dx:
+        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=7)
+        
+        Поиск src_top для верхнего поля кадра (для Destripe):
+        clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(True).std.SetFieldBased(0)[::2]
+        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=4, mark=True)
+    
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
-    фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
-    Поэтому при использовании срезов с большим значением шага неизбежно СИЛЬНОЕ падение производительности.
-    """  # noqa: D205
+        фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
+        Поэтому при использовании срезов с большим значением шага неизбежно СИЛЬНОЕ падение производительности.
+    """
     import gc
     
     import matplotlib as mpl
@@ -4196,8 +4312,23 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         case _:
             raise TypeError(f'{func_name}: invalid "kernel" or "descale_args"')
     
-    if not isinstance(sigma, int) or sigma < 0:
+    if not isinstance(sigma, int) or sigma not in range(256):
         raise TypeError(f'{func_name}: invalid "sigma"')
+    
+    if not isinstance(mark, bool):
+        raise TypeError(f'{func_name}: invalid "mark"')
+    
+    if not isinstance(thr, float) or thr < 0 or thr > 1:
+        raise TypeError(f'{func_name}: invalid "thr"')
+    
+    if not isinstance(crop, int) or crop not in range(min(clip.width, clip.height) // 2):
+        raise TypeError(f'{func_name}: invalid "crop"')
+    
+    if not isinstance(mean, int) or mean not in range(8):
+        raise TypeError(f'{func_name}: invalid "mean"')
+    
+    if not isinstance(yscale, str) or yscale not in {'asinh', 'linear', 'log', 'logit', 'symlog'}:
+        raise TypeError(f'{func_name}: invalid "yscale"')
     
     if not isinstance(interim, bool):
         raise TypeError(f'{func_name}: invalid "interim"')
@@ -4306,13 +4437,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     if crop:
         clip = core.std.Crop(clip, crop, crop, crop, crop)
     
-    clip = core.std.PlaneStats(clip) if mean == -1 else CrazyPlaneStats(clip, mean)
+    clip = core.std.PlaneStats(clip)
     
     result = np.zeros(clip.num_frames, dtype=np.float64)
     counter = np.full(clip.num_frames, np.False_, dtype=np.bool_)
-    
-    means = ['arithmetic_mean', 'geometric_mean', 'arithmetic_geometric_mean', 'harmonic_mean', 'contraharmonic_mean',
-             'root_mean_square', 'root_mean_cube', 'median', 'PlaneStatsAverage']
     
     class GetPlot:
         def __enter__(self) -> Self:
@@ -4371,7 +4499,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     def get_native(n: int, f: vs.VideoFrame, clip: vs.VideoNode, frange: list[str] | np.ndarray) -> vs.VideoNode:
         
         nonlocal result, counter
-        result[n] = f.props[means[mean]]
+        result[n] = f.props['PlaneStatsAverage']
         counter[n] = np.True_
         
         if np.all(counter):
@@ -4402,7 +4530,26 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
                         for i, j, k in zip(result, range(result.shape[0]), range(*frames)):
                             print(f'Frame: {j}/{result.shape[0]} - "interim" pass{' ':<20}', end='\r', file=sys.stderr)
                             plot.plot(sfrange, frange, i, f'{output[:-4]}/frame_{k}.txt', param[6:], y_lim)
-                    result = np.exp(np.mean(np.log(result), axis=0))
+                    match mean:
+                        case 0:
+                            result = np.mean(result, axis=0)
+                        case 1:
+                            result = np.exp(np.mean(np.log(result), axis=0))
+                        case 2:
+                            avg_a = np.mean(result, axis=0)
+                            avg_g = np.exp(np.mean(np.log(result), axis=0))
+                            result = (np.pi * (avg_a + avg_g) /
+                                      special.ellipk(np.square(avg_a - avg_g) / np.square(avg_a + avg_g)) / 4)
+                        case 3:
+                            result = np.size(result, axis=0) / np.sum(np.reciprocal(result), axis=0)
+                        case 4:
+                            result = np.mean(np.square(result), axis=0) / np.mean(result, axis=0)
+                        case 5:
+                            result = np.sqrt(np.mean(np.square(result), axis=0))
+                        case 6:
+                            result = np.cbrt(np.mean(result ** 3, axis=0))
+                        case 7:
+                            result = np.median(result, axis=0)
                 elif sigma:
                     result = gaussian_filter(result, sigma)
                 
