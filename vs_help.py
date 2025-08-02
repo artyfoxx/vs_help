@@ -74,6 +74,7 @@ from typing import Any, Self
 
 import numpy as np
 import vapoursynth as vs
+from scipy import special
 from vapoursynth import core
 
 
@@ -3767,8 +3768,6 @@ def CrazyPlaneStats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int
     
     The result is written to the frame properties with the corresponding name.
     """  # noqa: D205
-    from scipy import special
-    
     func_name = 'CrazyPlaneStats'
     
     if not isinstance(clip, vs.VideoNode):
@@ -3844,7 +3843,7 @@ def CrazyPlaneStats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int
                     avg = np.cbrt(np.mean(matrix.astype(np.float64 if isfloat else np.uint64) ** 3, dtype=np.float64))
                     name = 'root_mean_cube'
                 case 7:
-                    avg = np.median(matrix)
+                    avg = np.median(matrix.astype(np.float64) if isfloat else matrix)
                     name = 'median'
             
             if norm:
