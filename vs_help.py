@@ -4123,12 +4123,15 @@ def SCDetect(clip: vs.VideoNode, thr: float = 0.1, luma_only: bool = False) -> v
     
     if luma_only:
         diff = CrazyPlaneStats(core.std.Expr([clip, shift_clip(clip, -1)], ['x y - abs'] + [''] * (num_p - 1)))
-        clip = core.akarin.PropExpr([clip, diff], lambda: dict(_SceneChangeNext=f'y.arithmetic_mean {thr * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.akarin.PropExpr([clip, diff], lambda: dict(
+            _SceneChangeNext=f'y.arithmetic_mean {thr * factor / (256 * factor - 1)} > 1 0 ?'))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     else:
         diff = core.std.Expr([clip, shift_clip(clip, -1)], 'x y - abs')
         diffs = [CrazyPlaneStats(i) for i in core.std.SplitPlanes(diff)]
-        clip = core.akarin.PropExpr([clip, *diffs], lambda: dict(_SceneChangeNext=f'y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max {thr * factor / (256 * factor - 1)} > 1 0 ?'))
+        clip = core.akarin.PropExpr([clip, *diffs], lambda: dict(
+            _SceneChangeNext=('y.arithmetic_mean z.arithmetic_mean a.arithmetic_mean max max '
+                              f'{thr * factor / (256 * factor - 1)} > 1 0 ?')))
         clip = core.akarin.PropExpr([clip, shift_clip(clip, 1)], lambda: dict(_SceneChangePrev='y._SceneChangeNext'))
     
     return clip
