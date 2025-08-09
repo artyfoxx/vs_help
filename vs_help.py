@@ -10,7 +10,7 @@ Functions:
     Lanczosplus
     bion_dehalo (float support)
     fix_border (float support)
-    MaskDetail (float only)
+    mask_detail (float only)
     degrain_n
     Destripe (float only)
     daa
@@ -79,7 +79,23 @@ from vapoursynth import core
 
 
 def float_decorator(num_clips: int = 1) -> Callable:
+    """
+    Декоратор для добавления поддержки FLOAT sample type в функции, которые используют только Expr.
     
+    Перед вызовом декорируемой функции, декоратор проверяет, что все клипы имеют FLOAT sample type.
+    Если все клипы имеют INTEGER sample type, то вызывается функция без декорирования.
+    Если все клипы имеют FLOAT sample type, то цветностные планары приводятся к диапазону 0...1.
+    Также у всех планаров, включая яркостный, обрезаются значения, выходящие за пределы 0...1.
+    После вызова декорируемой функции, цветностные планары приводятся к диапазону -0.5...0.5.
+    Также у всех планаров, включая яркостный, обрезаются значения, выходящие за пределы 0...1 для яркости
+    и -0.5...0.5 для цвета.
+    
+    Args:
+        num_clips: Количество клипов, передаваемых в функцию. По умолчанию 1.
+    
+    Предупреждение: Поскольку обращение декоратора к клипам происходит позиционно, то обращение к клипам по ключам
+        в декорируемой функции необходимо запрещать.
+    """
     func_name = 'float_decorator'
     
     def decorator(func: Callable) -> Callable:
@@ -113,51 +129,198 @@ def float_decorator(num_clips: int = 1) -> Callable:
     
     return decorator
 
-def chroma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def chroma_up(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """Функция-обёртка для добавления поддержки float sample type в Expr.
+    
+    Выравнивает float-планары в 0...1 перед вызовом Expr. Также обрезает значения, которые выходят за пределы 0...1.
+    """
+    func_name = 'chroma_up'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 1 min 0 max', 'x 0.5 + 1 min 0 max', 'x 0.5 + 1 min 0 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
-def chroma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """
+    Функция-обёртка для добавления поддержки float sample type в Expr.
+    
+    Выравнивает цветные float-планары в -0.5...0.5 после вызова Expr.
+    Также обрезает значения, которые выходят за пределы 0...1 в яркостном канале и -0.5...0.5 в цветностных.
+    """
+    func_name = 'chroma_down'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
-def luma_up(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def luma_up(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """
+    Функция-обёртка для добавления поддержки float sample type в MakeDiff.
+    
+    Выравнивает яркостный float-планар в 0...1 после вызова MakeDiff.
+    Также обрезает значения, которые выходят за пределы 0...1 в яркостном канале и -0.5...0.5 в цветностных.
+    """
+    func_name = 'luma_up'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 0.5 + 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
-def luma_down(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def luma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """
+    Функция-обёртка для добавления поддержки float sample type в MergeDiff.
+    
+    Выравнивает яркостный float-планар в -0.5...0.5 перед вызовом MergeDiff.
+    Также обрезает значения, которые выходят за пределы -0.5...0.5.
+    """
+    func_name = 'luma_down'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 0.5 - 0.5 min -0.5 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
-def diff_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def diff_clamp(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """
+    Функция-обёртка для добавления поддержки float sample type в MakeDiff.
+    
+    Обрезает значения, которые выходят за пределы -0.5...0.5, после вызова MakeDiff.
+    """
+    func_name = 'diff_clamp'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 0.5 min -0.5 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
-def clip_clamp(clip: vs.VideoNode, planes: list[int]) -> vs.VideoNode:
+def clip_clamp(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
+    """
+    Функция-обёртка для добавления поддержки float sample type в MergeDiff.
+    
+    Обрезает значения, которые выходят за пределы 0...1 в яркостном канале и -0.5...0.5 в цветностных,
+    после вызова MergeDiff.
+    """
+    func_name = 'clip_clamp'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family not in {vs.YUV, vs.GRAY}:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    num_p = clip.format.num_planes
+    
+    match planes:
+        case None:
+            planes = list(range(num_p))
+        case int() if planes in range(num_p):
+            planes = [planes]
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
+            pass
+        case _:
+            raise ValueError(f'{func_name}: invalid "planes"')
     
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max']
-        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(clip.format.num_planes)])
+        clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
 
@@ -659,7 +822,7 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
         if not isinstance(i, list) or len(i) < 4 or len(i) > 9:
             raise ValueError(f'{func_name}: *args must be a sequence of lists with 4 <= len(list) <= 9')
         
-        if i[0] in set(range(num_p)):
+        if i[0] in range(num_p):
             clips[i[0]] = correction(clips[i[0]], *i[1:])
         else:
             raise ValueError(f'{func_name}: invalid plane {i[0]}')
@@ -873,9 +1036,9 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -889,7 +1052,7 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
     DD = Repair(shrpD, dblD, [13 if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
     
-    if set(planes) != set(range(num_p)):
+    if len(planes) != num_p:
         clip = core.std.ShufflePlanes([clip if i in planes else dblD for i in range(num_p)], list(range(num_p)), space)
     
     return clip
@@ -1052,9 +1215,9 @@ def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, p
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -1074,7 +1237,7 @@ def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, p
     DD = Repair(shrpD, dblD, [rep if i in planes else 0 for i in range(num_p)])
     clip = core.std.MergeDiff(dbl, DD, planes=planes)
     
-    if set(planes) != set(range(num_p)):
+    if len(planes) != num_p:
         clip = core.std.ShufflePlanes([clip if i in planes else dblD for i in range(num_p)], list(range(num_p)), space)
     
     return clip
@@ -1666,9 +1829,9 @@ def after_mask(clip: vs.VideoNode, /, boost: bool = False, offset: float = 0.0, 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -1782,11 +1945,11 @@ def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: fl
     
     num_p = clip.format.num_planes
     
-    if plane not in set(range(num_p)):
+    if plane not in range(num_p):
         raise ValueError(f'{func_name}: Unsupported plane')
     
     match mode:
-        case int() if mode in set(range(12)):
+        case int() if mode in range(12):
             mode = [mode]
         case list() if mode and (set(mode) <= set(range(8)) or set(mode) <= set(range(8, 12))):
             pass
@@ -1979,9 +2142,9 @@ def CombMask2(clip: vs.VideoNode, cthresh: int | None = None, mthresh: int = 9, 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2037,9 +2200,9 @@ def MTCombMask(clip: vs.VideoNode, thr1: float = 30, thr2: float = 30, div: floa
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2069,9 +2232,9 @@ def Binarize(clip: vs.VideoNode, thr: float | list[float] = 128, upper: bool = F
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2115,9 +2278,9 @@ def delcomb(clip: vs.VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2163,9 +2326,9 @@ def vinverse(clip: vs.VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2233,9 +2396,9 @@ def vinverse2(clip: vs.VideoNode, sstr: float = 2.7, amnt: int = 255, scl: float
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2292,9 +2455,9 @@ def sbr(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNo
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2330,9 +2493,9 @@ def sbrV(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoN
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2364,9 +2527,9 @@ def Blur(clip: vs.VideoNode, /, amountH: float = 0, amountV: float | None = None
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2436,9 +2599,9 @@ def Clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNo
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2468,9 +2631,9 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2508,7 +2671,8 @@ def MinBlur(clip: vs.VideoNode, r: int = 1, planes: int | list[int] | None = Non
     
     return clip
 
-def DitherLumaRebuild(clip: vs.VideoNode, s0: float = 2.0, c: float = 0.0625, planes: int | list[int] | None = None) -> vs.VideoNode:
+def DitherLumaRebuild(clip: vs.VideoNode, s0: float = 2.0, c: float = 0.0625,
+                      planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'DitherLumaRebuild'
     
@@ -2528,9 +2692,9 @@ def DitherLumaRebuild(clip: vs.VideoNode, s0: float = 2.0, c: float = 0.0625, pl
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2545,8 +2709,8 @@ def DitherLumaRebuild(clip: vs.VideoNode, s0: float = 2.0, c: float = 0.0625, pl
     
     return clip
 
-def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1, planes: int | list[int] | None = None,
-                    **thr_arg: float) -> vs.VideoNode:
+def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1,
+                planes: int | list[int] | None = None, **thr_arg: float) -> vs.VideoNode:
     
     func_name = 'ExpandMulti'
     
@@ -2558,9 +2722,9 @@ def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2583,8 +2747,8 @@ def ExpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
     
     return clip
 
-def InpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1, planes: int | list[int] | None = None,
-                    **thr_arg: float) -> vs.VideoNode:
+def InpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: int = 1,
+                planes: int | list[int] | None = None, **thr_arg: float) -> vs.VideoNode:
     
     func_name = 'InpandMulti'
     
@@ -2596,9 +2760,9 @@ def InpandMulti(clip: vs.VideoNode, mode: str = 'rectangle', sw: int = 1, sh: in
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2660,9 +2824,9 @@ def TemporalSoften(clip: vs.VideoNode, radius: int | None = None, thr: int | Non
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2800,9 +2964,9 @@ def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2848,7 +3012,7 @@ def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, 
     
     clip = core.std.Expr([nc_clip_d, *diff], ['x y z - +' if i in planes else '' for i in range(num_p)])
     
-    if set(planes) != set(range(num_p)):
+    if len(planes) != num_p:
         clip = core.std.ShufflePlanes([clip if i in planes else clip_d for i in range(num_p)], list(range(num_p)), space)
     
     return clip
@@ -2879,9 +3043,9 @@ def diff_transfer(clip: vs.VideoNode, nc_clip: vs.VideoNode, target: vs.VideoNod
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2917,9 +3081,9 @@ def shift_clip(clip: vs.VideoNode, shift: int = 0, planes: int | list[int] | Non
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -2931,7 +3095,7 @@ def shift_clip(clip: vs.VideoNode, shift: int = 0, planes: int | list[int] | Non
     elif shift < 0:
         clip = clip[-shift:] + clip[-1] * -shift
     
-    if set(planes) != set(range(num_p)):
+    if len(planes) != num_p:
         clip = core.std.ShufflePlanes([clip if i in planes else orig for i in range(num_p)], list(range(num_p)), space)
     
     return clip
@@ -3397,9 +3561,9 @@ def TemporalRepair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int = 0, 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -3481,9 +3645,9 @@ def Clense(clip: vs.VideoNode, /, previous: vs.VideoNode | None = None, followin
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -3518,9 +3682,9 @@ def BackwardClense(clip: vs.VideoNode, /, planes: int | list[int] | None = None)
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -3548,9 +3712,9 @@ def ForwardClense(clip: vs.VideoNode, /, planes: int | list[int] | None = None) 
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -3640,9 +3804,9 @@ def Convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] |
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
@@ -3879,9 +4043,9 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     match planes:
         case None:
             planes = list(range(num_p))
-        case int() if planes in set(range(num_p)):
+        case int() if planes in range(num_p):
             planes = [planes]
-        case list() if 0 < len(planes) <= num_p and set(planes) <= set(range(num_p)):
+        case [int(), *_] if len(x := set(planes)) == len(planes) and x <= set(range(num_p)):
             pass
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
