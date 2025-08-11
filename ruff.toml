@@ -21,6 +21,7 @@ select = [
     "RUF",  # Ruff-specific rules
     "ERA",  # eradicate
     "FURB", # refurb
+    "N",    # pep8-naming
 ]
 ignore = [
     "C408",   # unnecessary-collection-call
