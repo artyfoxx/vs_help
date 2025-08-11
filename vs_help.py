@@ -6,6 +6,7 @@ Support for floating point sample type is intended for clips converted from the 
 For clips converted from a limited range, correct operation is not guaranteed.
 
 Functions:
+    float_decorator (float support)
     autotap3 (float support)
     lanczosplus
     bion_dehalo (float support)
@@ -239,29 +240,24 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
-    cp1 = core.std.MaskedMerge(
-        vs_blur(t1, 1.42), t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    cp0 = vs_blur(t1, 1.42)
+    cp1 = core.std.MaskedMerge(cp0, t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                     **crop_args))
     m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(
-        cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                       **crop_args))
     m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(
-        cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                       **crop_args))
     m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(
-        cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                       **crop_args))
     m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(
-        cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                       **crop_args))
     m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(
-        cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3, **crop_args)
-        )
+    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
+                                                                                        **crop_args))
     
     if space == vs.YUV:
         clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)],
@@ -1230,9 +1226,9 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     return clip
 
 def fine_dehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128,
-               thlimi: int = 50, thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50,
-               highsens: float = 50, ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True,
-               edgeproc: float = 0.0, mt_prewitt: bool = False) -> vs.VideoNode:
+                thlimi: int = 50, thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50,
+                highsens: float = 50, ss: float = 1.25, showmask: int = 0, contra: float = 0.0, excl: bool = True,
+                edgeproc: float = 0.0, mt_prewitt: bool = False) -> vs.VideoNode:
     
     func_name = 'fine_dehalo'
     
@@ -1312,7 +1308,7 @@ def fine_dehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi
     return clip
 
 def fine_dehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list[int] | None = None,
-                showmask: bool = False) -> vs.VideoNode:
+                 showmask: bool = False) -> vs.VideoNode:
     
     func_name = 'fine_dehalo2'
     
@@ -1916,7 +1912,8 @@ def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: fl
     
     return clip
 
-def vs_comb_mask(clip: vs.VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256, planes: int | list[int] | None = None) -> vs.VideoNode:
+def vs_comb_mask(clip: vs.VideoNode, thr1: float = 30, thr2: float = 30, div: float = 256,
+                 planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_comb_mask'
     
@@ -1952,14 +1949,15 @@ def vs_comb_mask(clip: vs.VideoNode, thr1: float = 30, thr2: float = 30, div: fl
         case _:
             raise ValueError(f'{func_name}: invalid "planes"')
     
-    expr = f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ {thr2 * power} > {256 * factor - 1} var@ {div * factor} / ? ?'
+    expr = (f'x[0,-1] x - x[0,1] x - * var! var@ {thr1 * power} < 0 var@ '
+            f'{thr2 * power} > {256 * factor - 1} var@ {div * factor} / ? ?')
     defaults = ['0'] + [f'{128 * factor}'] * (num_p - 1)
     clip = core.akarin.Expr(clip, [expr if i in planes else defaults[i] for i in range(num_p)])
     
     return clip
 
-def vs_comb_mask2(clip: vs.VideoNode, cthresh: int | None = None, mthresh: int = 9, expand: bool = True, metric: int = 0,
-              planes: int | list[int] | None = None) -> vs.VideoNode:
+def vs_comb_mask2(clip: vs.VideoNode, cthresh: int | None = None, mthresh: int = 9, expand: bool = True,
+                  metric: int = 0, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_comb_mask2'
     
@@ -2015,7 +2013,8 @@ def vs_comb_mask2(clip: vs.VideoNode, cthresh: int | None = None, mthresh: int =
     
     if mthresh:
         expr = f'x y - abs {mthresh * factor} > {full} 0 ?'
-        motionmask = core.std.Expr([clip, shift_clip(clip, 1)], [expr if i in planes else defaults[i] for i in range(num_p)])
+        motionmask = core.std.Expr([clip, shift_clip(clip, 1)],
+                                   [expr if i in planes else defaults[i] for i in range(num_p)])
         
         expr = 'x[0,1] x[0,-1] x max max y min'
         mask = core.akarin.Expr([motionmask, mask], [expr if i in planes else '' for i in range(num_p)])
@@ -2025,7 +2024,8 @@ def vs_comb_mask2(clip: vs.VideoNode, cthresh: int | None = None, mthresh: int =
     
     return mask
 
-def vs_binarize(clip: vs.VideoNode, thr: float | list[float] = 128, upper: bool = False, planes: int | list[int] | None = None) -> vs.VideoNode:
+def vs_binarize(clip: vs.VideoNode, thr: float | list[float] = 128, upper: bool = False,
+                planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_binarize'
     
@@ -2071,7 +2071,8 @@ def vs_binarize(clip: vs.VideoNode, thr: float | list[float] = 128, upper: bool 
     
     return clip
 
-def delcomb(clip: vs.VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0, planes: int | list[int] | None = None) -> vs.VideoNode:
+def delcomb(clip: vs.VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 0,
+            planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'delcomb'
     
@@ -2113,7 +2114,8 @@ def delcomb(clip: vs.VideoNode, thr1: float = 100, thr2: float = 5, mode: int = 
     
     filt = core.std.MaskedMerge(clip, filt, mask, planes=planes, first_plane=True)
     
-    clip = core.akarin.Select([clip, filt], crazy_plane_stats(mask), f'x.arithmetic_mean {thr2 * factor / (256 * factor - 1)} > 1 0 ?')
+    clip = core.akarin.Select([clip, filt], crazy_plane_stats(mask),
+                              f'x.arithmetic_mean {thr2 * factor / (256 * factor - 1)} > 1 0 ?')
     
     return clip
 
@@ -2381,9 +2383,9 @@ def vs_sharpen(clip: vs.VideoNode, amount_h: float = 0, amount_v: float | None =
     
     return clip
 
-@float_decorator(num_clips=3)
+@float_decorator(num_clips=3, chroma_align=False)
 def vs_clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.VideoNode, /, overshoot: float = 0,
-          undershoot: float = 0, planes: int | list[int] | None = None) -> vs.VideoNode:
+             undershoot: float = 0, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_clamp'
     
@@ -2404,11 +2406,8 @@ def vs_clamp(clip: vs.VideoNode, bright_limit: vs.VideoNode, dark_limit: vs.Vide
     
     num_p = clip.format.num_planes
     
-    if clip.format.sample_type == vs.INTEGER:
-        factor = 1 << clip.format.bits_per_sample - 8
-        expr = f'x y {overshoot * factor} + min z {undershoot * factor} - max'
-    else:
-        expr = f'x y {overshoot / 255} + min z {undershoot / 255} - max'
+    factor = 1 << clip.format.bits_per_sample - 8 if clip.format.sample_type == vs.INTEGER else 1 / 255
+    expr = f'x y {overshoot * factor} + min z {undershoot * factor} - max'
     
     match planes:
         case None:
@@ -2590,7 +2589,7 @@ def vs_inpand_multi(clip: vs.VideoNode, planes: int | list[int] | None = None, t
     return clip
 
 def vs_temporal_soften(clip: vs.VideoNode, radius: int | None = None, thr: int | None = None, scenechange: int = 0,
-                   planes: int | list[int] | None = None) -> vs.VideoNode:
+                       planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_temporal_soften'
     
@@ -2653,8 +2652,9 @@ def vs_temporal_soften(clip: vs.VideoNode, radius: int | None = None, thr: int |
                     drop_frames.update(range(i + 1, scope))
                     break
         
-        expr = f'{' '.join(f'src{radius} src{i} - abs {thr} > src{radius} src{i} ?' if radius != i else
-               f'src{i}' for i in range(scope) if i not in drop_frames)} {'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /'
+        expr = (f'{' '.join(f'src{radius} src{i} - abs {thr} > src{radius} src{i} ?' if radius != i else
+                            f'src{i}' for i in range(scope) if i not in drop_frames)} '
+                f'{'+ ' * (scope - len(drop_frames) - 1)}{scope - len(drop_frames)} /')
         clip = core.akarin.Expr(clips, [expr if i in planes else f'src{radius}' for i in range(num_p)])
         
         return clip
@@ -2737,8 +2737,9 @@ def vs_unsharp_mask(clip: vs.VideoNode, /, strength: int = 64, radius: int = 3, 
     
     return clip
 
-def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str, diff_proc: Callable[..., vs.VideoNode] | None = None,
-             planes: int | list[int] | None = None, **tfm_args: Any) -> vs.VideoNode:
+def diff_tfm(clip: vs.VideoNode, nc_clip: vs.VideoNode, ovr_d: str, ovr_c: str,
+             diff_proc: Callable[..., vs.VideoNode] | None = None, planes: int | list[int] | None = None,
+             **tfm_args: Any) -> vs.VideoNode:
     
     func_name = 'diff_tfm'
     
@@ -2960,7 +2961,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
 
 @float_decorator()
 def vs_remove_grain(clip: vs.VideoNode, /, mode: int | list[int] = 2, edges: bool = False,
-                roundoff: int = 1) -> vs.VideoNode:
+                    roundoff: int = 1) -> vs.VideoNode:
     """
     Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
     
@@ -3156,7 +3157,7 @@ def vs_remove_grain(clip: vs.VideoNode, /, mode: int | list[int] = 2, edges: boo
 
 @float_decorator(num_clips=2)
 def vs_repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int | list[int] = 2,
-           edges: bool = False) -> vs.VideoNode:
+              edges: bool = False) -> vs.VideoNode:
     """
     Implementation of RgTools.Repair with clip edge processing.
     
@@ -3340,7 +3341,7 @@ def vs_repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int | list[int
 
 @float_decorator(num_clips=2)
 def vs_temporal_repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int = 0, edges: bool = False,
-                   planes: int | list[int] | None = None) -> vs.VideoNode:
+                       planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_temporal_repair'
     
@@ -3415,7 +3416,7 @@ def vs_temporal_repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int =
     return clip
 
 def vs_clense(clip: vs.VideoNode, /, previous: vs.VideoNode | None = None, following: vs.VideoNode | None = None,
-           reduceflicker: bool = False, planes: int | list[int] | None = None) -> vs.VideoNode:
+              reduceflicker: bool = False, planes: int | list[int] | None = None) -> vs.VideoNode:
     
     func_name = 'vs_clense'
     
@@ -3582,8 +3583,8 @@ def vs_vertical_cleaner(clip: vs.VideoNode, /, mode: int | list[int] = 1, edges:
 
 @float_decorator()
 def vs_convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] | None = None,
-                saturate: int | None = None, total: float | None = None,
-                planes: int | list[int] | None = None) -> vs.VideoNode:
+                   saturate: int | None = None, total: float | None = None,
+                   planes: int | list[int] | None = None) -> vs.VideoNode:
     """
     An unnatural hybrid of std.Convolution, mt_convolution and mt_edge.
     
@@ -3729,7 +3730,7 @@ def vs_convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]
 
 @float_decorator()
 def crazy_plane_stats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int = 0,
-                    norm: bool = True) -> vs.VideoNode:
+                      norm: bool = True) -> vs.VideoNode:
     """
     Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
     root mean square, root mean cube and median, depending on the mode.
