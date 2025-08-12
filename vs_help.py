@@ -1454,13 +1454,12 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         
         match clip.format.subsampling_w:
             case 0:
-                hshift = -0.5
+                crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5
             case 1:
-                hshift = -rfactor / 2 + 0.5
+                crop_args['src_left'] = crop_args.get('src_left', 0) - rfactor / 2 + 0.5
             case _:
                 raise ValueError(f'{func_name}: Unsupported subsampling_w value')
         
-        crop_args['src_left'] = crop_args.get('src_left', 0) + hshift
         crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
         
         match clip.format.subsampling_h:
