@@ -78,7 +78,7 @@ import re
 from collections.abc import Callable
 from functools import partial, wraps
 from inspect import signature
-from math import ceil, sqrt
+from math import ceil, log, sqrt
 from pathlib import Path
 from typing import Any, Self
 
@@ -161,9 +161,7 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
     clip = core.std.SetFieldBased(clip, 0)
-    
-    w = clip.width
-    h = clip.height
+    w, h = clip.width, clip.height
     
     match dx:
         case None:
@@ -1382,9 +1380,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         raise TypeError(f'{func_name}: Unsupported color family')
     
     clip = core.std.SetFieldBased(clip, 0)
-    
-    w = clip.width
-    h = clip.height
+    w, h = clip.width, clip.height
     
     if dx is None:
         dx = w * 2
@@ -1392,23 +1388,20 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if dy is None:
         dy = h * 2
     
-    if dx > w * 2 or dy > h * 2:
-        raise ValueError(f'{func_name}: upscale size is too big')
-    
-    def edi3_aa(clip: vs.VideoNode, mode: int, order: bool, **upscaler_args: Any) -> vs.VideoNode:
+    def edi3_aa(clip: vs.VideoNode, mode: int, order: bool, field: int, **upscaler_args: Any) -> vs.VideoNode:
         
         if order:
             clip = core.std.Transpose(clip)
         
         match mode:
             case 1:
-                clip = core.znedi3.nnedi3(clip, field=1, dh=True, **upscaler_args)
+                clip = core.znedi3.nnedi3(clip, 1 if order else field, True, **upscaler_args)
                 clip = core.std.Transpose(clip)
-                clip = core.znedi3.nnedi3(clip, field=1, dh=True, **upscaler_args)
+                clip = core.znedi3.nnedi3(clip, field if order else 1, True, **upscaler_args)
             case 2:
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True, **upscaler_args)
+                clip = core.eedi3m.EEDI3(clip, 1 if order else field, True, **upscaler_args)
                 clip = core.std.Transpose(clip)
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True, **upscaler_args)
+                clip = core.eedi3m.EEDI3(clip, field if order else 1, True, **upscaler_args)
             case 3:
                 eedi3_keys = signature(core.eedi3m.EEDI3).parameters.keys()
                 znedi3_keys = signature(core.znedi3.nnedi3).parameters.keys()
@@ -1419,11 +1412,13 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 if any((x := i) not in eedi3_args and i not in znedi3_args for i in upscaler_args):
                     raise KeyError(f'{func_name}: Unsupported key {x} in upscaler_args')
                 
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True,
-                                         sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
+                clip = core.eedi3m.EEDI3(clip, 1 if order else field, True,
+                                         sclip=core.znedi3.nnedi3(clip, 1 if order else field, True, **znedi3_args),
+                                         **eedi3_args)
                 clip = core.std.Transpose(clip)
-                clip = core.eedi3m.EEDI3(clip, field=1, dh=True,
-                                         sclip=core.znedi3.nnedi3(clip, field=1, dh=True, **znedi3_args), **eedi3_args)
+                clip = core.eedi3m.EEDI3(clip, field if order else 1, True,
+                                         sclip=core.znedi3.nnedi3(clip, field if order else 1, True, **znedi3_args),
+                                         **eedi3_args)
             case _:
                 raise ValueError(f'{func_name}: Please use 0...3 mode value')
         
@@ -1433,28 +1428,40 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         return clip
     
     if mode:
+        steps = ceil(log(max(dx / w, dy / h)) / log(2))
+        rfactor = 1 << steps
+        
         crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
-        crop_args = {key: value * 2 for key, value in upscaler_args.items() if key in crop_keys}
+        crop_args = {key: value * rfactor for key, value in upscaler_args.items() if key in crop_keys}
         upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
         
-        crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5
-        crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
+        for step in range(steps):
+            match order:
+                case 0:
+                    clip = edi3_aa(clip, mode, True, 0 if step else 1, **upscaler_args)
+                case 1:
+                    clip = edi3_aa(clip, mode, False, 0 if step else 1, **upscaler_args)
+                case 2:
+                    expr = ['x y max', 'x y min', 'x y max']
+                    clip = core.std.Expr([edi3_aa(clip, mode, True, 0 if step else 1, **upscaler_args),
+                                          edi3_aa(clip, mode, False, 0 if step else 1, **upscaler_args)], expr[:num_p])
+                case 3:
+                    expr = ['x y min', 'x y max', 'x y min']
+                    clip = core.std.Expr([edi3_aa(clip, mode, True, 0 if step else 1, **upscaler_args),
+                                          edi3_aa(clip, mode, False, 0 if step else 1, **upscaler_args)], expr[:num_p])
+                case _:
+                    raise ValueError(f'{func_name}: Please use 0...3 order value')
         
-        match order:
+        match clip.format.subsampling_w:
             case 0:
-                clip = edi3_aa(clip, mode, True, **upscaler_args)
+                hshift = -0.5
             case 1:
-                clip = edi3_aa(clip, mode, False, **upscaler_args)
-            case 2:
-                expr = ['x y max', 'x y min', 'x y max']
-                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
-                                      edi3_aa(clip, mode, False, **upscaler_args)], expr[:num_p])
-            case 3:
-                expr = ['x y min', 'x y max', 'x y min']
-                clip = core.std.Expr([edi3_aa(clip, mode, True, **upscaler_args),
-                                      edi3_aa(clip, mode, False, **upscaler_args)], expr[:num_p])
+                hshift = -rfactor / 2 + 0.5
             case _:
-                raise ValueError(f'{func_name}: Please use 0...3 order value')
+                raise ValueError(f'{func_name}: Unsupported subsampling_w value')
+        
+        crop_args['src_left'] = crop_args.get('src_left', 0) + hshift
+        crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
         
         match clip.format.subsampling_h:
             case 0:
@@ -1463,7 +1470,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
                 crop_args['src_top'] -= 0.5
                 clip = core.std.ShufflePlanes([luma, core.resize.Spline36(clip, dx, dy, **crop_args)],
-                                            list(range(num_p)), space)
+                                              list(range(num_p)), space)
             case _:
                 raise ValueError(f'{func_name}: Unsupported subsampling_h value')
     else:
@@ -5025,5 +5032,4 @@ def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs
 
 # в документации есть get_frame_async, подумать как это можно задействовать
 # поковырять исходники Frfun7, подумать над собственной реализацией
-# переписать upscaler без ограничения на увеличение
 # поковырять стандартные алгоритмы ресайза, попробовать написать свой на чистом питоне
