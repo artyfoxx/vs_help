@@ -1539,8 +1539,19 @@ def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: 
     
     return clip
 
-def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[int]) -> vs.VideoNode:
+def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[int | None]) -> vs.VideoNode:
+    """
+    Позволяет заменить указанные диапазоны кадров первого клипа на соответствующие кадры второго клипа.
     
+    Args:
+        first: Первый клип, который будет изменен.
+        second: Второй клип, который будет использован для замены.
+        *args: Кортеж аргументов, определяющих кадры и диапазоны кадров для замены.
+            Каждый аргумент может быть либо целым числом (номер кадра для замены), либо списком.
+            Список может содержать как один, так и два элемента: один элемент - номер кадра для замены,
+            два элемента - диапазон кадров для замены (второй кадр не включается, как в срезах Python).
+            Один из элементов списка может быть None, в этом случае он обозначает начало или конец клипа.
+    """
     func_name = 'apply_range'
     
     if not all(isinstance(i, vs.VideoNode) for i in (first, second)):
@@ -1563,6 +1574,10 @@ def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[
                     first = first[:a] + second[a:]
                 else:
                     first = first[:a] + second[a:b] + first[b:]
+            case [None, int(b)] if 0 < b < num_f:
+                first = second[:b] + first[b:]
+            case [int(a), None] if 0 < a < num_f:
+                first = first[:a] + second[a:]
             case int(a) | [int(a)] if 0 <= a < num_f:
                 if a == 0:
                     first = second[a] + first[a + 1:]
@@ -1571,7 +1586,7 @@ def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[
                 else:
                     first = first[:a] + second[a] + first[a + 1:]
             case _:
-                raise ValueError(f'{func_name}: *args must be list[second_frame, first_frame], list[frame] or "int"')
+                raise ValueError(f'{func_name}: *args must be list[frame, frame], list[frame] or "int"')
     
     return first
 
@@ -4954,7 +4969,7 @@ def vs_median_blur(clip: vs.VideoNode, /, radius: int = 2, planes: int | list[in
     square = side ** 2
     
     expr = (f'x {' '.join(f'x[{j - radius},{i - radius}]' for i in range(side) for j in range(side)
-                          if i - radius != 0 or j - radius != 0)} '
+                          if i - radius or j - radius)} '
             f'sort{square - 1} drop{square // 2 - 1} min! max! drop{square // 2 - 1} min@ max@ clamp')
     
     clip = core.akarin.Expr(clip, [expr if i in planes else '' for i in range(num_p)], boundary=mirror)
