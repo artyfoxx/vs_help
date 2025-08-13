@@ -1381,6 +1381,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
+    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
     
     if dx is None:
         dx = w * 2
@@ -1390,8 +1391,8 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     def edi3_aa(clip: vs.VideoNode, mode: int, order: bool, field: bool, **upscaler_args: Any) -> vs.VideoNode:
         
-        field0 = 1 if order and clip.format.subsampling_w else field
-        field1 = 1 if not order and clip.format.subsampling_w else field
+        field0 = 1 if order and sub_w else field
+        field1 = 1 if not order and sub_w else field
         
         if order:
             clip = core.std.Transpose(clip)
@@ -1453,26 +1454,26 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 case _:
                     raise ValueError(f'{func_name}: Please use 0...3 order value')
         
-        match clip.format.subsampling_w:
+        match sub_w:
             case 0:
                 crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5
             case 1 | 2:
                 crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5 * (rfactor - 1)
             case _:
-                raise ValueError(f'{func_name}: Unsupported subsampling_w value')
+                raise ValueError(f'{func_name}: Unsupported horizontal subsampling of the clip')
         
         crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
         
-        match clip.format.subsampling_h:
+        match sub_h:
             case 0:
                 clip = autotap3(clip, dx, dy, **crop_args)
             case 1:
+                chroma_args = {key: value - 0.5 if key == 'src_top' else value for key, value in crop_args.items()}
                 luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
-                crop_args['src_top'] -= 0.5
-                clip = core.std.ShufflePlanes([luma, core.resize.Spline36(clip, dx, dy, **crop_args)],
-                                              list(range(num_p)), space)
+                chroma = core.resize.Spline36(clip, dx, dy, **chroma_args)
+                clip = core.std.ShufflePlanes([luma, chroma], list(range(num_p)), space)
             case _:
-                raise ValueError(f'{func_name}: Unsupported subsampling_h value')
+                raise ValueError(f'{func_name}: Unsupported vertical subsampling of the clip')
     else:
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
         clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
@@ -4587,7 +4588,7 @@ def prop_format(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') -
             if i in f.props:
                 fout.props[i] = f'{f.props[i]:{modifier}}'
             else:
-                raise ValueError(f'{func_name}: prop {i} is not found in the clip')
+                raise KeyError(f'{func_name}: prop {i} is not found in the clip')
         
         return fout
     
