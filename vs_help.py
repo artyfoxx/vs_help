@@ -4082,12 +4082,14 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
                              b='a1', c='a2', taps='taps')
             fmtc_args = {fmtc_keys[key]: value for key, value in descale_args.items() if key in fmtc_keys}
             clip = core.fmtc.resample(clip, w, h, kernel=kernel, **fmtc_args)
+        case Callable(), 0 | 4:
+            clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
         case Callable(), 8:
             fmtc_keys = dict(src_left='sx', src_top='sy', src_width='sw', src_height='sh')
             fmtc_args = {fmtc_keys[key]: value for key, value in descale_args.items() if key in fmtc_keys}
             clip = upscaler(clip, w, h, **fmtc_args)
-        case Callable(), _:
-            clip = upscaler(clip, w, h, **{key: value for key, value in descale_args.items() if key in crop_keys})
+        case None | Callable(), _:
+            raise TypeError(f'{func_name}: invalid "mode & 12"')
         case _:
             raise TypeError(f'{func_name}: invalid "upscaler"')
     
@@ -5046,6 +5048,5 @@ def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs
     
     return clip
 
-# в документации есть get_frame_async, подумать как это можно задействовать
 # поковырять исходники Frfun7, подумать над собственной реализацией
-# поковырять стандартные алгоритмы ресайза, попробовать написать свой на чистом питоне
+# поковырять tensorflow.image, особенно resize и ssim/ssim_multiscale
