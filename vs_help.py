@@ -153,7 +153,7 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     dx and dy are the desired resolution.
     The other parameters are not documented in any way and are selectedusing the poke method.
-    Cropping options are added as **kwargs. The key names are the same as in VapourSynth-resize.
+    Cropping options are added as **kwargs. The key names are the same as in fmtc-resize.
     """
     func_name = 'autotap3'
     
@@ -162,6 +162,7 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
+    bits = clip.format.bits_per_sample
     
     match dx:
         case None:
@@ -188,27 +189,31 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     back_args = {}
     
     if crop_args:
-        if 'src_left' in crop_args:
-            back_args['src_left'] = -crop_args['src_left'] * dx / w
+        if 'sx' in crop_args:
+            back_args['sx'] = -crop_args['sx'] * dx / w
         
-        if 'src_top' in crop_args:
-            back_args['src_top'] = -crop_args['src_top'] * dy / h
+        if 'sy' in crop_args:
+            back_args['sy'] = -crop_args['sy'] * dy / h
         
-        if 'src_width' in crop_args:
-            if crop_args['src_width'] <= 0:
-                crop_args['src_width'] += w - crop_args.get('src_left', 0)
-            back_args['src_width'] = dx * 2 - crop_args['src_width'] * dx / w
+        if 'sw' in crop_args:
+            if crop_args['sw'] <= 0:
+                crop_args['sw'] += w - crop_args.get('sx', 0)
+            back_args['sw'] = dx * 2 - crop_args['sw'] * dx / w
         
-        if 'src_height' in crop_args:
-            if crop_args['src_height'] <= 0:
-                crop_args['src_height'] += h - crop_args.get('src_top', 0)
-            back_args['src_height'] = dy * 2 - crop_args['src_height'] * dy / h
+        if 'sh' in crop_args:
+            if crop_args['sh'] <= 0:
+                crop_args['sh'] += h - crop_args.get('sy', 0)
+            back_args['sh'] = dy * 2 - crop_args['sh'] * dy / h
         
         if any((x := i) not in back_args for i in crop_args):
             raise KeyError(f'{func_name}: Unsupported key {x} in crop_args')
     
+    if bits < 16:
+        clip = core.fmtc.bitdepth(clip, bits=16)
+    
     if dx == w and dy == h:
-        return core.resize.Spline36(clip, **crop_args)
+        clip = core.fmtc.resample(clip, kernel='spline36', **crop_args)
+        return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
     
     space = clip.format.color_family
     
@@ -220,48 +225,48 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    t1 = core.resize.Lanczos(clip, dx, dy, filter_param_a=1, **crop_args)
-    t2 = core.resize.Lanczos(clip, dx, dy, filter_param_a=2, **crop_args)
-    t3 = core.resize.Lanczos(clip, dx, dy, filter_param_a=3, **crop_args)
-    t4 = core.resize.Lanczos(clip, dx, dy, filter_param_a=4, **crop_args)
-    t5 = core.resize.Lanczos(clip, dx, dy, filter_param_a=5, **crop_args)
-    t6 = core.resize.Lanczos(clip, dx, dy, filter_param_a=9, **crop_args)
-    t7 = core.resize.Lanczos(clip, dx, dy, filter_param_a=36, **crop_args)
+    t1 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=1, **crop_args)
+    t2 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=2, **crop_args)
+    t3 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=3, **crop_args)
+    t4 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=4, **crop_args)
+    t5 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=5, **crop_args)
+    t6 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=9, **crop_args)
+    t7 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=36, **crop_args)
     
-    m1 = core.std.Expr([clip, core.resize.Lanczos(t1, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.resize.Lanczos(t2, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.resize.Lanczos(t3, w, h, filter_param_a=1, **back_args)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.resize.Lanczos(t4, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.resize.Lanczos(t5, w, h, filter_param_a=2, **back_args)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.resize.Lanczos(t6, w, h, filter_param_a=3, **back_args)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.resize.Lanczos(t7, w, h, filter_param_a=6, **back_args)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, kernel='lanczos', taps=3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, kernel='lanczos', taps=6, **back_args)], 'x y - abs')
     
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
     cp0 = vs_blur(t1, 1.42)
-    cp1 = core.std.MaskedMerge(cp0, t2, core.std.Expr([m1, m2], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                     **crop_args))
-    m100 = core.std.Expr([clip, core.resize.Bilinear(cp1, w, h, **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                       **crop_args))
-    m101 = core.std.Expr([clip, core.resize.Bilinear(cp2, w, h, **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                       **crop_args))
-    m102 = core.std.Expr([clip, core.resize.Bilinear(cp3, w, h, **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                       **crop_args))
-    m103 = core.std.Expr([clip, core.resize.Bilinear(cp4, w, h, **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                       **crop_args))
-    m104 = core.std.Expr([clip, core.resize.Bilinear(cp5, w, h, **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).resize.Lanczos(dx, dy, filter_param_a=mtaps3,
-                                                                                        **crop_args))
+    cp1 = core.std.MaskedMerge(cp0, t2, core.std.Expr([m1, m2], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                    taps=mtaps3, **crop_args))
+    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                      taps=mtaps3, **crop_args))
+    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                      taps=mtaps3, **crop_args))
+    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                      taps=mtaps3, **crop_args))
+    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                      taps=mtaps3, **crop_args))
+    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).fmtc.resample(dx, dy, kernel='lanczos',
+                                                                                       taps=mtaps3, **crop_args))
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy, **crop_args)],
+        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(orig, dx, dy, kernel='spline36', **crop_args)],
                                       list(range(orig.format.num_planes)), space)
     
-    return clip
+    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
 def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0,
                 thresh2: int | None = None, athresh: int = 256, sharp1: float = 1, sharp2: float = 4,
@@ -288,9 +293,7 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
     clip = core.std.SetFieldBased(clip, 0)
-    
-    w = clip.width
-    h = clip.height
+    w, h = clip.width, clip.height
     
     if dx is None:
         dx = w * 2
@@ -306,7 +309,10 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     
     space = clip.format.color_family
     bits = clip.format.bits_per_sample
-    thresh *= 1 << bits - 8
+    thresh *= 256
+    
+    if bits < 16:
+        clip = core.fmtc.bitdepth(clip, bits=16)
     
     if space == vs.YUV:
         orig = clip
@@ -316,18 +322,19 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    fd1 = core.resize.Lanczos(clip, dx, dy, filter_param_a=mtaps1)
-    fre1 = core.resize.Lanczos(fd1, w, h, filter_param_a=mtaps1)
+    fd1 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=mtaps1)
+    fre1 = core.fmtc.resample(fd1, w, h, kernel='lanczos', taps=mtaps1)
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
-    m2 = (core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1) if bits == 8 else
-          core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=bits))
-    m2 = core.resize.Lanczos(core.resize.Lanczos(m2, x, y, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
+    m2 = core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=16)
+    m2 = core.fmtc.resample(core.fmtc.resample(m2, x, y, kernel='lanczos', taps=ttaps),
+                            dx, dy, kernel='lanczos', taps=ttaps)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
-    d3 = core.resize.Lanczos(core.resize.Lanczos(d, w, h, filter_param_a=ttaps), dx, dy, filter_param_a=ttaps)
+    d3 = core.fmtc.resample(core.fmtc.resample(d, w, h, kernel='lanczos', taps=ttaps),
+                            dx, dy, kernel='lanczos', taps=ttaps)
     d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'),
                               core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
@@ -338,13 +345,14 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     e = core.warp.AWarpSharp2(e, thresh=wthresh, blur=wblur, depth=depth)
     e = core.warp.AWarpSharp2(e, thresh=wthresh, blur=wblur, depth=depth)
     
-    fd12 = core.resize.Lanczos(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, filter_param_a=mtaps2)
-    fre12 = core.resize.Lanczos(fd12, dx, dy, filter_param_a=mtaps2)
+    fd12 = core.fmtc.resample(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, kernel='lanczos', taps=mtaps2)
+    fre12 = core.fmtc.resample(fd12, dx, dy, kernel='lanczos', taps=mtaps2)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
-    m12 = core.resize.Lanczos(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), filter_param_a=mtaps2)
-    m12 = core.resize.Lanczos(m12, dx, dy, filter_param_a=mtaps2)
+    m12 = core.fmtc.resample(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), kernel='lanczos', taps=mtaps2)
+    m12 = core.fmtc.resample(m12, dx, dy, kernel='lanczos', taps=mtaps2)
     
-    e2 = core.resize.Lanczos(core.resize.Lanczos(e, w, h, filter_param_a=ltaps), dx, dy, filter_param_a=ltaps)
+    e2 = core.fmtc.resample(core.fmtc.resample(e, w, h, kernel='lanczos', taps=ltaps),
+                            dx, dy, kernel='lanczos', taps=ltaps)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
@@ -360,10 +368,10 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     clip = core.std.MaskedMerge(d4, e3, m2)
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.resize.Spline36(orig, dx, dy)],
+        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(orig, dx, dy, kernel='spline36')],
                                       list(range(orig.format.num_planes)), space)
     
-    return clip
+    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
 def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1,
                 m: bool = False) -> vs.VideoNode:
@@ -1142,11 +1150,11 @@ def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: flo
         clips = core.std.SplitPlanes(clip)
         clip = core.std.Expr(clips[1:], 'x y max')
         
-        if sub_w > 0 or sub_h > 0:
+        if sub_w or sub_h:
             bits = clip.format.bits_per_sample
             
             clip = core.fmtc.resample(clip, w, h, kernel='spline', taps=6)
-            if bits != 16:
+            if bits < 16:
                 clip = core.fmtc.bitdepth(clip, bits=bits, dmode=1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
@@ -1182,6 +1190,10 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     h = clip.height
     
     space = clip.format.color_family
+    bits = clip.format.bits_per_sample
+    
+    if bits < 16:
+        clip = core.fmtc.bitdepth(clip, bits=16)
     
     if space == vs.YUV:
         orig = clip
@@ -1191,27 +1203,26 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    factor = 1 << clip.format.bits_per_sample - 8
-    full = 256 * factor
-    
     def m4(var: float) -> int:
         return max(int(var / 4 + 0.5) * 4, 16)
     
-    halos = core.resize.Bicubic(clip, m4(w / rx), m4(h / ry)).resize.Bicubic(w, h, filter_param_a=1, filter_param_b=0)
+    halos = core.fmtc.resample(clip, m4(w / rx), m4(h / ry), kernel='bicubic').fmtc.resample(w, h, kernel='bicubic',
+                                                                                             a1=1, a2=0)
     are = vs_convolution(clip, 'min/max')
     ugly = vs_convolution(halos, 'min/max')
     so = core.std.Expr(
         [ugly, are],
-        f'y x - y 0.001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *')
+        f'y x - y 0.001 + / {65535} * {lowsens * 256} - y {65536} + {131072} / {highsens / 100} + *'
+        )
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
         remove = vs_repair(clip, lets, 1)
     else:
-        remove = core.resize.Lanczos(clip, x := m4(w * ss), y := m4(h * ss), filter_param_a=3)
-        remove = core.std.Expr([remove, vs_expand(lets).resize.Bicubic(x, y)], 'x y min')
-        remove = core.std.Expr([remove, vs_inpand(lets).resize.Bicubic(x, y)], 'x y max')
-        remove = core.resize.Lanczos(remove, w, h, filter_param_a=3)
+        remove = core.fmtc.resample(clip, x := m4(w * ss), y := m4(h * ss), kernel='lanczos', taps=3)
+        remove = core.std.Expr([remove, vs_expand(lets).fmtc.resample(x, y, kernel='bicubic')], 'x y min')
+        remove = core.std.Expr([remove, vs_inpand(lets).fmtc.resample(x, y, kernel='bicubic')], 'x y max')
+        remove = core.fmtc.resample(remove, w, h, kernel='lanczos', taps=3)
     
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
@@ -1221,7 +1232,7 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     if showmask:
         clip = core.resize.Point(so, format=orig.format.id) if space == vs.YUV else so
     
-    return clip
+    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
 def fine_dehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128,
                 thlimi: int = 50, thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50,
@@ -1382,6 +1393,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
     sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
+    bits = clip.format.bits_per_sample
+    
+    if bits < 16:
+        clip = core.fmtc.bitdepth(clip, bits=16)
     
     if dx is None:
         dx = w * 2
@@ -1433,7 +1448,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         steps = ceil(log(max(dx / w, dy / h)) / log(2))
         rfactor = 1 << steps
         
-        crop_keys = {'src_left', 'src_top', 'src_width', 'src_height'}
+        crop_keys = {'sx', 'sy', 'sw', 'sh'}
         crop_args = {key: value * rfactor for key, value in upscaler_args.items() if key in crop_keys}
         upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
         
@@ -1456,29 +1471,28 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         
         match sub_w:
             case 0:
-                crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5
+                crop_args['sx'] = crop_args.get('sx', 0) - 0.5
             case 1 | 2:
-                crop_args['src_left'] = crop_args.get('src_left', 0) - 0.5 * (rfactor - 1)
+                crop_args['sx'] = crop_args.get('sx', 0) - 0.5 * (rfactor - 1)
             case _:
                 raise ValueError(f'{func_name}: Unsupported horizontal subsampling of the clip')
         
-        crop_args['src_top'] = crop_args.get('src_top', 0) - 0.5
+        crop_args['sy'] = crop_args.get('sy', 0) - 0.5
         
         match sub_h:
             case 0:
                 clip = autotap3(clip, dx, dy, **crop_args)
             case 1:
-                chroma_args = {key: value - 0.5 if key == 'src_top' else value for key, value in crop_args.items()}
+                chroma_args = {key: value - 0.5 if key == 'sy' else value for key, value in crop_args.items()}
                 luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
-                chroma = core.resize.Spline36(clip, dx, dy, **chroma_args)
+                chroma = core.fmtc.resample(clip, dx, dy, kernel='spline36', **chroma_args)
                 clip = core.std.ShufflePlanes([luma, chroma], list(range(num_p)), space)
             case _:
                 raise ValueError(f'{func_name}: Unsupported vertical subsampling of the clip')
     else:
-        kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
-        clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
+        clip = core.fmtc.resample(clip, dx, dy, **upscaler_args)
     
-    return clip
+    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
 def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
               mt_prewitt: bool | None = None, **after_args: Any) -> vs.VideoNode:
@@ -3957,7 +3971,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     return clip
 
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
-             mode: int = 5, upscaler: Callable | None = None, ratio: float = 1.0,
+             mode: int = 9, upscaler: Callable | None = None, ratio: float = 1.0,
              **descale_args: Any) -> vs.VideoNode:
     
     func_name = 'rescaler'
@@ -4215,7 +4229,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             mode & 2: 0 - стандартная обработка dx и dy, 2 - режим студийного разрешения, принимает на вход
                 целочисленное студийное разрешение и автоматически вычисляет дробные dx и dy с макс. точностью.
             mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через zimg, 8 - через fmtconv.
-            По умолчанию 5 (1 + 0 + 4).
+            По умолчанию 9 (1 + 0 + 8).
             
             Вторичные параметры ядер можно задавать как отдельными аргументами, так и в виде списков.
             В случае перебора по ядрам первые конвертируются в списки с одинаковыми значениями, а вторые прямо
@@ -4246,11 +4260,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         clip = getnative(clip, 1443.61, 811.99, [3171, 61220], 'all', mark=True)
         
         Тоже самое, но через режим студийного разрешения и с автоматическим расчётом dx:
-        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=7)
+        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=11)
         
         Поиск src_top для верхнего поля кадра (для Destripe):
         clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(True).std.SetFieldBased(0)[::2]
-        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=4, mark=True)
+        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=8, mark=True)
     
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
         фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
@@ -5047,6 +5061,3 @@ def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs
         clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
     
     return clip
-
-# поковырять исходники Frfun7, подумать над собственной реализацией
-# поковырять tensorflow.image, особенно resize и ssim/ssim_multiscale
