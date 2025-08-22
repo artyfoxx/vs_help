@@ -162,23 +162,20 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
+    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
     bits = clip.format.bits_per_sample
     
-    match dx:
-        case None:
-            dx = w * 2
-        case int():
-            pass
-        case _:
-            raise TypeError(f'{func_name}: invalid "dx"')
+    if dx is None:
+        dx = w * 2
+    elif not isinstance(dx, int) or dx <= 1 << sub_w or dx >> sub_w << sub_w != dx:
+        raise TypeError(f'{func_name}: dx must be an integer, greater than "1 << subsampling_w" or divisible by '
+                        'subsampling_w')
     
-    match dy:
-        case None:
-            dy = h * 2
-        case int():
-            pass
-        case _:
-            raise TypeError(f'{func_name}: invalid "dy"')
+    if dy is None:
+        dy = h * 2
+    elif not isinstance(dy, int) or dy <= 1 << sub_h or dy >> sub_h << sub_h != dy:
+        raise TypeError(f'{func_name}: dy must be an integer, greater than "1 << subsampling_h" or divisible by '
+                        'subsampling_h')
     
     if not isinstance(mtaps3, int) or mtaps3 <= 0 or mtaps3 > 128:
         raise TypeError(f'{func_name}: invalid "mtaps3"')
@@ -294,15 +291,19 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
+    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
     
     if dx is None:
         dx = w * 2
+    elif not isinstance(dx, int) or dx <= w or dx >> sub_w << sub_w != dx:
+        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width or divisible by '
+                        'subsampling_w')
     
     if dy is None:
         dy = h * 2
-    
-    if dx <= w or dy <= h:
-        raise ValueError(f'{func_name}: this is an upscaler, dx and dy must be larger than the width and height')
+    elif not isinstance(dy, int) or dy <= h or dy >> sub_h << sub_h != dy:
+        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height or divisible by '
+                        'subsampling_h')
     
     if thresh2 is None:
         thresh2 = (thresh + 1) * 64
@@ -1210,10 +1211,8 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
                                                                                              a1=1, a2=0)
     are = vs_convolution(clip, 'min/max')
     ugly = vs_convolution(halos, 'min/max')
-    so = core.std.Expr(
-        [ugly, are],
-        f'y x - y 0.001 + / {65535} * {lowsens * 256} - y {65536} + {131072} / {highsens / 100} + *'
-        )
+    so = core.std.Expr([ugly, are],
+                       f'y x - y 0.001 + / 65535 * {lowsens * 256} - y 65536 + 131072 / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
@@ -1376,9 +1375,30 @@ def fine_dehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list
     
     return clip
 
-def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 0, order: int = 0,
-             **upscaler_args: Any) -> vs.VideoNode:
+def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 8, order: int = 0,
+             downscaler: Callable | None = None, **upscaler_args: Any) -> vs.VideoNode:
+    """
+    Апскейлер видео на базе стандартных оконных свёрток или удвоителей линий семейства EDI3.
     
+    Args:
+        clip: Видеоклип для апскейлинга.
+        dx: Ширина результирующего клипа. По умолчанию None (равна ширине исходного клипа умноженной на 2).
+        dy: Высота результирующего клипа. По умолчанию None (равна высоте исходного клипа умноженной на 2).
+        mode: Битовая маска для выбора типа апскейлинга. Поддерживаются следующие значения:
+            mode & 3: 0 - оконная свёртка, 1 - znedi3, 2 - eedi3, 3 - eedi3 + znedi3 в качестве sclip.
+            mode & 12: 4 - вторичные параметры в стиле zimg, 8 - вторичные параметры в стиле fmtconv.
+            По умолчанию 8 (0 + 8).
+        order: Порядок апскейлинга при выборе EDI3 (mode & 3 > 0). Поддерживаются следующие значения:
+            0 - горизонтальное удвоение, а потом вертикальное (по умолчанию).
+            1 - вертикальное удвоение, а потом горизонтальное.
+            2 - максимизация первых двух вариантов.
+            3 - минимизация первых двух вариантов.
+        downscaler: Функция для даунскейлинга после EDI3. По умолчанию None (autotap3).
+        upscaler_args: Дополнительные параметры, поступающие непосредственно в выбранную функцию апскейла.
+    
+    Пример:
+        clip = upscaler(clip, 1920, 1080, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+    """
     func_name = 'upscaler'
     
     if not isinstance(clip, vs.VideoNode):
@@ -1390,6 +1410,9 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if space not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
+    if any(i in upscaler_args for i in ('field', 'dh')):
+        raise ValueError(f'{func_name}: "dh" and "field" are not supported in upscaler_args')
+    
     clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
     sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
@@ -1400,10 +1423,24 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     if dx is None:
         dx = w * 2
+    elif not isinstance(dx, int) or dx <= w or dx >> sub_w << sub_w != dx:
+        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width or divisible by '
+                        'subsampling_w')
     
     if dy is None:
         dy = h * 2
+    elif not isinstance(dy, int) or dy <= h or dy >> sub_h << sub_h != dy:
+        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height or divisible by '
+                        'subsampling_h')
     
+    if not isinstance(mode, int) or mode < 0 or mode > 11:
+        raise TypeError(f'{func_name}: mode must be an integer in the range 0...11')
+    
+    if downscaler is None:
+        downscaler = autotap3
+    elif not isinstance(downscaler, Callable):
+        raise TypeError(f'{func_name}: downscaler must be a callable')
+        
     def edi3_aa(clip: vs.VideoNode, mode: int, order: bool, field: bool, **upscaler_args: Any) -> vs.VideoNode:
         
         field0 = 1 if order and sub_w else field
@@ -1412,7 +1449,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         if order:
             clip = core.std.Transpose(clip)
         
-        match mode:
+        match mode & 3:
             case 1:
                 clip = core.znedi3.nnedi3(clip, field0, True, **upscaler_args)
                 clip = core.std.Transpose(clip)
@@ -1444,11 +1481,17 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         
         return clip
     
-    if mode:
+    if mode & 3:
         steps = ceil(log(max(dx / w, dy / h)) / log(2))
         rfactor = 1 << steps
         
-        crop_keys = {'sx', 'sy', 'sw', 'sh'}
+        if mode & 12 == 8:
+            crop_keys = ('sx', 'sy', 'sw', 'sh')
+        elif mode & 12 == 4:
+            crop_keys = ('src_left', 'src_top', 'src_width', 'src_height')
+        else:
+            raise ValueError(f'{func_name}: Unsupported mode & 12 value')
+        
         crop_args = {key: value * rfactor for key, value in upscaler_args.items() if key in crop_keys}
         upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
         
@@ -1471,26 +1514,31 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         
         match sub_w:
             case 0:
-                crop_args['sx'] = crop_args.get('sx', 0) - 0.5
+                crop_args[crop_keys[0]] = crop_args.get(crop_keys[0], 0) - 0.5
             case 1 | 2:
-                crop_args['sx'] = crop_args.get('sx', 0) - 0.5 * (rfactor - 1)
+                crop_args[crop_keys[0]] = crop_args.get(crop_keys[0], 0) - 0.5 * (rfactor - 1)
             case _:
                 raise ValueError(f'{func_name}: Unsupported horizontal subsampling of the clip')
         
-        crop_args['sy'] = crop_args.get('sy', 0) - 0.5
+        crop_args[crop_keys[1]] = crop_args.get(crop_keys[1], 0) - 0.5
         
         match sub_h:
             case 0:
-                clip = autotap3(clip, dx, dy, **crop_args)
+                clip = downscaler(clip, dx, dy, **crop_args)
             case 1:
-                chroma_args = {key: value - 0.5 if key == 'sy' else value for key, value in crop_args.items()}
-                luma = autotap3(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
-                chroma = core.fmtc.resample(clip, dx, dy, kernel='spline36', **chroma_args)
+                chroma_args = {key: value - 0.5 if key == crop_keys[1] else value for key, value in crop_args.items()}
+                luma = downscaler(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
+                chroma = downscaler(clip, dx, dy, **chroma_args)
                 clip = core.std.ShufflePlanes([luma, chroma], list(range(num_p)), space)
             case _:
                 raise ValueError(f'{func_name}: Unsupported vertical subsampling of the clip')
-    else:
+    elif mode & 12 == 8:
         clip = core.fmtc.resample(clip, dx, dy, **upscaler_args)
+    elif mode & 12 == 4:
+        kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
+        clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
+    else:
+        raise ValueError(f'{func_name}: Unsupported mode & 12 value')
     
     return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
@@ -3994,12 +4042,18 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             По умолчанию 9 (1 + 0 + 8).
         upscaler: Функция для апскейла. По умолчанию None (внутренняя функция, задающаяся через mode & 12).
             Внешняя функция должна принимать на вход клип для апскейла, а также его новые ширину и высоту плюс
-            координаты точки начала и размер области входного клипа, подвергаемой апскейлу, в формате zimg или fmtconv.
+            координаты точки начала и размер области входного клипа, подвергаемой апскейлу, в формате zimg
+            ("src_left", "src_top", "src_width", "src_height") или fmtconv ("sx", "sy", "sw", "sh").
             Упавление форматом задаётся через mode & 12. Любые другие параметры, которые могут потребоваться для
             апскейла, должны быть переданы заранее через functools.partial.
         ratio: Множитель коррекции результата при автоматическом вычислении dx или dy. По умолчанию 1.0.
         **descale_args: Дополнительные параметры для функции descale. В целочисленном режиме (mode & 1 == 0) могут быть
-            переданы в том числе и координаты точки начала и размер области подвергаемой рескейлу.
+            переданы в том числе и координаты точки начала и размер области подвергаемой рескейлу ("src_left",
+            "src_top", "src_width", "src_height").
+    
+    Пример:
+        up_func = partial(upscaler, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+        clip = rescaler(clip, 1443.61, 812, 'bilinear', upscaler=up_func)
     """
     func_name = 'rescaler'
     
@@ -4176,7 +4230,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               interim: bool = False, yscale: str = 'log', figsize: tuple[int, int] = (16, 9),
               layout: str | None = 'tight', style: str | list[str] = 'fast', **descale_args: Any) -> vs.VideoNode:
     """
-    Ещё одна никому не нужная (кроме меня) реализация getnative.
+    Ещё одна никому (кроме меня) не нужная реализация getnative.
     
     Основные отличия:
     - Прямая работа с кадрами внутри функции, а значит корректый вывод их индексов.
@@ -4280,10 +4334,10 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         clip = getnative(clip, [1443, 1444, 0.01], clip.height, [3171, 61220], 'bilinear', mark=True)
         
         Поиск правильного ядра и вторичных параметров для отдельного кадра:
-        clip = getnative(clip, 1443.61, 811.99, 1133, 'all', mark=True)
+        clip = getnative(clip, 1443.61, 812, 1133, 'all', mark=True)
         
         Уточнение правильного ядра и вторичных параметров на диапазоне кадров:
-        clip = getnative(clip, 1443.61, 811.99, [3171, 61220], 'all', mark=True)
+        clip = getnative(clip, 1443.61, 812, [3171, 61220], 'all', mark=True)
         
         Тоже самое, но через режим студийного разрешения и с автоматическим расчётом dx:
         clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=11)
