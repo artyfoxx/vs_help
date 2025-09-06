@@ -1,12 +1,12 @@
 # vs_help
-Just a few vapoursynth function...  
-Written for internal use, but it would be great if it was useful to someone else.  
-Documented rather fragmentarily.
-# Dependencies
-## General
+Просто несколько функций для VapourSynth...  
+Написано для внутреннего использования, если оно будет ещё кому-то полезно, будет здорово.
+Документировано довольно фрагментарно.
+# Зависимости
+## Общие
 * [VapourSynth](https://www.vapoursynth.com/) >= R66
 * [Python](https://www.python.org/) >= 3.12
-## Plugins
+## Плагины
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
 * [akarin-vapoursynth-plugin](https://github.com/Jaded-Encoding-Thaumaturgy/akarin-vapoursynth-plugin)

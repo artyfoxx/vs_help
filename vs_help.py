@@ -1,77 +1,76 @@
-"""
-All functions support the following formats: GRAY and YUV 8 - 16 bit integer.
+"""Все функции поддерживают следующие форматы: GRAY и YUV 8 - 16 бит.
 
-Support for floating point sample type is added when needed. Such functions are marked separately.
-Support for floating point sample type is intended for clips converted from the full range.
-For clips converted from a limited range, correct operation is not guaranteed.
+Поддержка вещественного формата добавляется по мере необходимости. Такие функции обозначены отдельно.
+Поддежка виде в вещестенном формате предоставляется только для клипов, конвертированных из полного диапазона.
+Для клипов, конвертированных из ограниченного диапазона, корректная обработка не гарантируется.
 
-Functions:
-    float_decorator (float support)
-    autotap3 (float support)
+Функции:
+    float_decorator (поддежка float)
+    autotap3 (поддежка float)
     lanczosplus
-    bion_dehalo (float support)
-    fix_border (float support)
-    mask_detail (float only)
+    bion_dehalo (поддежка float)
+    fix_border (поддежка float)
+    mask_detail (только float)
     degrain_n
-    destripe (float only)
+    destripe (только float)
     daa
-    average_fields (float support)
+    average_fields (поддежка float)
     znedi3aas
     dehalo_mask
     tp7_deband_mask
     dehalo_alpha
     fine_dehalo
     fine_dehalo2
-    upscaler (float support)
+    upscaler (поддежка float)
     diff_mask
-    apply_range (float support)
+    apply_range (поддежка float)
     titles_mask
-    after_mask (float support)
-    search_field_diffs (float support)
+    after_mask (поддежка float)
+    search_field_diffs (поддежка float)
     vs_comb_mask
     vs_comb_mask2
     vs_binarize
     delcomb
     vinverse
     vinverse2
-    sbr (float support)
-    sbr_v (float support)
-    vs_blur (float support)
-    vs_sharpen (float support)
-    vs_clamp (float support)
-    min_blur (float support)
+    sbr (поддежка float)
+    sbr_v (поддежка float)
+    vs_blur (поддежка float)
+    vs_sharpen (поддежка float)
+    vs_clamp (поддежка float)
+    min_blur (поддежка float)
     dither_luma_rebuild
-    vs_expand_multi (float support)
-    vs_inpand_multi (float support)
+    vs_expand_multi (поддежка float)
+    vs_inpand_multi (поддежка float)
     vs_temporal_soften
-    vs_unsharp_mask (float support)
+    vs_unsharp_mask (поддежка float)
     diff_tfm
     diff_transfer
-    shift_clip (float support)
+    shift_clip (поддежка float)
     ovr_comparator
-    vs_remove_grain (float support)
-    vs_repair (float support)
-    vs_temporal_repair (float support)
-    vs_clense (float support)
-    vs_backward_clense (float support)
-    vs_forward_clense (float support)
-    vs_vertical_cleaner (float support)
-    vs_convolution (float support)
-    crazy_plane_stats (float support)
+    vs_remove_grain (поддежка float)
+    vs_repair (поддежка float)
+    vs_temporal_repair (поддежка float)
+    vs_clense (поддежка float)
+    vs_backward_clense (поддежка float)
+    vs_forward_clense (поддежка float)
+    vs_vertical_cleaner (поддежка float)
+    vs_convolution (поддежка float)
+    crazy_plane_stats (поддежка float)
     out_of_range_search
-    rescaler (float only)
+    rescaler (только float)
     sc_detect
-    getnative (float only)
-    prop_format (float support)
-    vs_expand (float support)
-    vs_inpand (float support)
-    vs_deflate (float support)
-    vs_inflate (float support)
-    vs_make_diff (float support)
-    vs_merge_diff (float support)
-    vs_median_blur (float support)
-    chroma_up (float support)
-    chroma_down (float support)
+    getnative (только float)
+    prop_format (поддежка float)
+    vs_expand (поддежка float)
+    vs_inpand (поддежка float)
+    vs_deflate (поддежка float)
+    vs_inflate (поддежка float)
+    vs_make_diff (поддежка float)
+    vs_merge_diff (поддежка float)
+    vs_median_blur (поддежка float)
+    chroma_up (поддежка float)
+    chroma_down (поддежка float)
 """
 
 import re
@@ -152,15 +151,22 @@ def float_decorator(num_clips: int = 1, chroma_align: bool = True) -> Callable:
 
 def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mtaps3: int = 1, thresh: int = 256,
              **crop_args: float) -> vs.VideoNode:
-    """
-    Lanczos-based resize from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    """Ресайз клипа на базе оконной функции Ланцоша. Портировано из версии для AviSynth от "*.mp4 guy".
     
-    In comparison with the original, processing accuracy has been doubled, support for 8-32 bit depth
-    and crop parameters has been added, and dead code has been removed.
+    Оригинал тут: https://forum.doom9.org/showthread.php?t=125469
+    Идея алгоритма состоит в множественном вызове функции Ланцоша с разными размерами окна, а затем их сращении с
+    одновременным вычитанием звона и сохранением резкости.
+    В отличие от оригинала, умеет устанавливать координаты точки начала и размер области входного клипа, подвергаемой
+    ресайзу в формате fmtconv ('sx', 'sy', 'sw', 'sh'). Также функции возвращён оригинальный алгоритм работы без
+    MakeDiff, благодаря чему не теряется точность при thresh=1. Плюс был удалён мёртвый код.
     
-    dx and dy are the desired resolution.
-    The other parameters are not documented in any way and are selectedusing the poke method.
-    Cropping options are added as **kwargs. The key names are the same as in fmtc-resize.
+    Args:
+        clip: Входной клип.
+        dx: Ширина выходного клипа. По умолчанию None (удвонная ширина входного клипа).
+        dy: Высота выходного клипа. По умолчанию None (удвонная высота входного клипа).
+        mtaps3: Размер окна ресайза разностной маски. По умолчанию 1.
+        thresh: Коэффициент усиления разностной маски. По умолчанию 256.
+        crop_args: Аргументы для функции fmtconv ('sx', 'sy', 'sw', 'sh').
     """
     func_name = 'autotap3'
     
@@ -175,13 +181,13 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if dx is None:
         dx = w * 2
     elif not isinstance(dx, int) or dx <= 1 << sub_w or dx >> sub_w << sub_w != dx:
-        raise TypeError(f'{func_name}: dx must be an integer, greater than "1 << subsampling_w" or divisible by '
+        raise TypeError(f'{func_name}: dx must be an integer, greater than "1 << subsampling_w" and divisible by '
                         'subsampling_w')
     
     if dy is None:
         dy = h * 2
     elif not isinstance(dy, int) or dy <= 1 << sub_h or dy >> sub_h << sub_h != dy:
-        raise TypeError(f'{func_name}: dy must be an integer, greater than "1 << subsampling_h" or divisible by '
+        raise TypeError(f'{func_name}: dy must be an integer, greater than "1 << subsampling_h" and divisible by '
                         'subsampling_h')
     
     if not isinstance(mtaps3, int) or mtaps3 <= 0 or mtaps3 > 128:
@@ -277,16 +283,35 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
                 blur1: float = 0.33, blur2: float = 1.25, mtaps1: int = 1, mtaps2: int = 1, ttaps: int = 1,
                 ltaps: int = 1, preblur: bool = False, depth: int = 2, wthresh: int = 230, wblur: int = 2,
                 mtaps3: int = 1) -> vs.VideoNode:
-    """
-    An upscaler based on Lanczos and AWarpSharp from "*.mp4 guy", ported from AviSynth version with minor modifications.
+    """Апскейлер, основанный на оконном фильтре Ланцоша и AWarpSharp.
     
-    In comparison with the original, the mathematics for non-multiple resolutions has been improved,
-    support for 8-16 bit depth has been added, dead code and unnecessary calculations have been removed.
-    All dependent parameters have been recalculated from AWarpSharp to AWarpSharp2.
-    It comes with autotap3, ported just for completion.
+    Портировано из версии для AviSynth от "*.mp4 guy".
+    Оригинал тут: https://forum.doom9.org/showthread.php?t=125469
+    По сравниению с оригиналом была улучшена математика для некратных разрешений, была добавлена поддержка 8-16 бит,
+    удалён мёртвый код и дублирующиеся вычисления.
+    Все зависимые от AWarpSharp параметры были пересчитаны для AWarpSharp2.
+    Функция шла вместе с autotap3 и портирована просто за компанию.
     
-    dx and dy are the desired resolution.
-    The other parameters are not documented in any way and are selected using the poke method.
+    Args:
+        clip: Входной клип.
+        dx: Ширина выходного клипа. По умолчанию равна ширине входного клипа умноженной на 2.
+        dy: Высота выходного клипа. По умолчанию равна высоте входного клипа умноженной на 2.
+        thresh: Нижний порог для построения разностной маски. По умолчанию равен 0.
+        thresh2: Коэффициент усиления разностной маски. По умолчанию равен (thresh + 1) * 64.
+        athresh: Коэффициент усиления разностной маски для autotap3. По умолчанию равен 256.
+        sharp1: Коэффициент усиления резкости этапа d4. По умолчанию равен 1.
+        sharp2: Коэффициент усиления резкости этапа e3. По умолчанию равен 4.
+        blur1: Коэффициент усиления размытия этапа d4. По умолчанию равен 0.33.
+        blur2: Коэффициент усиления размытия этапа e3. По умолчанию равен 1.25.
+        mtaps1: Размер окна для фильтра Ланцоша этапа fre1. По умолчанию равен 1.
+        mtaps2: Размер окна для фильтра Ланцоша этапов fre12 и m12. По умолчанию равен 1.
+        ttaps: Размер окна для фильтра Ланцоша этапов m2 и d3. По умолчанию равен 1.
+        ltaps: Размер окна для фильтра Ланцоша этапа e2. По умолчанию равен 1.
+        preblur: Если True, то будет применено предварительное размытие. По умолчанию False.
+        depth: Степень деформации для AWarpSharp2. По умолчанию равна 2.
+        wthresh: Порог для AWarpSharp2. По умолчанию равен 230.
+        wblur: Размытие для AWarpSharp2. По умолчанию равен 2.
+        mtaps3: Размер окна ресайза разностной маски для autotap3. По умолчанию равен 1.
     """
     func_name = 'lanczosplus'
     
@@ -303,13 +328,13 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     if dx is None:
         dx = w * 2
     elif not isinstance(dx, int) or dx <= w or dx >> sub_w << sub_w != dx:
-        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width or divisible by '
+        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width and divisible by '
                         'subsampling_w')
     
     if dy is None:
         dy = h * 2
     elif not isinstance(dy, int) or dy <= h or dy >> sub_h << sub_h != dy:
-        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height or divisible by '
+        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height and divisible by '
                         'subsampling_h')
     
     if thresh2 is None:
@@ -383,24 +408,25 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
 
 def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1,
                 m: bool = False) -> vs.VideoNode:
-    """
-    Dehalo by bion, ported from AviSynth version with minor additions.
+    """Функция для удаления гало. Портировано из версии для AviSynth от bion-x.
+    
+    Оригинал был когда-то создан в рамках закрытого проекта RG Genshiken, так что ссылки на него нет.
     
     Args:
-        mode: Repair mode from dehaloed clip.
-            1, 5, 11 - the weakest, artifacts will not cause.
-            2, 3, 4 - bad modes, eat innocent parts, can't be used.
-            10 - almost like mode = 1, 5, 11, but with a spread around the edges.
-            I think it's a little better for noisy sources.
-            14, 16, 17, 18 - the strongest of the "fit" ones, but they can blur the edges, mode = 13 is better.
-        rep: use Repair to clamp result clip or not.
-        rg: use RemoveGrain and Repair to merge with blurred clip or not.
-        mask: the mask to merge clip and blurred clip.
-            3 - the most accurate.
-            4 - the roughest.
-            1 and 2 - somewhere in the middle.
-            5...7 - the same, but Gaussian convolution is used
-        m: show the mask instead of the clip or not.
+        clip: Клип для обработки.
+        mode: Режим работы функции Repair для клипа с удалённым гало.
+            1, 5, 11 - самые слабенькие, косяков не вызовут.
+            2, 3, 4 - плохие режимы, съедают неповинные детали, использовать нельзя.
+            10 - почти как mode = 1, 5, 11, но с разбросом вокруг граней. Думаю, немного лучше для шумных источников
+            14, 16, 17, 18 - из "годных" наиболее сильные ореолодавы, но могут грани размыть, лучше mode = 13.
+        rep: Использовать ли функцию Repair при обрезке результата. По умолчанию True.
+        rg: Использовать ли функции RemoveGrain и Repair для слияния исходного клипа с заблюреным. По умолчанию False.
+        mask: Маска для слияния исходного клипа с заблюреным. По умолчанию 1.
+            3 - самая аккуратная.
+            4 - самая ядрёная.
+            1 and 2 - где-то посредине.
+            5...7 - тоже, что 2...4, но для постоения нерезкой маски вместо линейной используется свёртка Гаусса.
+        m: Показать маску вместо результата. По умолчанию False.
     """
     func_name = 'bion_dehalo'
     
@@ -492,28 +518,37 @@ def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool =
 
 @float_decorator()
 def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool]) -> vs.VideoNode:
-    """
-    A simple functions for fix brightness artifacts at the borders of the frame.
+    """Функция для исправления артефактов яркости на границах кадра.
     
-    All values are set as positional list arguments. The list have the following format:
-    [plane, axis, target, donor, limit, shift, curve, mean, clamp]. The first four are mandatory.
+    Все значения передаются в виде позиционных аргументов списка. Список имеет следующий формат:
+    [plane, axis, target, donor, limit, shift, curve, mean, clamp]. Первые четыре значения являются обязательными.
     
     Args:
-        plane: target planar.
-        axis: can take the values "X" or "Y" for columns and rows respectively.
-        target: the target column/row, it is counted from the upper left edge of the screen. It could be a list.
-            It can be negative.
-        donor: the donor column/row. It could be a list. It can be negative.
-        limit: by default 0, without restrictions, positive values prohibit the darkening of target rows/columns
-            and limit the maximum lightening, negative values - on the contrary, it's set in 8-bit notation.
-        shift: shift of the zero point of the curve relative to the beginning of the range,
-            if curve < 0 - the shift is relative to the end of the range, by default 0.
-        curve: target correction curve. 0 - subtraction and addition, -1 and 1 - division and multiplication,
-            -2 and 2 - logarithm and exponentiation, -3 and 3 - nth root and exponentiation, by default 1.
-        mean: CrazyPlaneStats mode, by default 0.
-        clamp: clamp target between donor minimum and maximum, by default True.
+        clip: Клип, который нуждается в коррекции.
+        args: Кортеж списков, содержащих параметры для коррекции.
     
-    Example:
+    Содержимое списка:
+        plane: Целевая плоскость.
+        axis: Ось, по которой производится коррекция. 'X' - столбцы, 'Y' - строки.
+        target: Целевой столбец/строка, нуждающийся в коррекции. Отсчитывается от левого верхнего угла кадра.
+            Может быть целым числом или списком. Может быть отрицательным, тогда отсчитывается от правого нижнего угла.
+        donor: Донорский столбец/строка, на основе которого производится коррекция. Может быть целым числом или списком.
+        limit: Ограничение на максимальное изменение яркости. Если значение положительное, то яркость не может вырасти
+            выше заданного значения или упасть, если отрицательное - то не может упасть ниже заданного значения или
+            вырасти. Задаётся в 8-битной нотации. По умолчанию 0 (без ограничений).
+        shift: Сдвиг нулевой точки кривой коррекции относительно начала диапазона. Если curve < 0 - сдвиг производится
+            относительно конца диапазона. По умолчанию 0.
+        curve: Кривая коррекции целевого столбца/строки. Может принимать значения от -3 до 3. По умолчанию 1.
+            0 - вычитание и сложение
+            1 и -1 - деление и умножение
+            2 и -2 - логарифм и экспонента
+            3 и -3 - корень и экспонента.
+        mean: Режим "crazy_plane_stats". По умолчанию 0 (среднее арифметическое).
+        clamp: Фиксация яркости исправленного целевого столбца/строки между максимумом и минимумом донорского
+            столбца/строки. По умолчанию True.
+    
+    Пример использования:
+        Осветление крайних строк/столбцов кадра на основе их соседей на шаг ближе к центру кадра:
         clip = fix_border(clip, [0, 'X', 0, 1, 50], [0, 'X', -1, -2, 50], [0, 'Y', 0, 1, 50], [0, 'Y', -1, -2, 50])
     """
     func_name = 'fix_border'
@@ -661,8 +696,7 @@ def fix_border(clip: vs.VideoNode, /, *args: list[str | int | list[int] | bool])
 def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, rg: int = 3, cutoff: int = 70,
                 gain: float = 0.75, exp_n: int = 2, inf_n: int = 1, blur_more: bool = False, kernel: str = 'bilinear',
                 **descale_args: Any) -> vs.VideoNode:
-    """
-    MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
+    """MaskDetail by "Tada no Snob", ported from AviSynth version with minor additions.
     
     It is based on the internal rescale function, therefore it supports fractional resolutions
     and automatic width calculation based on the original aspect ratio.
@@ -728,8 +762,7 @@ def mask_detail(clip: vs.VideoNode, dx: float | None = None, dy: float | None = 
     return clip
 
 def degrain_n(clip: vs.VideoNode, /, *args: dict[str, Any], tr: int = 1, full_range: bool = False) -> vs.VideoNode:
-    """
-    Just an alias for mv.Degrain.
+    """Just an alias for mv.Degrain.
     
     The parameters of individual functions are set as dictionaries. Unloading takes place sequentially,
     separated by commas. If you do not set anything, the default settings of MVTools itself apply.
@@ -768,8 +801,7 @@ def degrain_n(clip: vs.VideoNode, /, *args: dict[str, Any], tr: int = 1, full_ra
 
 def destripe(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, kernel: str = 'bilinear',
              tff: bool = True, restripe: bool = False, **descale_args: Any) -> vs.VideoNode:
-    """
-    Simplified Destripe from YomikoR without unnecessary frills.
+    """Simplified Destripe from YomikoR without unnecessary frills.
     
     The internal Descale functions are unloaded as usual.
     The function values that differ for the upper and lower fields are indicated in the list.
@@ -887,8 +919,7 @@ def daa(clip: vs.VideoNode, weight: float = 0.5, planes: int | list[int] | None 
 @float_decorator()
 def average_fields(clip: vs.VideoNode, /, weight: float = 0.5, shift: int | list[int] = 0,
                    curve: int | list[int | None] = 1, mode: int = 0, mean: int = 0) -> vs.VideoNode:
-    """
-    Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
+    """Just an experiment. It leads to a common denominator of the average normalized values of the fields of one frame.
     
     Ideally, it should fix interlaced fades painlessly, but in practice this does not always happen.
     Apparently it depends on the source.
@@ -1070,13 +1101,12 @@ def nnedi3aas(clip: vs.VideoNode, rg: int = 20, rep: int = 13, clamp: int = 0, p
     return clip
 
 def dehalo_mask(clip: vs.VideoNode, expand: float = 0.5, iterations: int = 2, brz: int = 255, shift: int = 8) -> vs.VideoNode:
-    """
-    Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
+    """Fork of jvsfunc.dehalo_mask from dnjulek with minor additions.
     
     Based on muvsfunc.YAHRmask(), stand-alone version with some tweaks.
     
     Args:
-        src: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
+        clip: Input clip. I suggest to descale (if possible) and nnedi3_rpow2 first, for a cleaner mask.
         expand: Expansion of edge mask.
         iterations: Protects parallel lines and corners that are usually damaged by YAHR.
         brz: Adjusts the internal line thickness.
@@ -1384,8 +1414,7 @@ def fine_dehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list
 
 def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 8, order: int = 0,
              downscaler: Callable | None = None, **upscaler_args: Any) -> vs.VideoNode:
-    """
-    Апскейлер видео на базе стандартных оконных свёрток или удвоителей линий семейства EDI3.
+    """Апскейлер видео на базе стандартных оконных свёрток или удвоителей строк семейства EDI3.
     
     Args:
         clip: Видеоклип для апскейлинга.
@@ -1394,6 +1423,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         mode: Битовая маска для выбора типа апскейлинга. Поддерживаются следующие значения:
             mode & 3: 0 - оконная свёртка, 1 - znedi3, 2 - eedi3, 3 - eedi3 + znedi3 в качестве sclip.
             mode & 12: 4 - вторичные параметры в стиле zimg, 8 - вторичные параметры в стиле fmtconv.
+                Плюс при "mode & 3 = 0" эти биты так же отвечают за выбор самого ресайзера (zimg или fmtconv).
             По умолчанию 8 (0 + 8).
         order: Порядок апскейлинга при выборе EDI3 (mode & 3 > 0). Поддерживаются следующие значения:
             0 - горизонтальное удвоение, а потом вертикальное (по умолчанию).
@@ -1431,13 +1461,13 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if dx is None:
         dx = w * 2
     elif not isinstance(dx, int) or dx <= w or dx >> sub_w << sub_w != dx:
-        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width or divisible by '
+        raise TypeError(f'{func_name}: dx must be an integer, greater than the clip width and divisible by '
                         'subsampling_w')
     
     if dy is None:
         dy = h * 2
     elif not isinstance(dy, int) or dy <= h or dy >> sub_h << sub_h != dy:
-        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height or divisible by '
+        raise TypeError(f'{func_name}: dy must be an integer, greater than the clip height and divisible by '
                         'subsampling_h')
     
     if not isinstance(mode, int) or mode < 0 or mode > 11:
@@ -1611,17 +1641,16 @@ def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: 
     return clip
 
 def apply_range(first: vs.VideoNode, second: vs.VideoNode, /, *args: int | list[int | None]) -> vs.VideoNode:
-    """
-    Позволяет заменить указанные диапазоны кадров первого клипа на соответствующие кадры второго клипа.
+    """Позволяет заменить указанные диапазоны кадров первого клипа на соответствующие кадры второго клипа.
     
     Args:
-        first: Первый клип, который будет изменен.
+        first: Первый клип, кадры которого будут заменены.
         second: Второй клип, который будет использован для замены.
-        *args: Кортеж аргументов, определяющих кадры и диапазоны кадров для замены.
+        args: Кортеж аргументов, определяющих кадры и диапазоны кадров для замены.
             Каждый аргумент может быть либо целым числом (номер кадра для замены), либо списком.
-            Список может содержать как один, так и два элемента: один элемент - номер кадра для замены,
-            два элемента - диапазон кадров для замены (второй кадр не включается, как в срезах Python).
-            Один из элементов списка может быть None, в этом случае он обозначает начало или конец клипа.
+            Список может содержать как один, так и два элемента: один элемент - номер кадра для замены, два элемента -
+            диапазон кадров для замены (второй кадр не включается, как в срезах Python).
+            Один из элементов списка может быть None, в этом случае он обозначает начало или конец клипа соответственно.
     """
     func_name = 'apply_range'
     
@@ -1781,13 +1810,13 @@ def after_mask(clip: vs.VideoNode, /, boost: bool = False, offset: float = 0.0, 
 def search_field_diffs(clip: vs.VideoNode, /, mode: int | list[int] = 0, thr: float | list[float] = 0.001,
                        div: float | list[float] = 2.0, frames: list[int] | None = None, output: str | None = None,
                        plane: int = 0, mean: int = 0, check: bool = False) -> vs.VideoNode:
-    """
-    Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
+    """Search for deinterlacing failures after ftm/vfm and similar filters, the result is saved to a text file.
     
     The principle of operation is quite simple - each frame is divided into fields and absolute normalized difference
     is calculated for them using two different algorithms.
     
     Args:
+        clip: clip to analyze.
         mode: function operation mode.
             0 and 1 - search for frames with absolute normalized difference above the specified threshold.
             2 and 3 - search for the absolute normalized difference change above the specified threshold.
@@ -2765,8 +2794,7 @@ def vs_temporal_soften(clip: vs.VideoNode, radius: int | None = None, thr: int |
 @float_decorator()
 def vs_unsharp_mask(clip: vs.VideoNode, /, strength: int = 64, radius: int = 3, threshold: int = 8, blur: str = 'box',
                     roundoff: int = 0) -> vs.VideoNode:
-    """
-    Implementation of UnsharpMask with the ability to select the blur type (box or gauss) and rounding mode.
+    """Implementation of UnsharpMask with the ability to select the blur type (box or gauss) and rounding mode.
     
     By default, it perfectly imitates UnsharpMask from the WarpSharp package to AviSynth.
     """
@@ -3054,8 +3082,7 @@ def ovr_comparator(ovr_d: str, ovr_c: str, num_f: int) -> list[list[int]]:
 @float_decorator()
 def vs_remove_grain(clip: vs.VideoNode, /, mode: int | list[int] = 2, edges: bool = False,
                     roundoff: int = 1) -> vs.VideoNode:
-    """
-    Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
+    """Implementation of RgTools.RemoveGrain with clip edge processing and bank rounding.
     
     Supported modes: -1...28
     
@@ -3250,8 +3277,7 @@ def vs_remove_grain(clip: vs.VideoNode, /, mode: int | list[int] = 2, edges: boo
 @float_decorator(num_clips=2)
 def vs_repair(clip: vs.VideoNode, refclip: vs.VideoNode, /, mode: int | list[int] = 2,
               edges: bool = False) -> vs.VideoNode:
-    """
-    Implementation of RgTools.Repair with clip edge processing.
+    """Implementation of RgTools.Repair with clip edge processing.
     
     Supported modes: -1...28
     
@@ -3677,8 +3703,7 @@ def vs_vertical_cleaner(clip: vs.VideoNode, /, mode: int | list[int] = 1, edges:
 def vs_convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]] | None = None,
                    saturate: int | None = None, total: float | None = None,
                    planes: int | list[int] | None = None) -> vs.VideoNode:
-    """
-    An unnatural hybrid of std.Convolution, mt_convolution and mt_edge.
+    """An unnatural hybrid of std.Convolution, mt_convolution and mt_edge.
     
     All named modes from mt_edge are present. The kernel can also be specified as two flat matrices or a square matrix.
     Unlike std.Convolution, it works correctly with edges.
@@ -3823,8 +3848,7 @@ def vs_convolution(clip: vs.VideoNode, /, mode: str | list[int] | list[list[int]
 @float_decorator()
 def crazy_plane_stats(clip: vs.VideoNode, /, mode: int | list[int] = 0, plane: int = 0,
                       norm: bool = True) -> vs.VideoNode:
-    """
-    Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
+    """Calculates arithmetic mean, geometric mean, arithmetic-geometric mean, harmonic mean, contraharmonic mean,
     root mean square, root mean cube and median, depending on the mode.
     
     The result is written to the frame properties with the corresponding name.
@@ -4028,8 +4052,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
              mode: int = 9, upscaler: Callable | None = None, ratio: float = 1.0,
              **descale_args: Any) -> vs.VideoNode:
-    """
-    Рескейлер клипа в указанное разрешение (в том числе дробное) и обратно.
+    """Рескейлер клипа в указанное разрешение (в том числе дробное) и обратно.
     
     Args:
         clip: Входной клип (поддерживается только 32-битный GRAY или YUV).
@@ -4664,8 +4687,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     return clip
 
 def prop_format(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') -> vs.VideoNode:
-    """
-    Format the properties of the clip. All properties are formatted to the string.
+    """Format the properties of the clip. All properties are formatted to the string.
     
     Args:
         clip: The clip to format.
@@ -4707,8 +4729,7 @@ def prop_format(clip: vs.VideoNode, prop: str | list[str], modifier: str = '') -
 @float_decorator(chroma_align=False)
 def vs_expand(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr: int | None = None,
               mode: str | list[int] = 'square') -> vs.VideoNode:
-    """
-    Нечто среднее между mt_expand и std.Maximum. Максимизирует значения пикселей на основе параметра mode.
+    """Нечто среднее между mt_expand и std.Maximum. Максимизирует значения пикселей на основе параметра mode.
     
     Args:
         clip: Клип для обработки.
@@ -4778,8 +4799,7 @@ def vs_expand(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr:
 @float_decorator(chroma_align=False)
 def vs_inpand(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr: int | None = None,
               mode: str | list[int] = 'square') -> vs.VideoNode:
-    """
-    Нечто среднее между mt_inpand и std.Minimum. Минимизирует значения пикселей на основе параметра mode.
+    """Нечто среднее между mt_inpand и std.Minimum. Минимизирует значения пикселей на основе параметра mode.
     
     Args:
         clip: Клип для обработки.
@@ -4848,8 +4868,7 @@ def vs_inpand(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr:
 
 @float_decorator()
 def vs_deflate(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr: int | None = None) -> vs.VideoNode:
-    """
-    Нечто среднее между mt_deflate и std.Deflate.
+    """Нечто среднее между mt_deflate и std.Deflate.
     
     Заменяет каждый пиксель средним значением восьми пикселей в его окрестности 3x3,
     но только если это среднее значение меньше значения центрального пикселя.
@@ -4898,8 +4917,7 @@ def vs_deflate(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr
 
 @float_decorator()
 def vs_inflate(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr: int | None = None) -> vs.VideoNode:
-    """
-    Нечто среднее между mt_inflate и std.Inflate.
+    """Нечто среднее между mt_inflate и std.Inflate.
     
     Заменяет каждый пиксель средним значением восьми пикселей в его окрестности 3x3,
     но только если это среднее значение больше значения центрального пикселя.
@@ -4948,8 +4966,7 @@ def vs_inflate(clip: vs.VideoNode, /, planes: int | list[int] | None = None, thr
 
 @float_decorator(num_clips=2)
 def vs_make_diff(clipa: vs.VideoNode, clipb: vs.VideoNode, /, planes: int | list[int] | None = None) -> vs.VideoNode:
-    """
-    Создает разность между двумя клипами. Разность ограничена половиной диапазона в каждую сторону.
+    """Создает разность между двумя клипами. Разность ограничена половиной диапазона в каждую сторону.
     
     Args:
         clipa: Клип, из которого вычитается.
@@ -4990,8 +5007,7 @@ def vs_make_diff(clipa: vs.VideoNode, clipb: vs.VideoNode, /, planes: int | list
 
 @float_decorator(num_clips=2)
 def vs_merge_diff(clipa: vs.VideoNode, clipb: vs.VideoNode, /, planes: int | list[int] | None = None) -> vs.VideoNode:
-    """
-    Объединяет клип с разностью между клипами. Изменение клипа ограничено половиной диапазона в каждую сторону.
+    """Объединяет клип с разностью между клипами. Изменение клипа ограничено половиной диапазона в каждую сторону.
     
     Args:
         clipa: Клип, в который вносится разность.
@@ -5033,8 +5049,7 @@ def vs_merge_diff(clipa: vs.VideoNode, clipb: vs.VideoNode, /, planes: int | lis
 @float_decorator(chroma_align=False)
 def vs_median_blur(clip: vs.VideoNode, /, radius: int = 2, planes: int | list[int] | None = None,
                    edges: bool = True, mirror: bool = False) -> vs.VideoNode:
-    """
-    Пространственное медианное размытие с заданным радиусом.
+    """Пространственное медианное размытие с заданным радиусом.
     
     Args:
         clip: Входной клип.
@@ -5122,8 +5137,7 @@ def chroma_up(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.V
     return clip
 
 def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs.VideoNode:
-    """
-    Функция-обёртка для добавления поддержки float sample type.
+    """Функция-обёртка для добавления поддержки float sample type.
     
     Выравнивает цветные float-планары в -0.5...0.5.
     Также обрезает значения, которые выходят за пределы 0...1 в яркостном канале и -0.5...0.5 в цветностных.
