@@ -1219,7 +1219,7 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     are = vs_convolution(clip, 'min/max')
     ugly = vs_convolution(halos, 'min/max')
     so = core.std.Expr([ugly, are],
-                       f'y x - y 0.001 + / 65535 * {lowsens * 256} - y 65536 + 131072 / {highsens / 100} + *')
+                       f'y x - y 0.000001 + / 65535 * {lowsens * 256} - y 65536 + 131072 / {highsens / 100} + *')
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
