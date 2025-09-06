@@ -37,7 +37,7 @@ ignore = [
 ]
 
 [lint.pydocstyle]
-convention = "numpy"
+convention = "google"
 
 [lint.flake8-annotations]
 allow-star-arg-any = true
