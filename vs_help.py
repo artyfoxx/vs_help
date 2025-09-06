@@ -4236,14 +4236,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
               mark: bool = False, output: str | None = None, thr: float = 0.015, crop: int = 5, mean: int = 1,
               interim: bool = False, yscale: str = 'log', figsize: tuple[int, int] = (16, 9),
               layout: str | None = 'tight', style: str | list[str] = 'fast', **descale_args: Any) -> vs.VideoNode:
-    """
-    Ещё одна никому (кроме меня) не нужная реализация getnative.
+    """Ещё одна никому (кроме меня) не нужная реализация getnative.
     
     Основные отличия:
     - Прямая работа с кадрами внутри функции, а значит корректый вывод их индексов.
     - Наличие встроенного пресета для автоматического перебора всех популярных комбинаций ядер и их параметров.
     - Ниличие встроенной возможности сглаживания результата по Гауссу.
-    - Возможность прогона клипа с двумя отстоящими на единицу значениями параметров и выводом результата их деления.
+    - Возможность прогона клипа с двумя отстоящими на единицу значениями параметров и вывод результата их деления.
     - Рассчёт среднего по всему клипу и вывод всех промежуточных результатов в общих границах координат.
     - Тонкая настройка графика, включая масштаб шкалы, размер фигуры, выравнивание осей и выбор стиля.
     
@@ -4263,18 +4262,21 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             'all' - автоматический перебор всех популярных комбинаций ядер и их вторичных параметров. Указание
             дополнительных аргументов в виде списков в этом режиме не поддерживается, а вторичные параметры ядер
             перезапишутся значениями из пересета. Вот сопоставление ядер и их вторичных параметров:
-            'bicubic#0' - b=1/3, c=1/3
-            'bicubic#1' - b=0.5, c=0
-            'bicubic#2' - b=0,   c=0.5
-            'bicubic#3' - b=0,   c=0.75
-            'bicubic#4' - b=1,   c=0
-            'bicubic#5' - b=0,   c=1
-            'bicubic#6' - b=0.2, c=0.5
-            'bicubic#7' - b=0.5, c=0.5
-            'lanczos#0' - taps=2
-            'lanczos#1' - taps=3
-            'lanczos#2' - taps=4
-            'lanczos#3' - taps=5
+            'bicubic#0'  - b=1/3,    c=1/3    (Mitchell-Netravali)
+            'bicubic#1'  - b=0.5,    c=0
+            'bicubic#2'  - b=0,      c=0.5    (Catmull-Rom)
+            'bicubic#3'  - b=0,      c=0.75   (Precise Bicubic)
+            'bicubic#4'  - b=1,      c=0      (B-Spline)
+            'bicubic#5'  - b=0,      c=1      (Sharp Bicubic)
+            'bicubic#6'  - b=0.2,    c=0.5
+            'bicubic#7'  - b=0.5,    c=0.5
+            'bicubic#8'  - b=0,      c=0      (Hermite)
+            'bicubic#9'  - b=0.3782, c=0.3109 (Robidoux)
+            'bicubic#10' - b=0.75,   c=0.25   (SoftCubicXX)
+            'lanczos#0'  - taps=2
+            'lanczos#1'  - taps=3
+            'lanczos#2'  - taps=4
+            'lanczos#3'  - taps=5
         sigma: Сигма для сглаживания результата по Гауссу. По умолчанию 0.
         mark: Вывод на график(и) меток локальных минимумов и их значений. По умолчанию False.
         output: Имя и путь для сохранения файлов. По умолчанию генерируется автоматически.
@@ -4294,7 +4296,9 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         interim: Генерация промежуточных дампов и графиков. По умолчанию False. Работает только в режимах 'total_...',
             собирающих статистику по заданному диапазону кадров для диапазона dx, dy или kernel.
             Если True, то создается папка с тем же именем, что и output, в которой сохраняются все промежуточные
-            дампы и графики, чей масштаб зажат между макс. и мин. значениями всего диапазона.
+            дампы и графики, чей масштаб зафиксирован между максимальным и минимальным значениями всего диапазона.
+            Прогресс обработки выводится в stderr (как в vspipe). Соответственно, если для тестового прогона
+            используется что-то отличное от vspipe с пустым выходом (--), корректный вывод прогресса не гарантируется.
         yscale: Выбор масштаба шкалы для графика. Поддерживаются следующие значения:
             'asinh' - логарифм с обратной функцией asinh.
             'linear' - линейный.
@@ -4309,7 +4313,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             'none' и None - без компоновки.
         style: Стиль(и) графика. По умолчанию 'fast'. Все поддерживаемые стили можно посмотреть тут:
             https://matplotlib.org/stable/gallery/style_sheets/style_sheets_reference.html
-        **descale_args: Дополнительные аргументы, перенаправляемые в rescaler.
+        descale_args: Дополнительные аргументы, перенаправляемые в rescaler.
             Из них особого внимания заслуживает mode, который представляет собой битовую маску для выбора
             различных режимов рескейла. Поддерживаются следующие значения:
             mode & 1: 0 - целочисленный рескейл, 1 - дробный.
@@ -4392,10 +4396,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     match kernel:
         case 'all' if not any(isinstance(i, list) for i in descale_args.values()):
             kernel = ['bilinear', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic', 'bicubic',
-                      'bicubic', 'lanczos', 'lanczos', 'lanczos', 'lanczos', 'spline16', 'spline36', 'spline64']
-            descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5]
-            descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5]
-            descale_args['taps'] = [None, None, None, None, None, None, None, None, None, 2, 3, 4, 5]
+                      'bicubic', 'bicubic', 'bicubic', 'bicubic', 'lanczos', 'lanczos', 'lanczos', 'lanczos',
+                      'spline16', 'spline36', 'spline64']
+            descale_args['b'] = [None, 1/3, 0.5, 0, 0, 1, 0, 0.2, 0.5, 0, 0.3782, 0.75]
+            descale_args['c'] = [None, 1/3, 0, 0.5, 0.75, 0, 1, 0.5, 0.5, 0, 0.3109, 0.25]
+            descale_args['taps'] = [None] * len(descale_args['b']) + [2, 3, 4, 5]
         case str() if any(isinstance(i, list) for i in descale_args.values()):
             kernel = [kernel] * max(len(i) for i in descale_args.values() if isinstance(i, list))
         case str():
