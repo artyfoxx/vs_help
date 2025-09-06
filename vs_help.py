@@ -89,21 +89,20 @@ from vapoursynth import core
 
 
 def float_decorator(num_clips: int = 1, chroma_align: bool = True) -> Callable:
-    """
-    Декоратор для добавления поддержки FLOAT sample type в функции, которые используют только Expr.
+    """Декоратор для добавления поддержки вещественного формата в функции, которые используют только Expr.
     
-    Перед вызовом декорируемой функции, декоратор проверяет, что все клипы имеют FLOAT sample type.
-    Если все клипы имеют INTEGER sample type, то вызывается функция без декорирования.
-    Если все клипы имеют FLOAT sample type, то цветностные планары приводятся к диапазону 0...1.
-    Также у всех планаров, включая яркостный, обрезаются значения, выходящие за пределы 0...1.
-    После вызова декорируемой функции, цветностные планары приводятся к диапазону -0.5...0.5.
-    Также у всех планаров, включая яркостный, обрезаются значения, выходящие за пределы 0...1 для яркости
-    и -0.5...0.5 для цвета.
+    Перед вызовом декорируемой функции, декоратор проверяет, что все клипы имеют вещественный формат.
+    Если все клипы имеют целечисленный формат, то вызывается функция без декорирования.
+    Если все клипы имеют вещественный формат, то цветоразностные плоскости приводятся к диапазону 0...1.
+    Также у всех плоскостей, включая яркостную, обрезаются значения, выходящие за пределы 0...1.
+    После вызова декорируемой функции, цветоразностные плоскости приводятся к диапазону -0.5...0.5.
+    Также у всех плоскостей, включая яркостную, обрезаются значения, выходящие за пределы 0...1 для Y
+    и -0.5...0.5 для UV.
     
     Args:
         num_clips: Количество клипов, передаваемых в функцию. По умолчанию 1.
-        chroma_align: Выравнивание цветностных планаров в диапазон 0...1. По умолчанию True.
-            Если False, то выравнивание цветностных планаров не производится, только обрезка в диапазон -0.5...0.5.
+        chroma_align: Выравнивание цветоразностных плоскостей в диапазон 0...1. По умолчанию True.
+            Если False, то выравнивание не производится, только обрезка в диапазон -0.5...0.5.
     
     Предупреждение: Поскольку обращение декоратора к клипам происходит позиционно, то обращение к клипам по ключам
         в декорируемой функции необходимо запрещать.
@@ -118,7 +117,13 @@ def float_decorator(num_clips: int = 1, chroma_align: bool = True) -> Callable:
             if not all(isinstance(i, vs.VideoNode) for i in args[:num_clips]):
                 raise TypeError(f'{func_name} the clip(s) must be of the vs.VideoNode type')
             
-            if not all(i.format.color_family in {vs.YUV, vs.GRAY} for i in args[:num_clips]):
+            if all(i.format.color_family == vs.GRAY for i in args[:num_clips]):
+                point = 0
+            elif all(i.format.color_family == vs.YUV for i in args[:num_clips]):
+                point = 1 if chroma_align else 0
+            elif all(i.format.color_family == vs.RGB for i in args[:num_clips]):
+                point = 2
+            else:
                 raise TypeError(f'{func_name}: Unsupported color family')
             
             if all(i.format.sample_type == vs.INTEGER for i in args[:num_clips]):
@@ -129,13 +134,15 @@ def float_decorator(num_clips: int = 1, chroma_align: bool = True) -> Callable:
                 raise TypeError(f'{func_name} the clip(s) must be of the INTEGER or FLOAT sample type')
             
             expr0 = [['x 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max'],
-                     ['x 1 min 0 max', 'x 0.5 + 1 min 0 max', 'x 0.5 + 1 min 0 max']]
+                     ['x 1 min 0 max', 'x 0.5 + 1 min 0 max', 'x 0.5 + 1 min 0 max'],
+                     ['x 1 min 0 max', 'x 1 min 0 max', 'x 1 min 0 max']]
             expr1 = [['x 1 min 0 max', 'x 0.5 min -0.5 max', 'x 0.5 min -0.5 max'],
-                     ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']]
+                     ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max'],
+                     ['x 1 min 0 max', 'x 1 min 0 max', 'x 1 min 0 max']]
             
-            clips = [core.std.Expr(i, expr0[chroma_align][:i.format.num_planes]) for i in args[:num_clips]]
+            clips = [core.std.Expr(i, expr0[point][:i.format.num_planes]) for i in args[:num_clips]]
             clip = func(*clips, *args[num_clips:], **kwargs)
-            clip = core.std.Expr(clip, expr1[chroma_align][:clip.format.num_planes])
+            clip = core.std.Expr(clip, expr1[point][:clip.format.num_planes])
             
             return clip
         
