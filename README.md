@@ -1,7 +1,7 @@
 # vs_help
-Just some functions for VapourSynth...
-Written for internal use, but if it turns out to be useful to someone else, that would be great.
-Documentation is rather fragmentary.
+Just some functions for VapourSynth...  
+Written for internal use, but if it turns out to be useful to someone else, that would be great.  
+Documentation is rather fragmentary.  
 Eternal beta, so there may be bugs in the code.
 # Dependencies
 ## General
