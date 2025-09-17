@@ -123,8 +123,8 @@ def float_decorator(num_clips: int = 1, chroma_align: bool = True) -> Callable:
         chroma_align: Alignment of color difference planes to the range 0...1. Default is True.
             If False, then no alignment is performed, only cropping to the range -0.5...0.5.
     
-    Warning: Since the decorator accesses clips positionally, accessing clips by keys
-        in the decorated function must be prohibited.
+    Warning: Since the decorator accesses clips positionally, accessing clips by keys in the decorated function
+        must be prohibited.
     """
     func_name = 'float_decorator'
     
@@ -1604,7 +1604,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if space not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    if space == vs.YUV and clip.get_frame(0).props.get('_ChromaLocation') != 0:
+    if space == vs.YUV and clip.get_frame(0).props.get('_ChromaLocation', 0) != 0:
         raise ValueError(f'{func_name}: the YUV clip must have left-aligned chroma')
     
     if any(i in upscaler_args for i in ('field', 'dh')):
@@ -1671,7 +1671,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
                 clip = core.eedi3m.EEDI3(clip, field1, True,
                                          sclip=core.znedi3.nnedi3(clip, field1, True, **znedi3_args), **eedi3_args)
             case _:
-                raise ValueError(f'{func_name}: Please use 0...3 mode value')
+                raise ValueError(f'{func_name}: Please use 0...3 "mode & 3" value')
         
         if not order:
             clip = core.std.Transpose(clip)
@@ -1682,12 +1682,13 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         steps = ceil(log(max(dx / w, dy / h)) / log(2))
         rfactor = 1 << steps
         
-        if mode & 12 == 8:
-            crop_keys = ('sx', 'sy', 'sw', 'sh')
-        elif mode & 12 == 4:
-            crop_keys = ('src_left', 'src_top', 'src_width', 'src_height')
-        else:
-            raise ValueError(f'{func_name}: Unsupported mode & 12 value')
+        match mode & 12:
+            case 8:
+                crop_keys = ('sx', 'sy', 'sw', 'sh')
+            case 4:
+                crop_keys = ('src_left', 'src_top', 'src_width', 'src_height')
+            case _:
+                raise ValueError(f'{func_name}: Unsupported "mode & 12" value')
         
         crop_args = {key: value * rfactor for key, value in upscaler_args.items() if key in crop_keys}
         upscaler_args = {key: value for key, value in upscaler_args.items() if key not in crop_keys}
@@ -1719,8 +1720,6 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         
         crop_args[crop_keys[1]] = crop_args.get(crop_keys[1], 0) - 0.5
         chroma_args = dict(crop_args)
-        corr_w = 0.5 * rfactor - 0.5 # коррекция left-aligned chroma
-        chroma_args[crop_keys[0]] += corr_w
         
         match sub_h:
             case 0:
@@ -1730,10 +1729,23 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             case _:
                 raise ValueError(f'{func_name}: Unsupported vertical subsampling of the clip')
         
+        chroma_args[crop_keys[0]] /= 1 << sub_w
+        chroma_args[crop_keys[1]] /= 1 << sub_h
+        if crop_keys[2] in chroma_args:
+            chroma_args[crop_keys[2]] /= 1 << sub_w
+        if crop_keys[3] in chroma_args:
+            chroma_args[crop_keys[3]] /= 1 << sub_h
+        chroma_args[crop_keys[0]] -= (0.5 - 0.5 / (1 << sub_w)) * (rfactor - 1)
+        
+        if dx != w:
+            chroma_args[crop_keys[0]] += (0.5 - 0.5 / (1 << sub_w)) * rfactor * (1 - w / dx)
+        
         if space == vs.YUV:
-            luma = downscaler(core.std.ShufflePlanes(clip, 0, vs.GRAY), dx, dy, **crop_args)
-            chroma = downscaler(clip, dx, dy, **chroma_args)
-            clip = core.std.ShufflePlanes([luma, chroma], list(range(num_p)), space)
+            clips = core.std.SplitPlanes(clip)
+            clips[0] = downscaler(clips[0], dx, dy, **crop_args)
+            clips[1] = downscaler(clips[1], dx >> sub_w, dy >> sub_h, **chroma_args)
+            clips[2] = downscaler(clips[2], dx >> sub_w, dy >> sub_h, **chroma_args)
+            clip = core.std.ShufflePlanes(clips, [0] * num_p, space)
         else:
             clip = downscaler(clip, dx, dy, **crop_args)
     
@@ -1743,7 +1755,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
         clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
     else:
-        raise ValueError(f'{func_name}: Unsupported mode & 12 value')
+        raise ValueError(f'{func_name}: Unsupported "mode & 12" value')
     
     return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
 
