@@ -1604,8 +1604,16 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     if space not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    if space == vs.YUV and clip.get_frame(0).props.get('_ChromaLocation', 0) != 0:
-        raise ValueError(f'{func_name}: the YUV clip must have left-aligned chroma')
+    if space == vs.YUV:
+        match clip.get_frame(0).props.get('_ChromaLocation', 0):
+            case 0:
+                chromaloc = True
+            case 1:
+                chromaloc = False
+            case _:
+                raise ValueError(f'{func_name}: the YUV clip must have left or center aligned chroma')
+    else:
+        chromaloc = False
     
     if any(i in upscaler_args for i in ('field', 'dh')):
         raise ValueError(f'{func_name}: "dh" and "field" are not supported in upscaler_args')
@@ -1737,7 +1745,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             chroma_args[crop_keys[3]] /= 1 << sub_h
         chroma_args[crop_keys[0]] -= (0.5 - 0.5 / (1 << sub_w)) * (rfactor - 1)
         
-        if dx != w:
+        if chromaloc and dx != w:
             chroma_args[crop_keys[0]] += (0.5 - 0.5 / (1 << sub_w)) * rfactor * (1 - w / dx)
         
         if space == vs.YUV:
