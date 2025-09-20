@@ -71,6 +71,7 @@ For clips converted from a limited range, correct processing is not guaranteed.
     vs_median_blur (float support)
     chroma_up (float support)
     chroma_down (float support)
+    artyfox_resize (float support)
 """
 
 import re
@@ -1562,7 +1563,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             1 - вертикальное удвоение, а потом горизонтальное.
             2 - максимизация первых двух вариантов.
             3 - минимизация первых двух вариантов.
-        downscaler: Функция для даунскейлинга после EDI3. По умолчанию None (autotap3).
+        downscaler: Функция для даунскейлинга после EDI3. По умолчанию None (Magic Kernel Sharp 2021).
         upscaler_args: Дополнительные параметры, поступающие непосредственно в выбранную функцию апскейла.
     
     Пример:
@@ -1587,7 +1588,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             1 - vertical doubling, then horizontal.
             2 - maximizing the first two options.
             3 - minimizing the first two options.
-        downscaler: Downscaling function after EDI3. Default is None (autotap3).
+        downscaler: Downscaling function after EDI3. Default is None (Magic Kernel Sharp 2021).
         upscaler_args: Additional parameters that go directly to the selected upscaler function.
     
     Example:
@@ -1611,7 +1612,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
             case 1:
                 chromaloc = False
             case _:
-                raise ValueError(f'{func_name}: the YUV clip must have left or center aligned chroma')
+                raise KeyError(f'{func_name}: the YUV clip must have left or center aligned chroma')
     else:
         chromaloc = False
     
@@ -1642,7 +1643,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         raise TypeError(f'{func_name}: mode must be an integer in the range 0...11')
     
     if downscaler is None:
-        downscaler = autotap3
+        downscaler = partial(artyfox_resize, kernel='magic21')
     elif not isinstance(downscaler, Callable):
         raise TypeError(f'{func_name}: downscaler must be a callable')
         
@@ -5636,5 +5637,104 @@ def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']
         clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
+    
+    return clip
+
+def artyfox_resize(clip: vs.VideoNode, width: int, height: int, src_left: float = 0.0, src_top: float = 0.0,
+                src_width: float | None = None, src_height: float | None = None, kernel: str = 'area',
+                sharp: float = 1.0) -> vs.VideoNode:
+    """[RU] Функция-обёртка для artyfox.Resize.
+    
+    Добавляет поддержку целочисленных форматов клипа и правильную конвертацию в вещественный формат и обратно.
+    
+    Args:
+        clip: Входной клип.
+        width: Ширина выходного клипа.
+        height: Высота выходного клипа.
+        src_left: Координата "x" точки начала области, размер которой нужно изменить. По умолчанию 0.
+        src_top: Координата "y" точки начала области, размер которой нужно изменить. По умолчанию 0.
+        src_width: Ширина области, размер которой нужно изменить. По умолчанию равна ширине входного клипа.
+        src_height: Высота области, размер которой нужно изменить. По умолчанию равна высоте входного клипа.
+        kernel: Тип ядра свёртки. Возможные значения:
+            "area" - Area Resize, по умолчанию.
+            "magic" - Magic Kernel.
+            "magic13" - Magic Kernel Sharp 2013.
+            "magic21" - Magic Kernel Sharp 2021.
+        sharp: Коэффициент резкости. По умолчанию 1.0. Значения меньше 1.0 - блюр, больше - шарп.
+            Диапазон допустимых значений - 0.1...5.0.
+    
+    [EN] Wrapper function for artyfox.Resize.
+    
+    Adds support for integer clip formats and correct conversion to and from floating-point formats.
+    
+    Args:
+        clip: Input clip.
+        width: Width of the output clip.
+        height: Height of the output clip.
+        src_left: The x-coordinate of the start point of the area to be resized. Defaults to 0.
+        src_top: The y-coordinate of the start point of the area to be resized. Defaults to 0.
+        src_width: The width of the area to be resized. Defaults to the width of the input clip.
+        src_height: The height of the area to be resized. Defaults to the height of the input clip.
+        kernel: The type of the convolution kernel. Possible values:
+            "area" - Area Resize, by default.
+            "magic" - Magic Kernel.
+            "magic13" - Magic Kernel Sharp 2013.
+            "magic21" - Magic Kernel Sharp 2021.
+        sharp: The sharpening factor. Defaults to 1.0. Values less than 1.0 - blur,
+            and values greater than 1.0 - sharpen. The acceptable range is 0.1...5.0.
+    """
+    func_name = 'artyfox_resize'
+    
+    if not isinstance(clip, vs.VideoNode):
+        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
+    
+    if clip.format.color_family == vs.UNDEFINED:
+        raise TypeError(f'{func_name}: Unsupported color family')
+    
+    w, h = clip.width, clip.height
+    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
+    bits = clip.format.bits_per_sample
+    
+    if not isinstance(width, int) or width <= 1 << sub_w or width >> sub_w << sub_w != width:
+        raise TypeError(f'{func_name}: "width" must be an integer, greater than "1 << subsampling_w" and divisible by '
+                        'subsampling_w')
+    
+    if not isinstance(height, int) or height <= 1 << sub_h or height >> sub_h << sub_h != height:
+        raise TypeError(f'{func_name}: "height" must be an integer, greater than "1 << subsampling_h" and divisible by '
+                        'subsampling_h')
+    
+    if not isinstance(src_left, int | float) or src_left <= -w or src_left >= w:
+        raise ValueError(f'{func_name}: "src_left" must be a float between -{w} and {w}')
+    
+    if not isinstance(src_top, int | float) or src_top <= -h or src_top >= h:
+        raise ValueError(f'{func_name}: "src_top" must be a float between -{h} and {h}')
+    
+    if src_width is None:
+        src_width = w
+    elif not isinstance(src_width, int | float) or src_width <= -w or src_width >= w * 2:
+        raise ValueError(f'{func_name}: "src_width" must be a float between -{w} and {w * 2}')
+    elif src_width <= 0:
+        src_width += w - src_left
+    
+    if src_height is None:
+        src_height = h
+    elif not isinstance(src_height, int | float) or src_height <= -h or src_height >= h * 2:
+        raise ValueError(f'{func_name}: "src_height" must be a float between -{h} and {h * 2}')
+    elif src_height <= 0:
+        src_height += h - src_top
+    
+    if not isinstance(kernel, str) or kernel not in {'area', 'magic', 'magic13', 'magic21'}:
+        raise ValueError(f'{func_name}: "kernel" must be one of "area", "magic", "magic13", "magic21"')
+    
+    if not isinstance(sharp, int | float) or sharp < 0.1 or sharp > 5.0:
+        raise ValueError(f'{func_name}: "sharp" must be a float in the range [0.1, 5.0]')
+    
+    if bits < 32:
+        clip = core.fmtc.bitdepth(clip, bits=32)
+    
+    clip = core.artyfox.Resize(clip, width, height, src_left, src_top, src_width, src_height, kernel, sharp=sharp)
+    
+    if bits < 32:
+        clip = core.fmtc.bitdepth(clip, bits=bits, dmode=1)
     
     return clip
