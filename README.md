@@ -8,7 +8,7 @@ Eternal beta, so there may be bugs in the code.
 * [VapourSynth](https://www.vapoursynth.com/) >= R66
 * [Python](https://www.python.org/) >= 3.12
 ## Plugins
-* [artyfox-pligin](https://github.com/artyfoxx/artyfox-plugin)
+* [artyfox-plugin](https://github.com/artyfoxx/artyfox-plugin)
 * [znedi3](https://github.com/sekrit-twc/znedi3)
 * [VapourSynth-EEDI3](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3)
 * [akarin-vapoursynth-plugin](https://github.com/Jaded-Encoding-Thaumaturgy/akarin-vapoursynth-plugin)
