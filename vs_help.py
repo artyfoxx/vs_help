@@ -178,8 +178,9 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     Идея алгоритма состоит в множественном вызове функции Ланцоша с разными размерами окна, а затем их сращении с
     одновременным вычитанием звона и сохранением резкости.
     В отличие от оригинала, умеет устанавливать координаты точки начала и размер области входного клипа, подвергаемой
-    ресайзу в формате fmtconv ('sx', 'sy', 'sw', 'sh'). Также функции возвращён оригинальный алгоритм работы без
-    MakeDiff, благодаря чему не теряется точность при thresh=1. Плюс был удалён мёртвый код.
+    ресайзу в формате artyfox ('src_left', 'src_top', 'src_width', 'src_height'). Также функции возвращён оригинальный
+    алгоритм работы без MakeDiff, благодаря чему не теряется точность при thresh=1.
+    Плюс был удалён мёртвый код.
     
     Args:
         clip: Входной клип.
@@ -187,7 +188,7 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         dy: Высота выходного клипа. По умолчанию None (удвонная высота входного клипа).
         mtaps3: Размер окна ресайза разностной маски. По умолчанию 1.
         thresh: Коэффициент усиления разностной маски. По умолчанию 256.
-        crop_args: Аргументы для функции fmtconv ('sx', 'sy', 'sw', 'sh').
+        crop_args: Аргументы для функции artyfox ('src_left', 'src_top', 'src_width', 'src_height').
     
     ---
     
@@ -197,8 +198,9 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     The idea of the algorithm is to call Lanczos function multiple times with different window sizes, and then merge
     them with simultaneous ringing subtraction and sharpness preservation.
     Unlike the original, it can set the coordinates of the start point and the size of the input clip area subjected to
-    resizing in fmtconv ('sx', 'sy', 'sw', 'sh') format. Also, the original algorithm without MakeDiff has been
-    returned to the function, so precision is not lost with thresh=1. Plus, dead code has been removed.
+    resizing in artyfox ('src_left', 'src_top', 'src_width', 'src_height') format. Also, the original algorithm without
+    MakeDiff has been returned to the function, so precision is not lost with thresh=1.
+    Plus, dead code has been removed.
     
     Args:
         clip: Input clip.
@@ -206,17 +208,15 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         dy: Output clip height. Default is None (twice the height of the input clip).
         mtaps3: Difference mask resize window size. Default is 1.
         thresh: Difference mask gain. Default is 256.
-        crop_args: Arguments for the fmtconv function ('sx', 'sy', 'sw', 'sh').
+        crop_args: Arguments for the artyfox function ('src_left', 'src_top', 'src_width', 'src_height').
     """
     func_name = 'autotap3'
     
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(f'{func_name} the clip must be of the vs.VideoNode type')
     
-    clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
     sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
-    bits = clip.format.bits_per_sample
     
     if dx is None:
         dx = w * 2
@@ -239,31 +239,30 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     back_args = {}
     
     if crop_args:
-        if 'sx' in crop_args:
-            back_args['sx'] = -crop_args['sx'] * dx / w
+        if 'src_left' in crop_args:
+            back_args['src_left'] = -crop_args['src_left'] * dx / w
         
-        if 'sy' in crop_args:
-            back_args['sy'] = -crop_args['sy'] * dy / h
+        if 'src_top' in crop_args:
+            back_args['src_top'] = -crop_args['src_top'] * dy / h
         
-        if 'sw' in crop_args:
-            if crop_args['sw'] <= 0:
-                crop_args['sw'] += w - crop_args.get('sx', 0)
-            back_args['sw'] = dx * 2 - crop_args['sw'] * dx / w
+        if 'src_width' in crop_args:
+            if crop_args['src_width'] <= 0:
+                crop_args['src_width'] += w - crop_args.get('src_left', 0)
+            back_args['src_width'] = dx * 2 - crop_args['src_width'] * dx / w
         
-        if 'sh' in crop_args:
-            if crop_args['sh'] <= 0:
-                crop_args['sh'] += h - crop_args.get('sy', 0)
-            back_args['sh'] = dy * 2 - crop_args['sh'] * dy / h
+        if 'src_height' in crop_args:
+            if crop_args['src_height'] <= 0:
+                crop_args['src_height'] += h - crop_args.get('src_top', 0)
+            back_args['src_height'] = dy * 2 - crop_args['src_height'] * dy / h
         
         if any((x := i) not in back_args for i in crop_args):
             raise KeyError(f'{func_name}: Unsupported key {x} in crop_args')
     
-    if bits < 16:
-        clip = core.fmtc.bitdepth(clip, bits=16)
+    back_args['gamma'] = 1
+    crop_args['gamma'] = 1
     
     if dx == w and dy == h:
-        clip = core.fmtc.resample(clip, kernel='spline36', **crop_args)
-        return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
+        return core.artyfox.Resize(clip, w, h, kernel='spline36', **crop_args)
     
     space = clip.format.color_family
     
@@ -275,48 +274,54 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    t1 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=1, **crop_args)
-    t2 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=2, **crop_args)
-    t3 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=3, **crop_args)
-    t4 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=4, **crop_args)
-    t5 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=5, **crop_args)
-    t6 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=9, **crop_args)
-    t7 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=36, **crop_args)
+    t1 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=1, **crop_args)
+    t2 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=2, **crop_args)
+    t3 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=3, **crop_args)
+    t4 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=4, **crop_args)
+    t5 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=5, **crop_args)
+    t6 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=9, **crop_args)
+    t7 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=36, **crop_args)
     
-    m1 = core.std.Expr([clip, core.fmtc.resample(t1, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
-    m2 = core.std.Expr([clip, core.fmtc.resample(t2, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
-    m3 = core.std.Expr([clip, core.fmtc.resample(t3, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
-    m4 = core.std.Expr([clip, core.fmtc.resample(t4, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
-    m5 = core.std.Expr([clip, core.fmtc.resample(t5, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
-    m6 = core.std.Expr([clip, core.fmtc.resample(t6, w, h, kernel='lanczos', taps=3, **back_args)], 'x y - abs')
-    m7 = core.std.Expr([clip, core.fmtc.resample(t7, w, h, kernel='lanczos', taps=6, **back_args)], 'x y - abs')
+    m1 = core.std.Expr([clip, core.artyfox.Resize(t1, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m2 = core.std.Expr([clip, core.artyfox.Resize(t2, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m3 = core.std.Expr([clip, core.artyfox.Resize(t3, w, h, kernel='lanczos', taps=1, **back_args)], 'x y - abs')
+    m4 = core.std.Expr([clip, core.artyfox.Resize(t4, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
+    m5 = core.std.Expr([clip, core.artyfox.Resize(t5, w, h, kernel='lanczos', taps=2, **back_args)], 'x y - abs')
+    m6 = core.std.Expr([clip, core.artyfox.Resize(t6, w, h, kernel='lanczos', taps=3, **back_args)], 'x y - abs')
+    m7 = core.std.Expr([clip, core.artyfox.Resize(t7, w, h, kernel='lanczos', taps=6, **back_args)], 'x y - abs')
     
     expr = f'x y - {thresh} *' if clip.format.sample_type == vs.INTEGER else f'x y - {thresh} * 1 min 0 max'
     
     cp0 = vs_blur(t1, 1.42)
-    cp1 = core.std.MaskedMerge(cp0, t2, core.std.Expr([m1, m2], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                    taps=mtaps3, **crop_args))
-    m100 = core.std.Expr([clip, core.fmtc.resample(cp1, w, h, kernel='bilinear', **back_args)], 'x y - abs')
-    cp2 = core.std.MaskedMerge(cp1, t3, core.std.Expr([m100, m3], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                      taps=mtaps3, **crop_args))
-    m101 = core.std.Expr([clip, core.fmtc.resample(cp2, w, h, kernel='bilinear', **back_args)], 'x y - abs')
-    cp3 = core.std.MaskedMerge(cp2, t4, core.std.Expr([m101, m4], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                      taps=mtaps3, **crop_args))
-    m102 = core.std.Expr([clip, core.fmtc.resample(cp3, w, h, kernel='bilinear', **back_args)], 'x y - abs')
-    cp4 = core.std.MaskedMerge(cp3, t5, core.std.Expr([m102, m5], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                      taps=mtaps3, **crop_args))
-    m103 = core.std.Expr([clip, core.fmtc.resample(cp4, w, h, kernel='bilinear', **back_args)], 'x y - abs')
-    cp5 = core.std.MaskedMerge(cp4, t6, core.std.Expr([m103, m6], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                      taps=mtaps3, **crop_args))
-    m104 = core.std.Expr([clip, core.fmtc.resample(cp5, w, h, kernel='bilinear', **back_args)], 'x y - abs')
-    clip = core.std.MaskedMerge(cp5, t7, core.std.Expr([m104, m7], expr).fmtc.resample(dx, dy, kernel='lanczos',
-                                                                                       taps=mtaps3, **crop_args))
+    cp1 = core.std.MaskedMerge(
+        cp0, t2, core.std.Expr([m1, m2], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
+    m100 = core.std.Expr([clip, core.artyfox.Resize(cp1, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp2 = core.std.MaskedMerge(
+        cp1, t3, core.std.Expr([m100, m3], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
+    m101 = core.std.Expr([clip, core.artyfox.Resize(cp2, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp3 = core.std.MaskedMerge(
+        cp2, t4, core.std.Expr([m101, m4], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
+    m102 = core.std.Expr([clip, core.artyfox.Resize(cp3, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp4 = core.std.MaskedMerge(
+        cp3, t5, core.std.Expr([m102, m5], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
+    m103 = core.std.Expr([clip, core.artyfox.Resize(cp4, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    cp5 = core.std.MaskedMerge(
+        cp4, t6, core.std.Expr([m103, m6], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
+    m104 = core.std.Expr([clip, core.artyfox.Resize(cp5, w, h, kernel='bilinear', **back_args)], 'x y - abs')
+    clip = core.std.MaskedMerge(
+        cp5, t7, core.std.Expr([m104, m7], expr).artyfox.Resize(dx, dy, kernel='lanczos', taps=mtaps3, **crop_args)
+        )
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(orig, dx, dy, kernel='spline36', **crop_args)],
+        clip = core.std.ShufflePlanes([clip, core.artyfox.Resize(orig, dx, dy, kernel='spline36', **crop_args)],
                                       list(range(orig.format.num_planes)), space)
     
-    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
+    return clip
 
 def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, thresh: int = 0,
                 thresh2: int | None = None, athresh: int = 256, sharp1: float = 1, sharp2: float = 4,
@@ -393,7 +398,6 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     if clip.format.sample_type != vs.INTEGER:
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    clip = core.std.SetFieldBased(clip, 0)
     w, h = clip.width, clip.height
     sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
     
@@ -414,10 +418,7 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     
     space = clip.format.color_family
     bits = clip.format.bits_per_sample
-    thresh *= 256
-    
-    if bits < 16:
-        clip = core.fmtc.bitdepth(clip, bits=16)
+    thresh *= 1 << bits - 8
     
     if space == vs.YUV:
         orig = clip
@@ -427,19 +428,26 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    fd1 = core.fmtc.resample(clip, dx, dy, kernel='lanczos', taps=mtaps1)
-    fre1 = core.fmtc.resample(fd1, w, h, kernel='lanczos', taps=mtaps1)
+    fd1 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=mtaps1, gamma=1)
+    fre1 = core.artyfox.Resize(fd1, w, h, kernel='lanczos', taps=mtaps1, gamma=1)
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
-    m2 = core.fmtc.bitdepth(m1, bits=8, dmode=1).frfun7.Frfun7(l=2.01, t=256, tuv=256, p=1).fmtc.bitdepth(bits=16)
-    m2 = core.fmtc.resample(core.fmtc.resample(m2, x, y, kernel='lanczos', taps=ttaps),
-                            dx, dy, kernel='lanczos', taps=ttaps)
+    
+    if bits != 8:
+        m2 = core.artyfox.BitDepth(m1, bits=8)
+        m2 = core.frfun7.Frfun7(m2, l=2.01, t=256, tuv=256, p=1)
+        m2 = core.artyfox.BitDepth(m2, bits=bits)
+    else:
+        m2 = core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1)
+    
+    m2 = core.artyfox.Resize(core.artyfox.Resize(m2, x, y, kernel='lanczos', taps=ttaps, gamma=1),
+                            dx, dy, kernel='lanczos', taps=ttaps, gamma=1)
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
-    d3 = core.fmtc.resample(core.fmtc.resample(d, w, h, kernel='lanczos', taps=ttaps),
-                            dx, dy, kernel='lanczos', taps=ttaps)
+    d3 = core.artyfox.Resize(core.artyfox.Resize(d, w, h, kernel='lanczos', taps=ttaps, gamma=1),
+                            dx, dy, kernel='lanczos', taps=ttaps, gamma=1)
     d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'),
                               core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
@@ -450,14 +458,16 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     e = core.warp.AWarpSharp2(e, thresh=wthresh, blur=wblur, depth=depth)
     e = core.warp.AWarpSharp2(e, thresh=wthresh, blur=wblur, depth=depth)
     
-    fd12 = core.fmtc.resample(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, kernel='lanczos', taps=mtaps2)
-    fre12 = core.fmtc.resample(fd12, dx, dy, kernel='lanczos', taps=mtaps2)
+    fd12 = core.artyfox.Resize(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, kernel='lanczos',
+                               taps=mtaps2, gamma=1)
+    fre12 = core.artyfox.Resize(fd12, dx, dy, kernel='lanczos', taps=mtaps2, gamma=1)
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
-    m12 = core.fmtc.resample(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), kernel='lanczos', taps=mtaps2)
-    m12 = core.fmtc.resample(m12, dx, dy, kernel='lanczos', taps=mtaps2)
+    m12 = core.artyfox.Resize(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), kernel='lanczos',
+                              taps=mtaps2, gamma=1)
+    m12 = core.artyfox.Resize(m12, dx, dy, kernel='lanczos', taps=mtaps2, gamma=1)
     
-    e2 = core.fmtc.resample(core.fmtc.resample(e, w, h, kernel='lanczos', taps=ltaps),
-                            dx, dy, kernel='lanczos', taps=ltaps)
+    e2 = core.artyfox.Resize(core.artyfox.Resize(e, w, h, kernel='lanczos', taps=ltaps, gamma=1),
+                            dx, dy, kernel='lanczos', taps=ltaps, gamma=1)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
@@ -473,10 +483,10 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     clip = core.std.MaskedMerge(d4, e3, m2)
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.fmtc.resample(orig, dx, dy, kernel='spline36')],
+        clip = core.std.ShufflePlanes([clip, core.artyfox.Resize(orig, dx, dy, kernel='spline36', gamma=1)],
                                       list(range(orig.format.num_planes)), space)
     
-    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
+    return clip
 
 def bion_dehalo(clip: vs.VideoNode, mode: int = 13, rep: bool = True, rg: bool = False, mask: int = 1,
                 m: bool = False) -> vs.VideoNode:
@@ -1322,11 +1332,7 @@ def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: flo
         clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w or sub_h:
-            bits = clip.format.bits_per_sample
-            
-            clip = core.fmtc.resample(clip, w, h, kernel='spline', taps=6)
-            if bits < 16:
-                clip = core.fmtc.bitdepth(clip, bits=bits, dmode=1)
+            clip = core.artyfox.Resize(clip, w, h, kernel='spline144', gamma=1)
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
     elif space == vs.GRAY:
@@ -1355,16 +1361,8 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     if clip.format.sample_type != vs.INTEGER:
         raise TypeError(f'{func_name}: floating point sample type is not supported')
     
-    clip = core.std.SetFieldBased(clip, 0)
-    
-    w = clip.width
-    h = clip.height
-    
+    w, h = clip.width, clip.height
     space = clip.format.color_family
-    bits = clip.format.bits_per_sample
-    
-    if bits < 16:
-        clip = core.fmtc.bitdepth(clip, bits=16)
     
     if space == vs.YUV:
         orig = clip
@@ -1374,24 +1372,29 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
+    factor = 1 << clip.format.bits_per_sample - 8
+    full = 256 * factor
+    
     def m4(var: float) -> int:
         return max(int(var / 4 + 0.5) * 4, 16)
     
-    halos = core.fmtc.resample(clip, m4(w / rx), m4(h / ry), kernel='bicubic').fmtc.resample(w, h, kernel='bicubic',
-                                                                                             a1=1, a2=0)
+    halos = core.artyfox.Resize(clip, m4(w / rx), m4(h / ry), kernel='bicubic', gamma=1)
+    halos = core.artyfox.Resize(halos, w, h, kernel='bicubic', b=1, c=0, gamma=1)
     are = vs_convolution(clip, 'min/max')
     ugly = vs_convolution(halos, 'min/max')
-    so = core.std.Expr([ugly, are],
-                       f'y x - y 0.000001 + / 65535 * {lowsens * 256} - y 65536 + 131072 / {highsens / 100} + *')
+    so = core.std.Expr(
+        [ugly, are],
+        f'y x - y 0.000001 + / {full - 1} * {lowsens * factor} - y {full} + {full * 2} / {highsens / 100} + *'
+        )
     lets = core.std.MaskedMerge(halos, clip, so)
     
     if ss == 1.0:
         remove = vs_repair(clip, lets, 1)
     else:
-        remove = core.fmtc.resample(clip, x := m4(w * ss), y := m4(h * ss), kernel='lanczos', taps=3)
-        remove = core.std.Expr([remove, vs_expand(lets).fmtc.resample(x, y, kernel='bicubic')], 'x y min')
-        remove = core.std.Expr([remove, vs_inpand(lets).fmtc.resample(x, y, kernel='bicubic')], 'x y max')
-        remove = core.fmtc.resample(remove, w, h, kernel='lanczos', taps=3)
+        remove = core.artyfox.Resize(clip, x := m4(w * ss), y := m4(h * ss), kernel='lanczos', taps=3, gamma=1)
+        remove = core.std.Expr([remove, vs_expand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma=1)], 'x y min')
+        remove = core.std.Expr([remove, vs_inpand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma=1)], 'x y max')
+        remove = core.artyfox.Resize(remove, w, h, kernel='lanczos', taps=3, gamma=1)
     
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
@@ -1401,7 +1404,7 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     if showmask:
         clip = core.resize.Point(so, format=orig.format.id) if space == vs.YUV else so
     
-    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
+    return clip
 
 def fine_dehalo(clip: vs.VideoNode, rx: float = 2, ry: float | None = None, thmi: int = 80, thma: int = 128,
                 thlimi: int = 50, thlima: int = 100, darkstr: float = 1.0, brightstr: float = 1.0, lowsens: float = 50,
@@ -1545,7 +1548,7 @@ def fine_dehalo2(clip: vs.VideoNode, hconv: list[int] | None = None, vconv: list
     
     return clip
 
-def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 8, order: int = 0,
+def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, mode: int = 4, order: int = 0,
              downscaler: Callable | None = None, **upscaler_args: Any) -> vs.VideoNode:
     """[RU] Апскейлер видео на базе стандартных оконных свёрток или удвоителей строк семейства EDI3.
     
@@ -1555,9 +1558,9 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         dy: Высота результирующего клипа. По умолчанию None (равна высоте исходного клипа умноженной на 2).
         mode: Битовая маска для выбора типа апскейлинга. Поддерживаются следующие значения:
             mode & 3: 0 - оконная свёртка, 1 - znedi3, 2 - eedi3, 3 - eedi3 + znedi3 в качестве sclip.
-            mode & 12: 4 - вторичные параметры в стиле zimg, 8 - вторичные параметры в стиле fmtconv.
-                Плюс при "mode & 3 = 0" эти биты так же отвечают за выбор самого ресайзера (zimg или fmtconv).
-            По умолчанию 8 (0 + 8).
+            mode & 12: 4 - вторичные параметры в стиле artyfox, 8 - вторичные параметры в стиле fmtconv.
+                Плюс при "mode & 3 = 0" эти биты так же отвечают за выбор самого ресайзера (artyfox или fmtconv).
+            По умолчанию 4 (0 + 4).
         order: Порядок апскейлинга при выборе EDI3 (mode & 3 > 0). Поддерживаются следующие значения:
             0 - горизонтальное удвоение, а потом вертикальное (по умолчанию).
             1 - вертикальное удвоение, а потом горизонтальное.
@@ -1567,7 +1570,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         upscaler_args: Дополнительные параметры, поступающие непосредственно в выбранную функцию апскейла.
     
     Пример:
-        clip = upscaler(clip, 1920, 1080, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+        clip = upscaler(clip, 1920, 1080, mode=5, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
     
     ---
     
@@ -1579,10 +1582,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         dy: Resulting clip height. Default is None (equal to the source clip height multiplied by 2).
         mode: Bitmask to select the upscaling type. The following values are supported:
             mode & 3: 0 - windowed convolution, 1 - znedi3, 2 - eedi3, 3 - eedi3 + znedi3 as sclip.
-            mode & 12: 4 - zimg-style secondary parameters, 8 - fmtconv-style secondary parameters.
+            mode & 12: 4 - artyfox-style secondary parameters, 8 - fmtconv-style secondary parameters.
                 Plus, when "mode & 3 = 0", these bits are also responsible for choosing the resizer itself
-                (zimg or fmtconv).
-            Default is 8 (0 + 8).
+                (artyfox or fmtconv).
+            Default is 4 (0 + 4).
         order: Upscaling order when EDI3 is selected (mode & 3 > 0). The following values are supported:
             0 - horizontal doubling, then vertical (default).
             1 - vertical doubling, then horizontal.
@@ -1592,7 +1595,7 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         upscaler_args: Additional parameters that go directly to the selected upscaler function.
     
     Example:
-        clip = upscaler(clip, 1920, 1080, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+        clip = upscaler(clip, 1920, 1080, mode=5, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
     """
     func_name = 'upscaler'
     
@@ -1601,11 +1604,13 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     space = clip.format.color_family
     num_p = clip.format.num_planes
+    w, h = clip.width, clip.height
+    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
     
     if space not in {vs.YUV, vs.GRAY}:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    if space == vs.YUV:
+    if sub_w | sub_h:
         match clip.get_frame(0).props.get('_ChromaLocation', 0):
             case 0:
                 chromaloc = True
@@ -1618,14 +1623,6 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
     
     if any(i in upscaler_args for i in ('field', 'dh')):
         raise ValueError(f'{func_name}: "dh" and "field" are not supported in upscaler_args')
-    
-    clip = core.std.SetFieldBased(clip, 0)
-    w, h = clip.width, clip.height
-    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
-    bits = clip.format.bits_per_sample
-    
-    if bits < 16:
-        clip = core.fmtc.bitdepth(clip, bits=16)
     
     if dx is None:
         dx = w * 2
@@ -1643,10 +1640,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         raise TypeError(f'{func_name}: mode must be an integer in the range 0...11')
     
     if downscaler is None:
-        downscaler = partial(artyfox_resize, kernel='magic21')
+        downscaler = partial(core.artyfox.Resize, kernel='magic21')
     elif not isinstance(downscaler, Callable):
         raise TypeError(f'{func_name}: downscaler must be a callable')
-        
+    
     def edi3_aa(clip: vs.VideoNode, mode: int, order: bool, field: bool, **upscaler_args: Any) -> vs.VideoNode:
         
         field0 = 1 if order and sub_w else field
@@ -1692,10 +1689,10 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         rfactor = 1 << steps
         
         match mode & 12:
-            case 8:
-                crop_keys = ('sx', 'sy', 'sw', 'sh')
             case 4:
                 crop_keys = ('src_left', 'src_top', 'src_width', 'src_height')
+            case 8:
+                crop_keys = ('sx', 'sy', 'sw', 'sh')
             case _:
                 raise ValueError(f'{func_name}: Unsupported "mode & 12" value')
         
@@ -1758,15 +1755,15 @@ def upscaler(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         else:
             clip = downscaler(clip, dx, dy, **crop_args)
     
+    elif mode & 12 == 4:
+        kernel = upscaler_args.pop('kernel', 'spline36')
+        clip = core.artyfox.Resize(clip, dx, dy, kernel=kernel, **upscaler_args)
     elif mode & 12 == 8:
         clip = core.fmtc.resample(clip, dx, dy, **upscaler_args)
-    elif mode & 12 == 4:
-        kernel = upscaler_args.pop('kernel', 'spline36').capitalize()
-        clip = getattr(core.resize, kernel)(clip, dx, dy, **upscaler_args)
     else:
         raise ValueError(f'{func_name}: Unsupported "mode & 12" value')
     
-    return core.fmtc.bitdepth(clip, bits=bits, dmode=1) if bits < 16 else clip
+    return clip
 
 def diff_mask(first: vs.VideoNode, second: vs.VideoNode, thr: float = 8, scale: float = 1.0, rg: bool = True,
               mt_prewitt: bool | None = None, **after_args: Any) -> vs.VideoNode:
@@ -4253,7 +4250,7 @@ def out_of_range_search(clip: vs.VideoNode, lower: int | None = None, upper: int
     return clip
 
 def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = None, kernel: str = 'bilinear',
-             mode: int = 9, upscaler: Callable | None = None, ratio: float = 1.0,
+             mode: int = 5, upscaler: Callable | None = None, ratio: float = 1.0,
              **descale_args: Any) -> vs.VideoNode:
     """[RU] Рескейлер клипа в указанное разрешение (в том числе дробное) и обратно.
     
@@ -4271,11 +4268,11 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
                 целочисленное студийное разрешение и автоматически вычисляет дробные dx и dy с макс. точностью.
                 Подробнее тут:
                 https://web.archive.org/web/20231123073420/https://anibin.blogspot.com/2014/01/blog-post_3155.html
-            mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через zimg, 8 - через fmtconv.
-                По умолчанию 9 (1 + 0 + 8).
+            mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через artyfox, 8 - через fmtconv.
+            По умолчанию 5 (1 + 0 + 4).
         upscaler: Функция для апскейла. По умолчанию None (внутренняя функция, задающаяся через mode & 12).
             Внешняя функция должна принимать на вход клип для апскейла, а также его новые ширину и высоту плюс
-            координаты точки начала и размер области входного клипа, подвергаемой апскейлу, в формате zimg
+            координаты точки начала и размер области входного клипа, подвергаемой апскейлу, в формате artyfox
             ("src_left", "src_top", "src_width", "src_height") или fmtconv ("sx", "sy", "sw", "sh").
             Упавление форматом задаётся через mode & 12. Любые другие параметры, которые могут потребоваться для
             апскейла, должны быть переданы заранее через functools.partial.
@@ -4285,7 +4282,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             "src_top", "src_width", "src_height").
     
     Пример:
-        up_func = partial(upscaler, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+        up_func = partial(upscaler, mode=5, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
         clip = rescaler(clip, 1443.61, 812, 'bilinear', upscaler=up_func)
     
     ---
@@ -4306,11 +4303,11 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
                 as input and automatically calculates fractional dx and dy with max accuracy.
                 More details here:
                 https://web.archive.org/web/20231123073420/https://anibin.blogspot.com/2014/01/blog-post_3155.html
-            mode & 12: 0 - inverse upscaling via descale library, 4 - via zimg, 8 - via fmtconv.
-                Default is 9 (1 + 0 + 8).
+            mode & 12: 0 - inverse upscaling via descale library, 4 - via artyfox, 8 - via fmtconv.
+            Default is 5 (1 + 0 + 4).
         upscaler: Function for upscaling. Defaults to None (internal function, set via mode & 12).
             External function should take as input the clip to be upscaled, as well as its new width and height, plus
-            the coordinates of the start point and the size of the area of the input clip to be upscaled, in zimg
+            the coordinates of the start point and the size of the area of the input clip to be upscaled, in artyfox
             ("src_left", "src_top", "src_width", "src_height") or fmtconv ("sx", "sy", "sw", "sh") format.
             Format control is set via mode & 12. Any other parameters that may be needed for
             upscaling should be passed in advance via functools.partial.
@@ -4320,7 +4317,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
             "src_height") can be passed, among other things.
     
     Example:
-        up_func = partial(upscaler, mode=9, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
+        up_func = partial(upscaler, mode=5, order=2, nsize=0, nns=4, qual=2, pscrn=0, exp=2)
         clip = rescaler(clip, 1443.61, 812, 'bilinear', upscaler=up_func)
     """
     func_name = 'rescaler'
@@ -4435,10 +4432,9 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
         case None, 0:
             clip = getattr(core.descale, kernel.capitalize())(clip, w, h, **descale_args)
         case None, 4:
-            resize_keys = dict(src_left='src_left', src_top='src_top', src_width='src_width', src_height='src_height',
-                               b='filter_param_a', c='filter_param_b', taps='filter_param_a')
-            resize_args = {resize_keys[key]: value for key, value in descale_args.items() if key in resize_keys}
-            clip = getattr(core.resize, kernel.capitalize())(clip, w, h, **resize_args)
+            resize_keys = set('src_left', 'src_top', 'src_width', 'src_height', 'b', 'c', 'taps')
+            resize_args = {key: value for key, value in descale_args.items() if key in resize_keys}
+            clip = core.artyfox.Resize(clip, w, h, kernel=kernel, gamma=1, **resize_args)
         case None, 8:
             fmtc_keys = dict(src_left='sx', src_top='sy', src_width='sw', src_height='sh',
                              b='a1', c='a2', taps='taps')
@@ -4502,7 +4498,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
     Основные отличия:
     - Прямая работа с кадрами внутри функции, а значит корректый вывод их индексов.
     - Наличие встроенного пресета для автоматического перебора всех популярных комбинаций ядер и их параметров.
-    - Ниличие встроенной возможности сглаживания результата по Гауссу.
+    - Наличие встроенной возможности сглаживания результата по Гауссу.
     - Возможность прогона клипа с двумя отстоящими на единицу значениями параметров и вывод результата их деления.
     - Рассчёт среднего по всему клипу и вывод всех промежуточных результатов в общих границах координат.
     - Тонкая настройка графика, включая масштаб шкалы, размер фигуры, выравнивание осей и выбор стиля.
@@ -4511,12 +4507,12 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         clip: Входной клип (поддерживается только 32-битный GRAY).
         dx: Ширина клипа для рескейла по горизонтали. Может быть целой, дробной или списком.
             Если не задано, то вычисляется автоматически (ширина клипа * dy / высота клипа).
-            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включительный.
         dy: Высота клипа для рескейла по вертикали. Может быть целой, дробной или списком.
             Если не задано, то вычисляется автоматически (высота клипа * 2 / 3).
-            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включительный.
         frames: Область клипа для обработки. Может быть целым или списком. Если не задано, то обрабатывается весь клип.
-            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включается.
+            Если задано списком, то он должен содержать 3 значения: начало, конец и шаг. Конец не включительный.
             Начало и конец могут быть None, тогда вместо них будут начало и конец клипа соответственно.
         kernel: Строка или список строк с именами ядер для рескейла. Поддерживаются следующие ядра:
             ['bilinear', 'bicubic', 'lanczos', 'spline16', 'spline36', 'spline64', 'point']. По умолчанию 'bilinear'.
@@ -4526,13 +4522,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             'bicubic#0'  - b=1/3,    c=1/3    (Mitchell-Netravali)
             'bicubic#1'  - b=0.5,    c=0
             'bicubic#2'  - b=0,      c=0.5    (Catmull-Rom)
-            'bicubic#3'  - b=0,      c=0.75   (Precise Bicubic)
+            'bicubic#3'  - b=0,      c=0.75   (Precise Bicubic / Robidoux)
             'bicubic#4'  - b=1,      c=0      (B-Spline)
             'bicubic#5'  - b=0,      c=1      (Sharp Bicubic)
             'bicubic#6'  - b=0.2,    c=0.5
             'bicubic#7'  - b=0.5,    c=0.5
-            'bicubic#8'  - b=0,      c=0      (Hermite)
-            'bicubic#9'  - b=0.3782, c=0.3109 (Robidoux)
+            'bicubic#8'  - b=0,      c=0      (Hermite / Bilinear)
+            'bicubic#9'  - b=0.3782, c=0.3109 (Robidoux Sharp)
             'bicubic#10' - b=0.75,   c=0.25   (SoftCubicXX)
             'lanczos#0'  - taps=2
             'lanczos#1'  - taps=3
@@ -4581,8 +4577,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             mode & 1: 0 - целочисленный рескейл, 1 - дробный.
             mode & 2: 0 - стандартная обработка dx и dy, 2 - режим студийного разрешения, принимает на вход
                 целочисленное студийное разрешение и автоматически вычисляет дробные dx и dy с макс. точностью.
-            mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через zimg, 8 - через fmtconv.
-            По умолчанию 9 (1 + 0 + 8).
+            mode & 12: 0 - обратный апскейл через библиотеку descale, 4 - через artyfox, 8 - через fmtconv.
+            По умолчанию 5 (1 + 0 + 4).
             
             Вторичные параметры ядер можно задавать как отдельными аргументами, так и в виде списков.
             В случае перебора по ядрам первые конвертируются в списки с одинаковыми значениями, а вторые прямо
@@ -4613,11 +4609,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         clip = getnative(clip, 1443.61, 812, [3171, 61220], 'all', mark=True)
         
         Тоже самое, но через режим студийного разрешения и с автоматическим расчётом dx:
-        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=11)
+        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=7)
         
         Поиск "src_top" для верхнего поля кадра (для destripe):
         clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(True).std.SetFieldBased(0)[::2]
-        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=8, mark=True)
+        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=4, mark=True)
     
     Предупреждение: не смотря на то, что клип представлен как последовательность и имеет те же методы,
         фактически он располагается на жёстком диске и в оперативную память кэшируется лишь его малая часть.
@@ -4658,13 +4654,13 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             'bicubic#0'  - b=1/3,    c=1/3    (Mitchell-Netravali)
             'bicubic#1'  - b=0.5,    c=0
             'bicubic#2'  - b=0,      c=0.5    (Catmull-Rom)
-            'bicubic#3'  - b=0,      c=0.75   (Precise Bicubic)
+            'bicubic#3'  - b=0,      c=0.75   (Precise Bicubic / Robidoux)
             'bicubic#4'  - b=1,      c=0      (B-Spline)
             'bicubic#5'  - b=0,      c=1      (Sharp Bicubic)
             'bicubic#6'  - b=0.2,    c=0.5
             'bicubic#7'  - b=0.5,    c=0.5
-            'bicubic#8'  - b=0,      c=0      (Hermite)
-            'bicubic#9'  - b=0.3782, c=0.3109 (Robidoux)
+            'bicubic#8'  - b=0,      c=0      (Hermite / Bilinear)
+            'bicubic#9'  - b=0.3782, c=0.3109 (Robidoux Sharp)
             'bicubic#10' - b=0.75,   c=0.25   (SoftCubicXX)
             'lanczos#0'  - taps=2
             'lanczos#1'  - taps=3
@@ -4677,7 +4673,7 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             between the original and rescaled clips. Default is 0.015.
         crop: Cropping artifacts at the edges of the area for calculating the average. Default is 5.
         mean: Select the algorithm for calculating the mean for the 'total_...' modes, collecting generalized statistics
-            for a given frame range. The following values ​​are supported:
+            for a given frame range. The following values are supported:
             0 - arithmetic mean.
             1 - geometric mean. Used by default.
             2 - arithmetic-geometric mean.
@@ -4713,8 +4709,8 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
             mode & 1: 0 - integer rescale, 1 - fractional.
             mode & 2: 0 - standard dx and dy processing, 2 - studio resolution mode, accepts integer studio resolution
                 as input and automatically calculates fractional dx and dy with max. accuracy.
-            mode & 12: 0 - reverse upscale via descale library, 4 - via zimg, 8 - via fmtconv.
-            Default is 9 (1 + 0 + 8).
+            mode & 12: 0 - reverse upscale via descale library, 4 - via artyfox, 8 - via fmtconv.
+            Default is 5 (1 + 0 + 4).
 
             Secondary kernel parameters can be specified as separate arguments or as lists.
             In case of iteration over kernels, the first ones are converted into lists with the same values, and
@@ -4746,11 +4742,11 @@ def getnative(clip: vs.VideoNode, dx: float | list[float] | None = None, dy: flo
         clip = getnative(clip, 1443.61, 812, [3171, 61220], 'all', mark=True)
         
         The same, but through the studio resolution mode and with automatic dx calculation:
-        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=11)
+        clip = getnative(clip, None, 818, [3171, 61220], 'all', mark=True, mode=7)
         
         Finding "src_top" for the upper frame field (for destripe):
         clip = core.std.SetFieldBased(clip, 0).std.SeparateFields(True).std.SetFieldBased(0)[::2]
-        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=8, mark=True)
+        clip = getnative(clip, 1280, 360, 2666, 'bicubic', b=0, c=0.75, src_top=[1/3, 1/6, 1/12], mode=4, mark=True)
     
     Warning: despite the fact that the clip is presented as a sequence and has the same methods,
         in fact it is located on the hard drive and only a small part of it is cached in RAM.
@@ -5637,104 +5633,5 @@ def chroma_down(clip: vs.VideoNode, planes: int | list[int] | None = None) -> vs
     if clip.format.sample_type == vs.FLOAT:
         expr = ['x 1 min 0 max', 'x 0.5 - 0.5 min -0.5 max', 'x 0.5 - 0.5 min -0.5 max']
         clip = core.std.Expr(clip, [expr[i] if i in planes else '' for i in range(num_p)])
-    
-    return clip
-
-def artyfox_resize(clip: vs.VideoNode, width: int, height: int, src_left: float = 0.0, src_top: float = 0.0,
-                src_width: float | None = None, src_height: float | None = None, kernel: str = 'area',
-                sharp: float = 1.0) -> vs.VideoNode:
-    """[RU] Функция-обёртка для artyfox.Resize.
-    
-    Добавляет поддержку целочисленных форматов клипа и правильную конвертацию в вещественный формат и обратно.
-    
-    Args:
-        clip: Входной клип.
-        width: Ширина выходного клипа.
-        height: Высота выходного клипа.
-        src_left: Координата "x" точки начала области, размер которой нужно изменить. По умолчанию 0.
-        src_top: Координата "y" точки начала области, размер которой нужно изменить. По умолчанию 0.
-        src_width: Ширина области, размер которой нужно изменить. По умолчанию равна ширине входного клипа.
-        src_height: Высота области, размер которой нужно изменить. По умолчанию равна высоте входного клипа.
-        kernel: Тип ядра свёртки. Возможные значения:
-            "area" - Area Resize, по умолчанию.
-            "magic" - Magic Kernel.
-            "magic13" - Magic Kernel Sharp 2013.
-            "magic21" - Magic Kernel Sharp 2021.
-        sharp: Коэффициент резкости. По умолчанию 1.0. Значения меньше 1.0 - блюр, больше - шарп.
-            Диапазон допустимых значений - 0.1...5.0.
-    
-    [EN] Wrapper function for artyfox.Resize.
-    
-    Adds support for integer clip formats and correct conversion to and from floating-point formats.
-    
-    Args:
-        clip: Input clip.
-        width: Width of the output clip.
-        height: Height of the output clip.
-        src_left: The x-coordinate of the start point of the area to be resized. Defaults to 0.
-        src_top: The y-coordinate of the start point of the area to be resized. Defaults to 0.
-        src_width: The width of the area to be resized. Defaults to the width of the input clip.
-        src_height: The height of the area to be resized. Defaults to the height of the input clip.
-        kernel: The type of the convolution kernel. Possible values:
-            "area" - Area Resize, by default.
-            "magic" - Magic Kernel.
-            "magic13" - Magic Kernel Sharp 2013.
-            "magic21" - Magic Kernel Sharp 2021.
-        sharp: The sharpening factor. Defaults to 1.0. Values less than 1.0 - blur,
-            and values greater than 1.0 - sharpen. The acceptable range is 0.1...5.0.
-    """
-    func_name = 'artyfox_resize'
-    
-    if not isinstance(clip, vs.VideoNode):
-        raise TypeError(f'{func_name} the clip must be of the VideoNode type')
-    
-    if clip.format.color_family == vs.UNDEFINED:
-        raise TypeError(f'{func_name}: Unsupported color family')
-    
-    w, h = clip.width, clip.height
-    sub_w, sub_h = clip.format.subsampling_w, clip.format.subsampling_h
-    bits = clip.format.bits_per_sample
-    
-    if not isinstance(width, int) or width <= 1 << sub_w or width >> sub_w << sub_w != width:
-        raise TypeError(f'{func_name}: "width" must be an integer, greater than "1 << subsampling_w" and divisible by '
-                        'subsampling_w')
-    
-    if not isinstance(height, int) or height <= 1 << sub_h or height >> sub_h << sub_h != height:
-        raise TypeError(f'{func_name}: "height" must be an integer, greater than "1 << subsampling_h" and divisible by '
-                        'subsampling_h')
-    
-    if not isinstance(src_left, int | float) or src_left <= -w or src_left >= w:
-        raise ValueError(f'{func_name}: "src_left" must be a float between -{w} and {w}')
-    
-    if not isinstance(src_top, int | float) or src_top <= -h or src_top >= h:
-        raise ValueError(f'{func_name}: "src_top" must be a float between -{h} and {h}')
-    
-    if src_width is None:
-        src_width = w
-    elif not isinstance(src_width, int | float) or src_width <= -w or src_width >= w * 2:
-        raise ValueError(f'{func_name}: "src_width" must be a float between -{w} and {w * 2}')
-    elif src_width <= 0:
-        src_width += w - src_left
-    
-    if src_height is None:
-        src_height = h
-    elif not isinstance(src_height, int | float) or src_height <= -h or src_height >= h * 2:
-        raise ValueError(f'{func_name}: "src_height" must be a float between -{h} and {h * 2}')
-    elif src_height <= 0:
-        src_height += h - src_top
-    
-    if not isinstance(kernel, str) or kernel not in {'area', 'magic', 'magic13', 'magic21'}:
-        raise ValueError(f'{func_name}: "kernel" must be one of "area", "magic", "magic13", "magic21"')
-    
-    if not isinstance(sharp, int | float) or sharp < 0.1 or sharp > 5.0:
-        raise ValueError(f'{func_name}: "sharp" must be a float in the range [0.1, 5.0]')
-    
-    if bits < 32:
-        clip = core.fmtc.bitdepth(clip, bits=32)
-    
-    clip = core.artyfox.Resize(clip, width, height, src_left, src_top, src_width, src_height, kernel, sharp=sharp)
-    
-    if bits < 32:
-        clip = core.fmtc.bitdepth(clip, bits=bits, dmode=1)
     
     return clip
