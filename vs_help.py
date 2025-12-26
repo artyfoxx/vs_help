@@ -4,7 +4,7 @@ Float format support is added as needed. Such features are indicated separately.
 Float format video support is provided only for clips converted from the full range.
 For clips converted from a limited range, correct processing is not guaranteed.
 
-Функции:
+Functions:
     float_decorator (float support)
     autotap3 (float support)
     lanczosplus
@@ -71,7 +71,6 @@ For clips converted from a limited range, correct processing is not guaranteed.
     vs_median_blur (float support)
     chroma_up (float support)
     chroma_down (float support)
-    artyfox_resize (float support)
 """
 
 import re
@@ -258,8 +257,8 @@ def autotap3(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None, m
         if any((x := i) not in back_args for i in crop_args):
             raise KeyError(f'{func_name}: Unsupported key {x} in crop_args')
     
-    back_args['gamma'] = 1
-    crop_args['gamma'] = 1
+    back_args['gamma'] = 'none'
+    crop_args['gamma'] = 'none'
     
     if dx == w and dy == h:
         return core.artyfox.Resize(clip, w, h, kernel='spline36', **crop_args)
@@ -428,8 +427,8 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     else:
         raise TypeError(f'{func_name}: Unsupported color family')
     
-    fd1 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=mtaps1, gamma=1)
-    fre1 = core.artyfox.Resize(fd1, w, h, kernel='lanczos', taps=mtaps1, gamma=1)
+    fd1 = core.artyfox.Resize(clip, dx, dy, kernel='lanczos', taps=mtaps1, gamma='none')
+    fre1 = core.artyfox.Resize(fd1, w, h, kernel='lanczos', taps=mtaps1, gamma='none')
     fre2 = autotap3(fre1, x := max(w // 16 * 8, 144), y := max(h // 16 * 8, 144), mtaps3, athresh)
     fre2 = autotap3(fre2, w, h, mtaps3, athresh)
     m1 = core.std.Expr([fre1, clip], f'x y - abs {thresh} - {thresh2} *')
@@ -441,13 +440,13 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     else:
         m2 = core.frfun7.Frfun7(m1, l=2.01, t=256, tuv=256, p=1)
     
-    m2 = core.artyfox.Resize(core.artyfox.Resize(m2, x, y, kernel='lanczos', taps=ttaps, gamma=1),
-                            dx, dy, kernel='lanczos', taps=ttaps, gamma=1)
+    m2 = core.artyfox.Resize(core.artyfox.Resize(m2, x, y, kernel='lanczos', taps=ttaps, gamma='none'),
+                            dx, dy, kernel='lanczos', taps=ttaps, gamma='none')
     
     d = core.std.MaskedMerge(clip, fre2, m1) if preblur else clip
     d2 = autotap3(d, dx, dy, mtaps3, athresh)
-    d3 = core.artyfox.Resize(core.artyfox.Resize(d, w, h, kernel='lanczos', taps=ttaps, gamma=1),
-                            dx, dy, kernel='lanczos', taps=ttaps, gamma=1)
+    d3 = core.artyfox.Resize(core.artyfox.Resize(d, w, h, kernel='lanczos', taps=ttaps, gamma='none'),
+                            dx, dy, kernel='lanczos', taps=ttaps, gamma='none')
     d4 = core.std.MaskedMerge(core.std.Expr([d2, d3],  f'x y - {sharp1} * x +'),
                               core.std.Expr([d2, d3],  f'y x - {blur1} * x +'), m2)
     d5 = autotap3(d4, w, h, mtaps3, athresh)
@@ -459,15 +458,15 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     e = core.warp.AWarpSharp2(e, thresh=wthresh, blur=wblur, depth=depth)
     
     fd12 = core.artyfox.Resize(e, dx ** 2 // w // 16 * 16, dy ** 2 // h // 16 * 16, kernel='lanczos',
-                               taps=mtaps2, gamma=1)
-    fre12 = core.artyfox.Resize(fd12, dx, dy, kernel='lanczos', taps=mtaps2, gamma=1)
+                               taps=mtaps2, gamma='none')
+    fre12 = core.artyfox.Resize(fd12, dx, dy, kernel='lanczos', taps=mtaps2, gamma='none')
     m12 = core.std.Expr([fre12, e], f'x y - abs {thresh} - {thresh2} *')
     m12 = core.artyfox.Resize(m12, max(dx // 16 * 8, 144), max(dy // 16 * 8, 144), kernel='lanczos',
-                              taps=mtaps2, gamma=1)
-    m12 = core.artyfox.Resize(m12, dx, dy, kernel='lanczos', taps=mtaps2, gamma=1)
+                              taps=mtaps2, gamma='none')
+    m12 = core.artyfox.Resize(m12, dx, dy, kernel='lanczos', taps=mtaps2, gamma='none')
     
-    e2 = core.artyfox.Resize(core.artyfox.Resize(e, w, h, kernel='lanczos', taps=ltaps, gamma=1),
-                            dx, dy, kernel='lanczos', taps=ltaps, gamma=1)
+    e2 = core.artyfox.Resize(core.artyfox.Resize(e, w, h, kernel='lanczos', taps=ltaps, gamma='none'),
+                            dx, dy, kernel='lanczos', taps=ltaps, gamma='none')
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
     e2 = core.warp.AWarpSharp2(e2, thresh=wthresh, blur=wblur, depth=depth)
@@ -483,7 +482,7 @@ def lanczosplus(clip: vs.VideoNode, dx: int | None = None, dy: int | None = None
     clip = core.std.MaskedMerge(d4, e3, m2)
     
     if space == vs.YUV:
-        clip = core.std.ShufflePlanes([clip, core.artyfox.Resize(orig, dx, dy, kernel='spline36', gamma=1)],
+        clip = core.std.ShufflePlanes([clip, core.artyfox.Resize(orig, dx, dy, kernel='spline36', gamma='none')],
                                       list(range(orig.format.num_planes)), space)
     
     return clip
@@ -1332,7 +1331,7 @@ def tp7_deband_mask(clip: vs.VideoNode, thr: float | list[float] = 8, scale: flo
         clip = core.std.Expr(clips[1:], 'x y max')
         
         if sub_w or sub_h:
-            clip = core.artyfox.Resize(clip, w, h, kernel='spline144', gamma=1)
+            clip = core.artyfox.Resize(clip, w, h, kernel='spline144', gamma='none')
         
         clip = core.std.Expr([clip, clips[0]], 'x y max')
     elif space == vs.GRAY:
@@ -1378,8 +1377,8 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     def m4(var: float) -> int:
         return max(int(var / 4 + 0.5) * 4, 16)
     
-    halos = core.artyfox.Resize(clip, m4(w / rx), m4(h / ry), kernel='bicubic', gamma=1)
-    halos = core.artyfox.Resize(halos, w, h, kernel='bicubic', b=1, c=0, gamma=1)
+    halos = core.artyfox.Resize(clip, m4(w / rx), m4(h / ry), kernel='bicubic', gamma='none')
+    halos = core.artyfox.Resize(halos, w, h, kernel='bicubic', b=1, c=0, gamma='none')
     are = vs_convolution(clip, 'min/max')
     ugly = vs_convolution(halos, 'min/max')
     so = core.std.Expr(
@@ -1391,10 +1390,12 @@ def dehalo_alpha(clip: vs.VideoNode, rx: float = 2.0, ry: float = 2.0, darkstr: 
     if ss == 1.0:
         remove = vs_repair(clip, lets, 1)
     else:
-        remove = core.artyfox.Resize(clip, x := m4(w * ss), y := m4(h * ss), kernel='lanczos', taps=3, gamma=1)
-        remove = core.std.Expr([remove, vs_expand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma=1)], 'x y min')
-        remove = core.std.Expr([remove, vs_inpand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma=1)], 'x y max')
-        remove = core.artyfox.Resize(remove, w, h, kernel='lanczos', taps=3, gamma=1)
+        remove = core.artyfox.Resize(clip, x := m4(w * ss), y := m4(h * ss), kernel='lanczos', taps=3, gamma='none')
+        remove = core.std.Expr([remove, vs_expand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma='none')],
+                               'x y min')
+        remove = core.std.Expr([remove, vs_inpand(lets).artyfox.Resize(x, y, kernel='bicubic', gamma='none')],
+                               'x y max')
+        remove = core.artyfox.Resize(remove, w, h, kernel='lanczos', taps=3, gamma='none')
     
     clip = core.std.Expr([clip, remove], f'x y < x x y - {darkstr} * - x x y - {brightstr} * - ?')
     
@@ -4434,7 +4435,7 @@ def rescaler(clip: vs.VideoNode, dx: float | None = None, dy: float | None = Non
         case None, 4:
             resize_keys = set('src_left', 'src_top', 'src_width', 'src_height', 'b', 'c', 'taps')
             resize_args = {key: value for key, value in descale_args.items() if key in resize_keys}
-            clip = core.artyfox.Resize(clip, w, h, kernel=kernel, gamma=1, **resize_args)
+            clip = core.artyfox.Resize(clip, w, h, kernel=kernel, gamma='none', **resize_args)
         case None, 8:
             fmtc_keys = dict(src_left='sx', src_top='sy', src_width='sw', src_height='sh',
                              b='a1', c='a2', taps='taps')
